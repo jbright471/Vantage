@@ -17,6 +17,10 @@ export type RunRecord = {
   started_at: string | null;
 };
 
+export type ActionRunRecord = RunRecord & {
+  idempotency_key: string | null;
+};
+
 export type ModelRecord = {
   model_name: string;
   placements: string[];
@@ -71,4 +75,19 @@ export function mergeFullState(current: FullState, patch: Partial<FullState>): F
     routing: patch.routing ?? current.routing,
     warnings: patch.warnings ?? current.warnings,
   };
+}
+
+export async function submitRefreshNode(nodeId: string): Promise<ActionRunRecord> {
+  const response = await fetch(`/api/actions/refresh-node/${encodeURIComponent(nodeId)}`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Refresh request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as ActionRunRecord;
 }

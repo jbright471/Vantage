@@ -3,6 +3,12 @@ import type { NodeRecord } from "../../api/client";
 type NodeCardProps = {
   node: Pick<NodeRecord, "node_id" | "display_name" | "observed_status" | "freshness" | "last_seen_at"> &
     Partial<Pick<NodeRecord, "role" | "enabled" | "created_from">>;
+  onRefresh: (nodeId: string) => void;
+  refreshState?: {
+    phase: "idle" | "submitting" | "submitted" | "error";
+    status?: string;
+    message?: string;
+  };
 };
 
 function formatLastSeen(value: string | null): string {
@@ -33,10 +39,13 @@ function describeFreshness(value: string): string {
   return "Awaiting sync";
 }
 
-export function NodeCard({ node }: NodeCardProps) {
+export function NodeCard({ node, onRefresh, refreshState }: NodeCardProps) {
   const role = node.role ?? "unassigned";
   const createdFrom = node.created_from ?? "runtime";
   const isEnabled = node.enabled ?? true;
+  const refreshPhase = refreshState?.phase ?? "idle";
+  const refreshStatus = refreshState?.status ?? null;
+  const refreshMessage = refreshState?.message ?? null;
 
   return (
     <article className="node-card">
@@ -72,6 +81,25 @@ export function NodeCard({ node }: NodeCardProps) {
           <dd>Observed</dd>
         </div>
       </dl>
+
+      <div className="node-action-row">
+        <button
+          type="button"
+          className="action-button"
+          disabled={refreshPhase === "submitting"}
+          onClick={() => onRefresh(node.node_id)}
+        >
+          {refreshPhase === "submitting" ? "Submitting refresh..." : "Refresh node"}
+        </button>
+
+        {refreshStatus ? <span className={`status-chip is-${refreshStatus}`}>{refreshStatus}</span> : null}
+      </div>
+
+      {refreshMessage ? (
+        <p className={`action-copy${refreshPhase === "error" ? " is-error" : ""}`} role="status">
+          {refreshMessage}
+        </p>
+      ) : null}
     </article>
   );
 }
