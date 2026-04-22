@@ -157,6 +157,25 @@ select {
   color: var(--accent);
 }
 
+.is-submitted_unverified,
+.is-running,
+.is-partial,
+.is-timed_out {
+  background: rgba(155, 101, 17, 0.14);
+  color: var(--warning);
+}
+
+.is-success {
+  background: rgba(31, 122, 84, 0.13);
+  color: var(--healthy);
+}
+
+.is-failed,
+.is-abandoned {
+  background: rgba(178, 70, 50, 0.14);
+  color: var(--danger);
+}
+
 .signal-bar {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -186,6 +205,7 @@ select {
 .panel-section {
   border-radius: 24px;
   padding: 1.5rem;
+  margin-top: 1.5rem;
 }
 
 .section-header {
@@ -218,6 +238,59 @@ select {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 1rem;
+}
+
+.table-shell {
+  overflow-x: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(20, 33, 43, 0.08);
+  background: rgba(255, 255, 255, 0.48);
+}
+
+.runs-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.runs-table th,
+.runs-table td {
+  padding: 1rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(20, 33, 43, 0.08);
+}
+
+.runs-table th {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.runs-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.run-summary {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.run-summary strong {
+  font-size: 1rem;
+}
+
+.run-meta,
+.run-status-copy {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.run-status-copy {
+  margin: 0.45rem 0 0;
+  max-width: 28ch;
 }
 
 .node-card {

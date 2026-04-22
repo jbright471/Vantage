@@ -14,7 +14,7 @@ export type RunRecord = {
   summary: string;
   status: string;
   node_id: string | null;
-  started_at: string;
+  started_at: string | null;
 };
 
 export type ModelRecord = {

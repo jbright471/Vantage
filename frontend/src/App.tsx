@@ -1,4 +1,5 @@
 import { NodesPage } from "./features/nodes/NodesPage";
+import { RunsPage } from "./features/runs/RunsPage";
 import { useEventSource } from "./hooks/useEventSource";
 
 function formatRelativeSync(lastSyncAt: string | null): string {
@@ -75,6 +76,7 @@ export default function App() {
       {errorMessage ? <p className="inline-warning">{errorMessage}</p> : null}
 
       <NodesPage nodes={state.nodes} />
+      <RunsPage runs={state.runs} />
     </main>
   );
 }
