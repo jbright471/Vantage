@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from backend.app.api.actions import router as actions_router
 from backend.app.api.health import router as health_router
 from backend.app.api.models import router as models_router
 from backend.app.api.nodes import router as nodes_router
@@ -27,6 +28,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Vantage Control Plane", lifespan=lifespan)
 app.include_router(health_router, prefix="/api")
+app.include_router(actions_router, prefix="/api")
 app.include_router(nodes_router, prefix="/api")
 app.include_router(runs_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
