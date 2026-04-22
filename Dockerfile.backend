@@ -1,0 +1,18 @@
+FROM python:3.14-slim
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+COPY pyproject.toml ./
+COPY backend ./backend
+COPY agent ./agent
+COPY config ./config
+
+RUN python -m pip install --upgrade pip \
+    && python -m pip install --no-cache-dir -e . watchfiles
+
+EXPOSE 8000
+
+CMD ["python", "-m", "uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

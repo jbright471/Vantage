@@ -1,0 +1,14 @@
+.git
+.gitignore
+.pytest_cache
+__pycache__
+*.pyc
+*.egg-info
+*.log
+*.sqlite3
+frontend/node_modules
+frontend/dist
+frontend/tsconfig.tsbuildinfo
+logs
+node_modules
+dist
