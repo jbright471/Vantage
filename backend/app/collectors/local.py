@@ -1,35 +1,78 @@
+from collections.abc import Sequence
 from datetime import UTC, datetime
-import subprocess
+import os
+
+import httpx
 
 
-def _parse_ollama_list_output(output: str) -> list[dict]:
+DEFAULT_LOCAL_OLLAMA_BASE_URLS = ("http://127.0.0.1:11434",)
+LOCAL_OLLAMA_BASE_URLS_ENV = "VANTAGE_LOCAL_OLLAMA_BASE_URLS"
+
+
+def resolve_local_ollama_base_urls(configured_urls: Sequence[str] | None = None) -> list[str]:
+    raw_urls = os.getenv(LOCAL_OLLAMA_BASE_URLS_ENV)
+    if raw_urls:
+        candidates = [part.strip() for part in raw_urls.split(",")]
+    elif configured_urls:
+        candidates = list(configured_urls)
+    else:
+        candidates = list(DEFAULT_LOCAL_OLLAMA_BASE_URLS)
+
+    return [candidate.rstrip("/") for candidate in candidates if candidate.strip()]
+
+
+def _parse_ollama_tags_payload(payload: dict) -> list[dict]:
     rows: list[dict] = []
-    lines = output.strip().splitlines()
-    for line in lines[1:]:
-        parts = line.split()
-        if not parts:
+    for model in payload.get("models", []):
+        name = model.get("name")
+        if not name:
             continue
         rows.append(
             {
-                "name": parts[0],
-                "digest": None,
+                "name": name,
+                "digest": model.get("digest"),
             }
         )
     return rows
 
 
-def collect_local_snapshot(node_id: str) -> dict:
-    result = subprocess.run(
-        ["ollama", "list"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+def _merge_models(model_groups: Sequence[list[dict]]) -> list[dict]:
+    merged: dict[tuple[str, str | None], dict] = {}
+    for group in model_groups:
+        for model in group:
+            key = (model["name"], model.get("digest"))
+            merged[key] = model
+    return sorted(merged.values(), key=lambda model: model["name"])
+
+
+def collect_local_snapshot(
+    node_id: str,
+    base_urls: Sequence[str] | None = None,
+    timeout_seconds: float = 5.0,
+) -> dict:
+    resolved_urls = resolve_local_ollama_base_urls(base_urls)
+    model_groups: list[list[dict]] = []
+    errors: list[dict] = []
+
+    for base_url in resolved_urls:
+        try:
+            response = httpx.get(f"{base_url}/api/tags", timeout=timeout_seconds)
+            response.raise_for_status()
+            model_groups.append(_parse_ollama_tags_payload(response.json()))
+        except httpx.HTTPError as exc:
+            errors.append({"base_url": base_url, "error": str(exc)})
+
+    ollama_status = "ok" if errors == [] else "error"
     return {
         "node_id": node_id,
         "captured_at": datetime.now(UTC),
         "gpu_json": [],
         "cpu_json": {"usage_percent": 0},
         "memory_json": {"used_mb": 0},
-        "ollama_json": {"status": "ok", "models": _parse_ollama_list_output(result.stdout)},
+        "ollama_json": {
+            "status": ollama_status,
+            "base_urls": resolved_urls,
+            "models": _merge_models(model_groups),
+            "errors": errors,
+        },
     }

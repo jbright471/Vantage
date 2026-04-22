@@ -10,6 +10,9 @@ services:
       - .:/app
     environment:
       WATCHFILES_FORCE_POLLING: "true"
+      VANTAGE_LOCAL_OLLAMA_BASE_URLS: "http://host.docker.internal:11434,http://host.docker.internal:11435"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   frontend:
     build:

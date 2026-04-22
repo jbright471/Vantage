@@ -23,6 +23,7 @@ class BootstrapConfig(BaseModel):
     run_timeout_seconds: int = 300
     abandoned_after_seconds: int = 900
     idempotency_dedupe_seconds: int = 30
+    local_ollama_base_urls: list[str] = Field(default_factory=lambda: ["http://127.0.0.1:11434"])
     nodes: list[BootstrapNode] = Field(default_factory=list)
 
 

@@ -6,6 +6,7 @@ snapshot_retention_hours = 24
 run_timeout_seconds = 300
 abandoned_after_seconds = 900
 idempotency_dedupe_seconds = 30
+local_ollama_base_urls = ["http://127.0.0.1:11434", "http://127.0.0.1:11435"]
 
 [[nodes]]
 node_id = "jedi"
