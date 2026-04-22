@@ -1,0 +1,24 @@
+from fastapi.testclient import TestClient
+
+from backend.app.main import app
+
+
+def test_nodes_runs_models_routing_and_warnings_endpoints_exist() -> None:
+    with TestClient(app) as client:
+        nodes = client.get("/api/nodes")
+        runs = client.get("/api/runs")
+        models = client.get("/api/models")
+        routing = client.get("/api/routing")
+        warnings = client.get("/api/warnings")
+
+        assert nodes.status_code == 200
+        assert runs.status_code == 200
+        assert models.status_code == 200
+        assert routing.status_code == 200
+        assert warnings.status_code == 200
+
+        assert any(node["node_id"] == "jedi" for node in nodes.json())
+        assert isinstance(runs.json(), list)
+        assert isinstance(models.json(), list)
+        assert isinstance(routing.json(), list)
+        assert isinstance(warnings.json(), list)

@@ -3,6 +3,8 @@ import tomllib
 
 from pydantic import BaseModel, Field
 
+DEFAULT_BOOTSTRAP_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "vantage.bootstrap.toml"
+
 
 class BootstrapNode(BaseModel):
     node_id: str
