@@ -1,0 +1,12 @@
+[Unit]
+Description=Vantage Bastet Agent
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/vantage
+ExecStart=/opt/vantage/.venv/bin/uvicorn agent.app.main:app --host 0.0.0.0 --port 9100
+Restart=always
+User=bastet
+
+[Install]
+WantedBy=multi-user.target

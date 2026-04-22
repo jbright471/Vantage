@@ -26,4 +26,4 @@ pythonpath = ["."]
 testpaths = ["tests"]
 
 [tool.setuptools.packages.find]
-include = ["backend*"]
+include = ["backend*", "agent*"]
