@@ -1,4 +1,6 @@
+import { ModelsPage } from "./features/models/ModelsPage";
 import { NodesPage } from "./features/nodes/NodesPage";
+import { RoutingPage } from "./features/routing/RoutingPage";
 import { RunsPage } from "./features/runs/RunsPage";
 import { useEventSource } from "./hooks/useEventSource";
 
@@ -77,6 +79,8 @@ export default function App() {
 
       <NodesPage nodes={state.nodes} />
       <RunsPage runs={state.runs} />
+      <ModelsPage models={state.models} />
+      <RoutingPage rules={state.routing} />
     </main>
   );
 }

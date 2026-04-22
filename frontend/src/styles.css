@@ -66,7 +66,8 @@ select {
 
 .hero-copy h1,
 .section-header h2,
-.node-card h3 {
+.node-card h3,
+.info-card h3 {
   font-family: "Aptos Serif", Georgia, serif;
   letter-spacing: -0.02em;
 }
@@ -291,6 +292,41 @@ select {
 .run-status-copy {
   margin: 0.45rem 0 0;
   max-width: 28ch;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.info-card {
+  backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(20, 33, 43, 0.08);
+  border-radius: 22px;
+  padding: 1.2rem;
+}
+
+.info-kicker {
+  margin: 0 0 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.info-card h3 {
+  margin: 0;
+  font-size: 1.45rem;
+  text-transform: capitalize;
+}
+
+.info-copy {
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+  font-size: 0.98rem;
 }
 
 .node-card {
