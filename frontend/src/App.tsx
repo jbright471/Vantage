@@ -157,7 +157,7 @@ export default function App() {
 
         {errorMessage ? <p className="inline-warning">{errorMessage}</p> : null}
 
-        <NodesPage nodes={state.nodes} />
+        <NodesPage nodes={state.nodes} runs={state.runs} />
         <RunsPage runs={state.runs} />
         <ModelsPage models={state.models} />
         <RoutingPage rules={state.routing} />

@@ -1,7 +1,16 @@
 import type { NodeRecord } from "../../api/client";
 
 type NodeCardProps = {
-  node: Pick<NodeRecord, "node_id" | "display_name" | "observed_status" | "freshness" | "last_seen_at"> &
+  node: Pick<
+    NodeRecord,
+    | "node_id"
+    | "display_name"
+    | "observed_status"
+    | "freshness"
+    | "last_seen_at"
+    | "model_count"
+    | "ollama_status"
+  > &
     Partial<Pick<NodeRecord, "role" | "enabled" | "created_from">>;
   onRefresh: (nodeId: string) => void;
   refreshState?: {
@@ -78,7 +87,11 @@ export function NodeCard({ node, onRefresh, refreshState }: NodeCardProps) {
         </div>
         <div className="node-metric">
           <dt>Observation model</dt>
-          <dd>Observed</dd>
+          <dd>{node.ollama_status ?? "Unknown"}</dd>
+        </div>
+        <div className="node-metric">
+          <dt>Models</dt>
+          <dd>{node.model_count}</dd>
         </div>
       </dl>
 

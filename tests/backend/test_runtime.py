@@ -69,6 +69,9 @@ def test_run_poll_cycle_persists_snapshots_and_model_inventory(monkeypatch) -> N
     state = asyncio.run(run_poll_cycle(config, session_factory=session_factory))
 
     assert state["models"] == [{"model_name": "qwen3.5:27b", "placements": ["jedi"]}]
+    assert state["nodes"][0]["model_count"] == 1
+    assert state["nodes"][0]["ollama_status"] == "ok"
+    assert state["nodes"][0]["memory_used_mb"] == 4096
 
     with session_factory() as session:
         node = session.get(Node, "jedi")
@@ -115,6 +118,50 @@ def test_get_nodes_state_marks_old_observation_as_unreachable() -> None:
 
     assert state[0]["observed_status"] == "unreachable"
     assert state[0]["freshness"] == "stale"
+    assert state[0]["gpu_stats"] == []
+    assert state[0]["model_count"] == 0
+
+
+def test_get_nodes_state_exposes_latest_gpu_and_model_details() -> None:
+    session_factory = build_session_factory()
+    with session_factory() as session:
+        captured_at = datetime.now(UTC)
+        session.add(
+            Node(
+                node_id="bastet",
+                display_name="Bastet",
+                base_url="http://192.168.50.209:9110",
+                role="remote",
+                enabled=True,
+                created_from="bootstrap",
+                last_seen_at=captured_at,
+            )
+        )
+        session.add(
+            NodeSnapshot(
+                node_id="bastet",
+                captured_at=captured_at,
+                gpu_json=[{"name": "RTX 3090", "memory_total_mb": 24576, "temperature_c": 42}],
+                cpu_json={"usage_percent": 11},
+                memory_json={"used_mb": 32768},
+                ollama_json={
+                    "status": "ok",
+                    "models": [{"name": "qwen3.6-hermes:latest", "digest": "sha256:abc"}],
+                    "errors": [],
+                },
+                health_status="healthy",
+            )
+        )
+        session.commit()
+
+        state = get_nodes_state(session, config=BootstrapConfig())
+
+    assert state[0]["base_url"] == "http://192.168.50.209:9110"
+    assert state[0]["gpu_stats"][0]["name"] == "RTX 3090"
+    assert state[0]["cpu_usage_percent"] == 11
+    assert state[0]["memory_used_mb"] == 32768
+    assert state[0]["model_count"] == 1
+    assert state[0]["ollama_status"] == "ok"
 
 
 def test_run_poll_cycle_resolves_config_drift_warning_once_node_is_observed(monkeypatch) -> None:

@@ -41,12 +41,29 @@ def get_nodes_state(session: Session, config: BootstrapConfig | None = None) -> 
             {
                 "node_id": node.node_id,
                 "display_name": node.display_name,
+                "base_url": node.base_url,
                 "role": node.role,
                 "enabled": node.enabled,
                 "created_from": node.created_from,
                 "observed_status": observed_status,
                 "freshness": freshness,
                 "last_seen_at": last_seen_at.isoformat() if last_seen_at else None,
+                "gpu_stats": latest_snapshot.gpu_json if latest_snapshot is not None else [],
+                "cpu_usage_percent": latest_snapshot.cpu_json.get("usage_percent")
+                if latest_snapshot is not None
+                else None,
+                "memory_used_mb": latest_snapshot.memory_json.get("used_mb")
+                if latest_snapshot is not None
+                else None,
+                "ollama_status": latest_snapshot.ollama_json.get("status")
+                if latest_snapshot is not None
+                else None,
+                "ollama_errors": latest_snapshot.ollama_json.get("errors", [])
+                if latest_snapshot is not None
+                else [],
+                "model_count": len(latest_snapshot.ollama_json.get("models", []))
+                if latest_snapshot is not None
+                else 0,
             }
         )
     return state

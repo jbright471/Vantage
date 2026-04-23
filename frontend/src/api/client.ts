@@ -1,12 +1,31 @@
+export type GpuStat = {
+  name: string;
+  memory_total_mb: number;
+  temperature_c: number;
+};
+
+export type OllamaErrorRecord = {
+  source?: string;
+  base_url?: string;
+  error: string;
+};
+
 export type NodeRecord = {
   node_id: string;
   display_name: string;
+  base_url: string;
   role: string;
   enabled: boolean;
   created_from: string;
   observed_status: string;
   freshness: string;
   last_seen_at: string | null;
+  gpu_stats: GpuStat[];
+  cpu_usage_percent: number | null;
+  memory_used_mb: number | null;
+  ollama_status: string | null;
+  ollama_errors: OllamaErrorRecord[];
+  model_count: number;
 };
 
 export type RunRecord = {

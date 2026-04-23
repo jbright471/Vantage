@@ -1,16 +1,32 @@
 import { useState } from "react";
 
-import { submitRefreshNode, type NodeRecord } from "../../api/client";
+import { submitRefreshNode, type NodeRecord, type RunRecord } from "../../api/client";
 import { NodeCard } from "./NodeCard";
+import { RemoteFocusPanel } from "./RemoteFocusPanel";
 
 type NodesPageProps = {
   nodes: Array<
-    Pick<NodeRecord, "node_id" | "display_name" | "observed_status" | "freshness" | "last_seen_at"> &
+    Pick<
+      NodeRecord,
+      | "node_id"
+      | "display_name"
+      | "base_url"
+      | "observed_status"
+      | "freshness"
+      | "last_seen_at"
+      | "gpu_stats"
+      | "cpu_usage_percent"
+      | "memory_used_mb"
+      | "ollama_status"
+      | "ollama_errors"
+      | "model_count"
+    > &
       Partial<Pick<NodeRecord, "role" | "enabled" | "created_from">>
   >;
+  runs: Array<Pick<RunRecord, "run_id" | "summary" | "status" | "node_id"> & Partial<Pick<RunRecord, "started_at">>>;
 };
 
-export function NodesPage({ nodes }: NodesPageProps) {
+export function NodesPage({ nodes, runs }: NodesPageProps) {
   const [refreshStateByNode, setRefreshStateByNode] = useState<
     Record<
       string,
@@ -86,6 +102,8 @@ export function NodesPage({ nodes }: NodesPageProps) {
           ))}
         </div>
       )}
+
+      <RemoteFocusPanel nodes={orderedNodes as NodeRecord[]} runs={runs as RunRecord[]} />
     </section>
   );
 }

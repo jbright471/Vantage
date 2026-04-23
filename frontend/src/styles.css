@@ -392,6 +392,75 @@ select {
   padding: 14px;
 }
 
+.focus-section {
+  margin-top: 18px;
+}
+
+.focus-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.focus-card {
+  padding: 16px;
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(46, 102, 255, 0.06) 0%, rgba(26, 28, 32, 0) 42%),
+    var(--surface);
+}
+
+.focus-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+
+.focus-summary-grid {
+  margin-bottom: 14px;
+}
+
+.focus-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.focus-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.focus-gpu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.focus-run-list,
+.focus-warning-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.focus-run-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+  padding: 10px 0;
+  border-top: 1px solid var(--outline);
+}
+
+.focus-run-item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
 .node-card-header {
   display: flex;
   justify-content: space-between;
@@ -596,6 +665,10 @@ select {
   }
 
   .runs-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .focus-layout {
     grid-template-columns: 1fr;
   }
 }
