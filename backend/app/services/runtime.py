@@ -44,8 +44,13 @@ def _serialize_remote_models(payload: dict) -> list[dict]:
     ]
 
 
-async def collect_remote_snapshot(node: Node) -> dict:
-    client = BastetClient(node.base_url)
+def resolve_agent_auth_token(config: BootstrapConfig) -> str | None:
+    token = os.getenv(config.agent_auth_token_env)
+    return token if token else None
+
+
+async def collect_remote_snapshot(node: Node, auth_token: str | None = None) -> dict:
+    client = BastetClient(node.base_url, auth_token=auth_token)
     captured_at = datetime.now(UTC)
     health_payload, gpu_payload, models_payload, runs_payload = await asyncio.gather(
         client.fetch_health(),
@@ -92,7 +97,7 @@ async def collect_remote_snapshot(node: Node) -> dict:
 
 async def collect_snapshot_for_node(node: Node, config: BootstrapConfig) -> dict:
     if node.role == "remote":
-        return await collect_remote_snapshot(node)
+        return await collect_remote_snapshot(node, auth_token=resolve_agent_auth_token(config))
     return await asyncio.to_thread(collect_local_snapshot, node.node_id, config.local_ollama_base_urls)
 
 
@@ -237,7 +242,18 @@ async def run_poll_cycle(
             session.commit()
 
     with session_factory() as session:
-        prune_snapshots(session, retention_hours=config.snapshot_retention_hours)
+        summary = prune_snapshots(
+            session,
+            retention_hours=config.snapshot_retention_hours,
+            max_per_node=config.snapshot_max_per_node,
+            min_per_node=config.snapshot_min_per_node,
+        )
+        if summary.total_deleted:
+            logger.info(
+                "snapshot_pruned deleted_by_age=%s deleted_by_count=%s",
+                summary.deleted_by_age,
+                summary.deleted_by_count,
+            )
         warnings = detect_config_drift(
             configured_nodes=[{"node_id": node.node_id, "enabled": node.enabled} for node in nodes],
             observed_nodes=observed_nodes,

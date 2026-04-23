@@ -1,9 +1,10 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 
+from agent.app.auth import require_agent_auth
 from agent.app import collectors
 from agent.app.schemas import CapabilityCheckRequest, GpuResponse, HealthResponse, ModelsResponse, RunInfo, RunsResponse
 
-app = FastAPI(title="Vantage Bastet Agent")
+app = FastAPI(title="Vantage Bastet Agent", dependencies=[Depends(require_agent_auth)])
 
 
 @app.get("/health", response_model=HealthResponse)

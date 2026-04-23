@@ -3,9 +3,12 @@ poll_interval_seconds = 5
 stale_after_seconds = 15
 unreachable_after_seconds = 30
 snapshot_retention_hours = 24
+snapshot_max_per_node = 5000
+snapshot_min_per_node = 1
 run_timeout_seconds = 300
 abandoned_after_seconds = 900
 idempotency_dedupe_seconds = 30
+agent_auth_token_env = "VANTAGE_AGENT_SHARED_TOKEN"
 local_ollama_base_urls = ["http://127.0.0.1:11434", "http://127.0.0.1:11435"]
 
 [[nodes]]

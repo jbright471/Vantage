@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+import os
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
@@ -28,6 +29,14 @@ def _coerce_datetime(value: str | datetime | None) -> datetime | None:
     if isinstance(value, datetime):
         return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _agent_auth_headers() -> dict[str, str]:
+    config = load_bootstrap_config(DEFAULT_BOOTSTRAP_CONFIG_PATH)
+    token = os.getenv(config.agent_auth_token_env)
+    if not token:
+        return {}
+    return {"Authorization": f"Bearer {token}"}
 
 
 @router.get("/models")
@@ -112,6 +121,7 @@ def run_capability_check(request: CapabilityCheckRequest) -> dict:
             response = httpx.post(
                 f"{node.base_url}/capability-check",
                 json={"model_name": request.model_name, "prompt": CAPABILITY_CHECK_PROMPT},
+                headers=_agent_auth_headers(),
                 timeout=60.0,
             )
             response.raise_for_status()

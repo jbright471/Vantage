@@ -11,6 +11,7 @@ services:
     environment:
       WATCHFILES_FORCE_POLLING: "true"
       VANTAGE_LOCAL_OLLAMA_BASE_URLS: "http://host.docker.internal:11434,http://host.docker.internal:11435"
+      VANTAGE_AGENT_SHARED_TOKEN: "${VANTAGE_AGENT_SHARED_TOKEN:-}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
