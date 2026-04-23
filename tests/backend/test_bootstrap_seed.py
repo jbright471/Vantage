@@ -39,3 +39,39 @@ def test_seed_nodes_from_config_inserts_without_duplicates() -> None:
         "app_settings",
         "warning_records",
     }.issubset(Base.metadata.tables.keys())
+
+
+def test_seed_nodes_from_config_updates_existing_bootstrap_node_fields() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        session.add(
+            Node(
+                node_id="bastet",
+                display_name="Bastet",
+                base_url="http://192.168.50.209:9100",
+                role="remote",
+                enabled=True,
+                created_from="bootstrap",
+            )
+        )
+        session.commit()
+
+        config = BootstrapConfig(
+            nodes=[
+                BootstrapNode(
+                    node_id="bastet",
+                    display_name="Bastet",
+                    base_url="http://192.168.50.209:9110",
+                    role="remote",
+                    enabled=True,
+                )
+            ]
+        )
+
+        seed_nodes_from_config(session, config)
+        updated = session.get(Node, "bastet")
+
+    assert updated is not None
+    assert updated.base_url == "http://192.168.50.209:9110"

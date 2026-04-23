@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 WorkingDirectory=/opt/vantage
-ExecStart=/opt/vantage/.venv/bin/uvicorn agent.app.main:app --host 0.0.0.0 --port 9100
+ExecStart=/opt/vantage/.venv/bin/python -m uvicorn agent.app.main:app --host 0.0.0.0 --port 9110
 Restart=always
 User=bastet
 

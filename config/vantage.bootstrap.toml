@@ -18,6 +18,6 @@ enabled = true
 [[nodes]]
 node_id = "bastet"
 display_name = "Bastet"
-base_url = "http://192.168.50.209:9100"
+base_url = "http://192.168.50.209:9110"
 role = "remote"
 enabled = true

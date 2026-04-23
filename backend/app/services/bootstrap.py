@@ -9,6 +9,11 @@ def seed_nodes_from_config(session: Session, config: BootstrapConfig) -> None:
     for bootstrap_node in config.nodes:
         existing = session.scalar(select(Node).where(Node.node_id == bootstrap_node.node_id))
         if existing:
+            if existing.created_from == "bootstrap":
+                existing.display_name = bootstrap_node.display_name
+                existing.base_url = bootstrap_node.base_url
+                existing.role = bootstrap_node.role
+                existing.enabled = bootstrap_node.enabled
             continue
         session.add(
             Node(
