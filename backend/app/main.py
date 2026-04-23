@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -15,15 +16,36 @@ from backend.app.config import DEFAULT_BOOTSTRAP_CONFIG_PATH, load_bootstrap_con
 from backend.app.db import SessionLocal, engine
 from backend.app.models import Base
 from backend.app.services.bootstrap import seed_nodes_from_config
+from backend.app.services.events import EventBroker
+from backend.app.services.runtime import background_polling_enabled, poll_forever, run_poll_cycle, stop_polling_task
+from backend.app.logging import configure_logging
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    configure_logging()
     Base.metadata.create_all(bind=engine)
     config = load_bootstrap_config(DEFAULT_BOOTSTRAP_CONFIG_PATH)
+    broker = EventBroker()
+    app.state.event_broker = broker
+
     with SessionLocal() as session:
         seed_nodes_from_config(session, config)
-    yield
+
+    poller_task: asyncio.Task[None] | None = None
+    if background_polling_enabled():
+        await run_poll_cycle(config, broker=broker)
+        stop_event = asyncio.Event()
+        app.state.poller_stop_event = stop_event
+        poller_task = asyncio.create_task(poll_forever(stop_event, config, broker))
+        app.state.poller_task = poller_task
+
+    try:
+        yield
+    finally:
+        if poller_task is not None:
+            app.state.poller_stop_event.set()
+            await stop_polling_task(poller_task)
 
 
 app = FastAPI(title="Vantage Control Plane", lifespan=lifespan)

@@ -1,15 +1,42 @@
+from datetime import UTC, datetime
+
 from collections import defaultdict
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.models import ModelPlacement, Node, RoutingRule, RoutingRuleNode, Run, WarningRecord
+from backend.app.config import BootstrapConfig, DEFAULT_BOOTSTRAP_CONFIG_PATH, load_bootstrap_config
+from backend.app.models import ModelPlacement, Node, NodeSnapshot, RoutingRule, RoutingRuleNode, Run, WarningRecord
 
 
-def get_nodes_state(session: Session) -> list[dict]:
+def _timestamp(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+def get_nodes_state(session: Session, config: BootstrapConfig | None = None) -> list[dict]:
+    active_config = config or load_bootstrap_config(DEFAULT_BOOTSTRAP_CONFIG_PATH)
     nodes = session.scalars(select(Node).order_by(Node.display_name)).all()
+    snapshots = session.scalars(select(NodeSnapshot).order_by(NodeSnapshot.captured_at.desc())).all()
+    latest_snapshot_by_node: dict[str, NodeSnapshot] = {}
+    for snapshot in snapshots:
+        latest_snapshot_by_node.setdefault(snapshot.node_id, snapshot)
+
     state: list[dict] = []
+    now = datetime.now(UTC)
     for node in nodes:
+        latest_snapshot = latest_snapshot_by_node.get(node.node_id)
+        last_seen_at = _timestamp(node.last_seen_at)
+        freshness = "stale"
+        observed_status = "unreachable"
+
+        if last_seen_at is not None:
+            age_seconds = (now - last_seen_at).total_seconds()
+            freshness = "stale" if age_seconds >= active_config.stale_after_seconds else "live"
+            if age_seconds < active_config.unreachable_after_seconds and latest_snapshot is not None:
+                observed_status = latest_snapshot.health_status
+
         state.append(
             {
                 "node_id": node.node_id,
@@ -17,9 +44,9 @@ def get_nodes_state(session: Session) -> list[dict]:
                 "role": node.role,
                 "enabled": node.enabled,
                 "created_from": node.created_from,
-                "observed_status": "unreachable" if node.last_seen_at is None else "healthy",
-                "freshness": "stale" if node.last_seen_at is None else "live",
-                "last_seen_at": node.last_seen_at.isoformat() if node.last_seen_at else None,
+                "observed_status": observed_status,
+                "freshness": freshness,
+                "last_seen_at": last_seen_at.isoformat() if last_seen_at else None,
             }
         )
     return state
@@ -80,9 +107,9 @@ def get_warnings_state(session: Session) -> list[dict]:
     ]
 
 
-def build_full_state(session: Session) -> dict:
+def build_full_state(session: Session, config: BootstrapConfig | None = None) -> dict:
     return {
-        "nodes": get_nodes_state(session),
+        "nodes": get_nodes_state(session, config=config),
         "runs": get_runs_state(session),
         "models": get_models_state(session),
         "routing": get_routing_state(session),

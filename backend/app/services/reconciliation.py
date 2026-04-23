@@ -48,3 +48,20 @@ def upsert_warning_records(session: Session, warnings: list[dict]) -> None:
             session.add(WarningRecord(**payload))
 
     session.commit()
+
+
+def resolve_warning_records(session: Session, warning_type: str, active_node_ids: set[str | None]) -> None:
+    active_warnings = session.scalars(
+        select(WarningRecord).where(
+            WarningRecord.warning_type == warning_type,
+            WarningRecord.status == "active",
+        )
+    ).all()
+    now = datetime.now(UTC)
+
+    for warning in active_warnings:
+        if warning.node_id not in active_node_ids:
+            warning.status = "resolved"
+            warning.last_seen_at = now
+
+    session.commit()
