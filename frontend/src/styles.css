@@ -544,6 +544,37 @@ select {
   color: var(--danger);
 }
 
+.table-action-cell {
+  min-width: 260px;
+}
+
+.action-stack,
+.placement-stack,
+.inline-result {
+  display: grid;
+  gap: 8px;
+}
+
+.placement-stack {
+  grid-template-columns: repeat(auto-fit, minmax(88px, max-content));
+}
+
+.placement-chip {
+  width: fit-content;
+}
+
+.inline-action-row,
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.inline-result {
+  margin-left: 2px;
+}
+
 .runs-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) 320px;

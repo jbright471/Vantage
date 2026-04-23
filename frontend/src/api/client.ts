@@ -32,17 +32,31 @@ export type RunRecord = {
   run_id: string;
   summary: string;
   status: string;
+  source_type?: string;
+  detail_type?: string;
   node_id: string | null;
   started_at: string | null;
+  ended_at?: string | null;
+  duration_ms?: number | null;
+  model_name?: string | null;
+  action_type?: string | null;
+  metadata_json?: Record<string, unknown>;
 };
 
 export type ActionRunRecord = RunRecord & {
   idempotency_key: string | null;
 };
 
+export type ModelPlacementRecord = {
+  node_id: string;
+  model_digest: string | null;
+  available: boolean;
+};
+
 export type ModelRecord = {
   model_name: string;
   placements: string[];
+  placement_details: ModelPlacementRecord[];
 };
 
 export type RoutingRuleRecord = {
@@ -109,4 +123,45 @@ export async function submitRefreshNode(nodeId: string): Promise<ActionRunRecord
   }
 
   return (await response.json()) as ActionRunRecord;
+}
+
+
+export async function submitCapabilityCheck(modelName: string, nodeId: string): Promise<RunRecord> {
+  const response = await fetch("/api/models/capability-check", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model_name: modelName,
+      node_id: nodeId,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Capability check failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as RunRecord;
+}
+
+
+export async function updateRoutingRule(ruleId: string, preferredNodes: string[]): Promise<RoutingRuleRecord> {
+  const response = await fetch(`/api/routing/${encodeURIComponent(ruleId)}`, {
+    method: "PUT",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      preferred_nodes: preferredNodes,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Routing update failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as RoutingRuleRecord;
 }

@@ -15,7 +15,7 @@ from backend.app.api.warnings import router as warnings_router
 from backend.app.config import DEFAULT_BOOTSTRAP_CONFIG_PATH, load_bootstrap_config
 from backend.app.db import SessionLocal, engine
 from backend.app.models import Base
-from backend.app.services.bootstrap import seed_nodes_from_config
+from backend.app.services.bootstrap import seed_nodes_from_config, seed_routing_from_config
 from backend.app.services.events import EventBroker
 from backend.app.services.runtime import background_polling_enabled, poll_forever, run_poll_cycle, stop_polling_task
 from backend.app.logging import configure_logging
@@ -31,6 +31,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     with SessionLocal() as session:
         seed_nodes_from_config(session, config)
+        seed_routing_from_config(session, config)
 
     poller_task: asyncio.Task[None] | None = None
     if background_polling_enabled():

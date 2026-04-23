@@ -11,7 +11,7 @@ from backend.app.collectors.local import collect_local_snapshot
 from backend.app.collectors.remote import BastetClient
 from backend.app.config import BootstrapConfig
 from backend.app.db import SessionLocal
-from backend.app.models import ModelPlacement, Node, NodeSnapshot
+from backend.app.models import ModelPlacement, Node, NodeSnapshot, Run
 from backend.app.services.events import EventBroker
 from backend.app.services.polling import classify_health, extract_model_placements, normalize_snapshot
 from backend.app.services.pruning import prune_snapshots
@@ -47,10 +47,11 @@ def _serialize_remote_models(payload: dict) -> list[dict]:
 async def collect_remote_snapshot(node: Node) -> dict:
     client = BastetClient(node.base_url)
     captured_at = datetime.now(UTC)
-    health_payload, gpu_payload, models_payload = await asyncio.gather(
+    health_payload, gpu_payload, models_payload, runs_payload = await asyncio.gather(
         client.fetch_health(),
         client.fetch_gpu(),
         client.fetch_models(),
+        client.fetch_runs(),
         return_exceptions=True,
     )
 
@@ -70,6 +71,9 @@ async def collect_remote_snapshot(node: Node) -> dict:
     if isinstance(models_payload, Exception):
         errors.append({"source": "models", "error": str(models_payload)})
 
+    if isinstance(runs_payload, Exception):
+        errors.append({"source": "runs", "error": str(runs_payload)})
+
     return {
         "node_id": node.node_id,
         "captured_at": captured_at,
@@ -82,6 +86,7 @@ async def collect_remote_snapshot(node: Node) -> dict:
             "models": [] if isinstance(models_payload, Exception) else _serialize_remote_models(models_payload),
             "errors": errors,
         },
+        "runs_json": [] if isinstance(runs_payload, Exception) else runs_payload.get("runs", []),
     }
 
 
@@ -126,6 +131,80 @@ def persist_node_observation(session, node: Node, raw_snapshot: dict) -> dict:
     return normalized
 
 
+def _coerce_remote_datetime(value, fallback: datetime) -> datetime:
+    if isinstance(value, datetime):
+        return _timestamp(value)
+    if isinstance(value, str):
+        return _timestamp(datetime.fromisoformat(value.replace("Z", "+00:00")))
+    return fallback
+
+
+def persist_remote_runs(session, node_id: str, payloads: list[dict], observed_at: datetime) -> None:
+    active_loaded_model_run_ids: set[str] = set()
+
+    for payload in payloads:
+        run_id = payload.get("run_id")
+        if not run_id:
+            continue
+
+        started_at = _coerce_remote_datetime(payload.get("started_at"), observed_at)
+        ended_at = payload.get("ended_at")
+        coerced_ended_at = _coerce_remote_datetime(ended_at, observed_at) if ended_at else None
+
+        existing = session.get(Run, run_id)
+        if existing is None:
+            session.add(
+                Run(
+                    run_id=run_id,
+                    source_type=payload.get("source_type", "remote_agent"),
+                    detail_type=payload.get("detail_type", "remote_activity"),
+                    source_id=payload.get("source_id", f"remote:{node_id}:{run_id}"),
+                    node_id=payload.get("node_id", node_id),
+                    model_name=payload.get("model_name"),
+                    action_type=payload.get("action_type"),
+                    status=payload.get("status", "running"),
+                    started_at=started_at,
+                    ended_at=coerced_ended_at,
+                    duration_ms=payload.get("duration_ms"),
+                    summary=payload.get("summary", f"Remote activity on {node_id}"),
+                    metadata_json=payload.get("metadata_json", {}),
+                )
+            )
+        else:
+            existing.source_type = payload.get("source_type", existing.source_type)
+            existing.detail_type = payload.get("detail_type", existing.detail_type)
+            existing.source_id = payload.get("source_id", existing.source_id)
+            existing.node_id = payload.get("node_id", existing.node_id)
+            existing.model_name = payload.get("model_name")
+            existing.action_type = payload.get("action_type")
+            existing.status = payload.get("status", existing.status)
+            existing.ended_at = coerced_ended_at
+            existing.duration_ms = payload.get("duration_ms")
+            existing.summary = payload.get("summary", existing.summary)
+            existing.metadata_json = payload.get("metadata_json", {})
+
+        if payload.get("detail_type") == "ollama_loaded_model" and payload.get("status") == "running":
+            active_loaded_model_run_ids.add(run_id)
+
+    existing_active_runs = session.scalars(
+        select(Run).where(
+            Run.node_id == node_id,
+            Run.detail_type == "ollama_loaded_model",
+            Run.status == "running",
+        )
+    ).all()
+    for run in existing_active_runs:
+        if run.run_id in active_loaded_model_run_ids:
+            continue
+        run.status = "success"
+        run.ended_at = observed_at
+        if run.duration_ms is None:
+            run.duration_ms = int((observed_at - _timestamp(run.started_at)).total_seconds() * 1000)
+        metadata_json = dict(run.metadata_json)
+        metadata_json["released_at"] = observed_at.isoformat()
+        run.metadata_json = metadata_json
+
+
 async def run_poll_cycle(
     config: BootstrapConfig,
     broker: EventBroker | None = None,
@@ -148,6 +227,13 @@ async def run_poll_cycle(
             if persisted_node is None:
                 continue
             observed_nodes[node.node_id] = persist_node_observation(session, persisted_node, raw_snapshot)
+            if persisted_node.role == "remote":
+                persist_remote_runs(
+                    session,
+                    persisted_node.node_id,
+                    raw_snapshot.get("runs_json", []),
+                    _timestamp(raw_snapshot.get("captured_at", datetime.now(UTC))),
+                )
             session.commit()
 
     with session_factory() as session:

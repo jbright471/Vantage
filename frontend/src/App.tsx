@@ -160,7 +160,7 @@ export default function App() {
         <NodesPage nodes={state.nodes} runs={state.runs} />
         <RunsPage runs={state.runs} />
         <ModelsPage models={state.models} />
-        <RoutingPage rules={state.routing} />
+        <RoutingPage rules={state.routing} availableNodes={state.nodes.map((node) => node.node_id)} />
       </section>
     </main>
   );

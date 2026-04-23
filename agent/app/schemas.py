@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -26,5 +28,26 @@ class ModelsResponse(BaseModel):
     models: list[ModelInfo]
 
 
+class RunInfo(BaseModel):
+    run_id: str
+    source_type: str
+    detail_type: str
+    source_id: str
+    node_id: str
+    model_name: str | None = None
+    action_type: str | None = None
+    status: str
+    started_at: datetime
+    ended_at: datetime | None = None
+    duration_ms: int | None = None
+    summary: str
+    metadata_json: dict
+
+
 class RunsResponse(BaseModel):
-    runs: list[dict]
+    runs: list[RunInfo]
+
+
+class CapabilityCheckRequest(BaseModel):
+    model_name: str
+    prompt: str | None = None

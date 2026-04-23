@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from agent.app import collectors
-from agent.app.schemas import GpuResponse, HealthResponse, ModelsResponse, RunsResponse
+from agent.app.schemas import CapabilityCheckRequest, GpuResponse, HealthResponse, ModelsResponse, RunInfo, RunsResponse
 
 app = FastAPI(title="Vantage Bastet Agent")
 
@@ -24,3 +24,8 @@ def models() -> dict:
 @app.get("/runs", response_model=RunsResponse)
 def runs() -> dict:
     return {"runs": collectors.get_runs()}
+
+
+@app.post("/capability-check", response_model=RunInfo)
+def capability_check(request: CapabilityCheckRequest) -> dict:
+    return collectors.run_capability_check(request.model_name, prompt=request.prompt)

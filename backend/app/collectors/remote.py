@@ -22,3 +22,9 @@ class BastetClient:
             response = await client.get(f"{self.base_url}/models")
             response.raise_for_status()
             return response.json()
+
+    async def fetch_runs(self) -> dict:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{self.base_url}/runs")
+            response.raise_for_status()
+            return response.json()

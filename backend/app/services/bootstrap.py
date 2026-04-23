@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.config import BootstrapConfig
-from backend.app.models import Node
+from backend.app.models import Node, RoutingRule, RoutingRuleNode
 
 
 def seed_nodes_from_config(session: Session, config: BootstrapConfig) -> None:
@@ -25,4 +25,56 @@ def seed_nodes_from_config(session: Session, config: BootstrapConfig) -> None:
                 created_from="bootstrap",
             )
         )
+    session.commit()
+
+
+def _default_routing_specs(config: BootstrapConfig) -> list[dict]:
+    enabled_nodes = [node for node in config.nodes if node.enabled]
+    if not enabled_nodes:
+        return []
+
+    primary_nodes = [node.node_id for node in enabled_nodes if node.role == "primary"]
+    worker_nodes = [node.node_id for node in enabled_nodes if node.role != "primary"]
+    control_first = primary_nodes + worker_nodes
+    worker_first = worker_nodes + primary_nodes if worker_nodes else control_first
+
+    return [
+        {
+            "rule_id": "interactive-default",
+            "priority_class": "interactive",
+            "model_name": None,
+            "preferred_nodes": control_first,
+        },
+        {
+            "rule_id": "batch-default",
+            "priority_class": "batch",
+            "model_name": None,
+            "preferred_nodes": worker_first,
+        },
+        {
+            "rule_id": "scheduled-default",
+            "priority_class": "scheduled",
+            "model_name": None,
+            "preferred_nodes": worker_first,
+        },
+    ]
+
+
+def seed_routing_from_config(session: Session, config: BootstrapConfig) -> None:
+    existing_rule_ids = set(session.scalars(select(RoutingRule.rule_id)).all())
+    for spec in _default_routing_specs(config):
+        if spec["rule_id"] in existing_rule_ids:
+            continue
+
+        session.add(
+            RoutingRule(
+                rule_id=spec["rule_id"],
+                priority_class=spec["priority_class"],
+                model_name=spec["model_name"],
+                enabled=True,
+            )
+        )
+        for sort_order, node_id in enumerate(spec["preferred_nodes"]):
+            session.add(RoutingRuleNode(rule_id=spec["rule_id"], node_id=node_id, sort_order=sort_order))
+
     session.commit()

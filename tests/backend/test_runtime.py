@@ -68,7 +68,13 @@ def test_run_poll_cycle_persists_snapshots_and_model_inventory(monkeypatch) -> N
 
     state = asyncio.run(run_poll_cycle(config, session_factory=session_factory))
 
-    assert state["models"] == [{"model_name": "qwen3.5:27b", "placements": ["jedi"]}]
+    assert state["models"] == [
+        {
+            "model_name": "qwen3.5:27b",
+            "placements": ["jedi"],
+            "placement_details": [{"node_id": "jedi", "model_digest": "sha256:111", "available": True}],
+        }
+    ]
     assert state["nodes"][0]["model_count"] == 1
     assert state["nodes"][0]["ollama_status"] == "ok"
     assert state["nodes"][0]["memory_used_mb"] == 4096
@@ -224,3 +230,66 @@ def test_run_poll_cycle_resolves_config_drift_warning_once_node_is_observed(monk
 
     assert warning is not None
     assert warning.status == "resolved"
+
+
+def test_run_poll_cycle_persists_remote_runs(monkeypatch) -> None:
+    session_factory = build_session_factory()
+    config = BootstrapConfig(
+        nodes=[
+            BootstrapNode(
+                node_id="bastet",
+                display_name="Bastet",
+                base_url="http://192.168.50.209:9110",
+                role="remote",
+                enabled=True,
+            )
+        ],
+    )
+
+    with session_factory() as session:
+        session.add(
+            Node(
+                node_id="bastet",
+                display_name="Bastet",
+                base_url="http://192.168.50.209:9110",
+                role="remote",
+                enabled=True,
+                created_from="bootstrap",
+            )
+        )
+        session.commit()
+
+    async def fake_collect(node, runtime_config):
+        captured_at = datetime.now(UTC)
+        return {
+            "node_id": node.node_id,
+            "captured_at": captured_at,
+            "gpu_json": [],
+            "cpu_json": {},
+            "memory_json": {},
+            "ollama_json": {"status": "ok", "models": [], "errors": []},
+            "runs_json": [
+                {
+                    "run_id": "remote-run-1",
+                    "source_type": "remote_agent",
+                    "detail_type": "capability_check",
+                    "source_id": "capability-check:bastet:qwen3.6:latest",
+                    "node_id": "bastet",
+                    "model_name": "qwen3.6:latest",
+                    "action_type": "infer",
+                    "status": "success",
+                    "started_at": captured_at,
+                    "ended_at": captured_at,
+                    "duration_ms": 321,
+                    "summary": "Capability check passed for qwen3.6:latest on bastet",
+                    "metadata_json": {"response_preview": "{\"mode\":\"ok\"}"},
+                }
+            ],
+        }
+
+    monkeypatch.setattr("backend.app.services.runtime.collect_snapshot_for_node", fake_collect)
+
+    state = asyncio.run(run_poll_cycle(config, session_factory=session_factory))
+
+    assert state["runs"][0]["run_id"] == "remote-run-1"
+    assert state["runs"][0]["detail_type"] == "capability_check"

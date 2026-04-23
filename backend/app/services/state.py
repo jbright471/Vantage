@@ -76,8 +76,15 @@ def get_runs_state(session: Session) -> list[dict]:
             "run_id": run.run_id,
             "summary": run.summary,
             "status": run.status,
+            "source_type": run.source_type,
+            "detail_type": run.detail_type,
             "node_id": run.node_id,
             "started_at": run.started_at.isoformat(),
+            "ended_at": run.ended_at.isoformat() if run.ended_at else None,
+            "duration_ms": run.duration_ms,
+            "model_name": run.model_name,
+            "action_type": run.action_type,
+            "metadata_json": run.metadata_json,
         }
         for run in runs
     ]
@@ -86,9 +93,24 @@ def get_runs_state(session: Session) -> list[dict]:
 def get_models_state(session: Session) -> list[dict]:
     placements = session.scalars(select(ModelPlacement).order_by(ModelPlacement.model_name, ModelPlacement.node_id)).all()
     grouped: dict[str, list[str]] = defaultdict(list)
+    placement_details: dict[str, list[dict]] = defaultdict(list)
     for placement in placements:
         grouped[placement.model_name].append(placement.node_id)
-    return [{"model_name": model_name, "placements": nodes} for model_name, nodes in grouped.items()]
+        placement_details[placement.model_name].append(
+            {
+                "node_id": placement.node_id,
+                "model_digest": placement.model_digest,
+                "available": placement.available,
+            }
+        )
+    return [
+        {
+            "model_name": model_name,
+            "placements": nodes,
+            "placement_details": placement_details[model_name],
+        }
+        for model_name, nodes in grouped.items()
+    ]
 
 
 def get_routing_state(session: Session) -> list[dict]:

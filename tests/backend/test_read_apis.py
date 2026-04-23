@@ -27,3 +27,4 @@ def test_nodes_runs_models_routing_and_warnings_endpoints_exist() -> None:
         assert isinstance(models.json(), list)
         assert isinstance(routing.json(), list)
         assert isinstance(warnings.json(), list)
+        assert any(rule["rule_id"] == "interactive-default" for rule in routing.json())
