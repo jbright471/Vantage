@@ -529,6 +529,17 @@ select {
   border-color: rgba(182, 196, 255, 0.7);
 }
 
+.action-button.is-danger {
+  background: rgba(255, 98, 98, 0.16);
+  border-color: rgba(255, 142, 142, 0.58);
+  color: #ffb4b4;
+}
+
+.action-button.is-danger:hover:not(:disabled) {
+  background: rgba(255, 98, 98, 0.24);
+  border-color: rgba(255, 180, 180, 0.74);
+}
+
 .action-button:disabled {
   cursor: wait;
   opacity: 0.72;
@@ -579,6 +590,47 @@ select {
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) 320px;
   gap: 16px;
+}
+
+.runs-toolbar,
+.pagination-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.pagination-row {
+  margin: 16px 0 0;
+  justify-content: flex-end;
+}
+
+.segmented-control {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.segmented-control button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.segmented-control button:hover,
+.segmented-control button.is-selected {
+  background: rgba(46, 102, 255, 0.2);
+  color: var(--primary-soft);
 }
 
 .table-shell {
@@ -681,6 +733,61 @@ select {
 .info-card h3 {
   font-size: 1.15rem;
   text-transform: none;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(3, 7, 18, 0.76);
+  backdrop-filter: blur(10px);
+}
+
+.confirmation-modal {
+  width: min(520px, 100%);
+  padding: 22px;
+  border: 1px solid rgba(182, 196, 255, 0.32);
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(18, 26, 44, 0.98), rgba(10, 16, 28, 0.98));
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+}
+
+.confirmation-modal h3 {
+  margin: 6px 0 0;
+}
+
+.modal-meta {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.modal-meta div {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.modal-meta dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.modal-meta dd {
+  margin: 0;
+  color: var(--text);
+}
+
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 @media (max-width: 1100px) {

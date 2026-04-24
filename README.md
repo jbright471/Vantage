@@ -26,6 +26,8 @@ Vantage exists to make that state visible and actionable without taking ownershi
 - Model placement details with Ollama digests
 - Operator-editable routing preference order
 - Remote run ingestion from node agents
+- Backend-filtered run history with pagination
+- CSV and JSON audit exports for run history
 - Local LLM capability checks from the Models surface
 - SSE-based live UI updates
 - SQLite persistence with bounded snapshot pruning

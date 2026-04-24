@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.config import BootstrapConfig, DEFAULT_BOOTSTRAP_CONFIG_PATH, load_bootstrap_config
 from backend.app.models import ModelPlacement, Node, NodeSnapshot, RoutingRule, RoutingRuleNode, Run, WarningRecord
+from backend.app.services.runs import serialize_run
 
 
 def _timestamp(value: datetime | None) -> datetime | None:
@@ -71,23 +72,7 @@ def get_nodes_state(session: Session, config: BootstrapConfig | None = None) -> 
 
 def get_runs_state(session: Session) -> list[dict]:
     runs = session.scalars(select(Run).order_by(Run.started_at.desc())).all()
-    return [
-        {
-            "run_id": run.run_id,
-            "summary": run.summary,
-            "status": run.status,
-            "source_type": run.source_type,
-            "detail_type": run.detail_type,
-            "node_id": run.node_id,
-            "started_at": run.started_at.isoformat(),
-            "ended_at": run.ended_at.isoformat() if run.ended_at else None,
-            "duration_ms": run.duration_ms,
-            "model_name": run.model_name,
-            "action_type": run.action_type,
-            "metadata_json": run.metadata_json,
-        }
-        for run in runs
-    ]
+    return [serialize_run(run) for run in runs]
 
 
 def get_models_state(session: Session) -> list[dict]:

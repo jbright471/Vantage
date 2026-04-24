@@ -43,6 +43,26 @@ export type RunRecord = {
   metadata_json?: Record<string, unknown>;
 };
 
+export type RunsQuery = {
+  status?: string | null;
+  node_id?: string | null;
+  detail_type?: string | null;
+  limit?: number;
+  offset?: number;
+};
+
+export type RunsQueryResult = {
+  items: RunRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+  filters: {
+    status: string | null;
+    node_id: string | null;
+    detail_type: string | null;
+  };
+};
+
 export type ActionRunRecord = RunRecord & {
   idempotency_key: string | null;
 };
@@ -108,6 +128,52 @@ export function mergeFullState(current: FullState, patch: Partial<FullState>): F
     routing: patch.routing ?? current.routing,
     warnings: patch.warnings ?? current.warnings,
   };
+}
+
+function buildRunsSearchParams(query: RunsQuery): URLSearchParams {
+  const params = new URLSearchParams();
+  if (query.status) {
+    params.set("status", query.status);
+  }
+  if (query.node_id) {
+    params.set("node_id", query.node_id);
+  }
+  if (query.detail_type) {
+    params.set("detail_type", query.detail_type);
+  }
+  if (query.limit) {
+    params.set("limit", String(query.limit));
+  }
+  if (query.offset) {
+    params.set("offset", String(query.offset));
+  }
+  return params;
+}
+
+export function buildRunExportUrl(format: "csv" | "json", query: RunsQuery): string {
+  const params = buildRunsSearchParams({
+    status: query.status,
+    node_id: query.node_id,
+    detail_type: query.detail_type,
+  });
+  const suffix = params.toString();
+  return `/api/runs/export.${format}${suffix ? `?${suffix}` : ""}`;
+}
+
+export async function fetchRuns(query: RunsQuery): Promise<RunsQueryResult> {
+  const params = buildRunsSearchParams(query);
+  const suffix = params.toString();
+  const response = await fetch(`/api/runs${suffix ? `?${suffix}` : ""}`, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Runs request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as RunsQueryResult;
 }
 
 export async function submitRefreshNode(nodeId: string): Promise<ActionRunRecord> {

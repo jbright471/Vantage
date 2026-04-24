@@ -3,6 +3,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { RoutingPage } from "./RoutingPage";
 
 describe("RoutingPage", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("renders the preferred node order", () => {
     render(
       <RoutingPage
@@ -21,7 +25,7 @@ describe("RoutingPage", () => {
     expect(screen.getByText("jedi → bastet")).toBeTruthy();
   });
 
-  it("lets the operator promote a preferred node", async () => {
+  it("requires strict confirmation before promoting a preferred node", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -46,6 +50,11 @@ describe("RoutingPage", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /prefer bastet/i }));
+
+    expect(screen.getByRole("dialog", { name: /confirm preferred node change/i })).toBeTruthy();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /confirm routing change/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/preferred node updated/i)).toBeTruthy();

@@ -23,7 +23,7 @@ def test_nodes_runs_models_routing_and_warnings_endpoints_exist() -> None:
         assert "gpu_stats" in jedi
         assert "model_count" in jedi
         assert "ollama_status" in jedi
-        assert isinstance(runs.json(), list)
+        assert isinstance(runs.json()["items"], list)
         assert isinstance(models.json(), list)
         assert isinstance(routing.json(), list)
         assert isinstance(warnings.json(), list)

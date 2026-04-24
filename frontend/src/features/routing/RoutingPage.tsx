@@ -7,6 +7,13 @@ type RoutingPageProps = {
   availableNodes: string[];
 };
 
+type PendingRouteChange = {
+  ruleId: string;
+  nodeId: string;
+  currentOrder: string[];
+  nextOrder: string[];
+};
+
 function formatModelScope(modelName: string | null | undefined): string {
   if (!modelName) {
     return "Default rule";
@@ -20,6 +27,7 @@ export function RoutingPage({ rules, availableNodes }: RoutingPageProps) {
   const [saveStateByRule, setSaveStateByRule] = useState<
     Record<string, { phase: "idle" | "saving" | "saved" | "error"; message?: string }>
   >({});
+  const [pendingRouteChange, setPendingRouteChange] = useState<PendingRouteChange | null>(null);
   const orderedRules = [...rules].sort((left, right) => left.priority_class.localeCompare(right.priority_class));
   const effectiveRules = orderedRules.map((rule) => ({
     ...rule,
@@ -38,13 +46,32 @@ export function RoutingPage({ rules, availableNodes }: RoutingPageProps) {
     });
   }, [rules]);
 
-  async function handlePromote(ruleId: string, nodeId: string) {
+  function buildPreferredOrder(ruleId: string, nodeId: string): PendingRouteChange {
     const currentOrder = preferredNodesByRule[ruleId] ?? rules.find((rule) => rule.rule_id === ruleId)?.preferred_nodes ?? [];
     const nextOrder = [
       nodeId,
       ...currentOrder.filter((candidate) => candidate !== nodeId),
       ...availableNodes.filter((candidate) => candidate !== nodeId && !currentOrder.includes(candidate)),
     ];
+
+    return {
+      ruleId,
+      nodeId,
+      currentOrder,
+      nextOrder,
+    };
+  }
+
+  function openRouteConfirmation(ruleId: string, nodeId: string) {
+    setPendingRouteChange(buildPreferredOrder(ruleId, nodeId));
+  }
+
+  async function confirmRouteChange() {
+    if (!pendingRouteChange) {
+      return;
+    }
+
+    const { ruleId, nodeId, nextOrder } = pendingRouteChange;
 
     setPreferredNodesByRule((current) => ({
       ...current,
@@ -72,6 +99,10 @@ export function RoutingPage({ rules, availableNodes }: RoutingPageProps) {
         },
       }));
     } catch (error) {
+      setPreferredNodesByRule((current) => ({
+        ...current,
+        [ruleId]: pendingRouteChange.currentOrder,
+      }));
       setSaveStateByRule((current) => ({
         ...current,
         [ruleId]: {
@@ -79,6 +110,8 @@ export function RoutingPage({ rules, availableNodes }: RoutingPageProps) {
           message: error instanceof Error ? error.message : "Routing update failed.",
         },
       }));
+    } finally {
+      setPendingRouteChange(null);
     }
   }
 
@@ -147,7 +180,7 @@ export function RoutingPage({ rules, availableNodes }: RoutingPageProps) {
                               key={`${rule.rule_id}-${nodeId}`}
                               type="button"
                               className="action-button"
-                              onClick={() => handlePromote(rule.rule_id, nodeId)}
+                              onClick={() => openRouteConfirmation(rule.rule_id, nodeId)}
                               disabled={saveStateByRule[rule.rule_id]?.phase === "saving"}
                             >
                               Prefer {nodeId}
@@ -172,6 +205,46 @@ export function RoutingPage({ rules, availableNodes }: RoutingPageProps) {
           </div>
         </>
       )}
+
+      {pendingRouteChange ? (
+        <div className="modal-backdrop" role="presentation">
+          <section
+            className="confirmation-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="routing-confirm-title"
+          >
+            <p className="section-kicker">Routing change</p>
+            <h3 id="routing-confirm-title">Confirm preferred node change</h3>
+            <p className="info-copy">
+              This changes configured routing order for the selected lane. Vantage requires explicit confirmation before
+              altering where future work is preferred.
+            </p>
+            <dl className="modal-meta">
+              <div>
+                <dt>Rule</dt>
+                <dd>{pendingRouteChange.ruleId}</dd>
+              </div>
+              <div>
+                <dt>Promote</dt>
+                <dd>{pendingRouteChange.nodeId}</dd>
+              </div>
+              <div>
+                <dt>New order</dt>
+                <dd>{pendingRouteChange.nextOrder.join(" → ")}</dd>
+              </div>
+            </dl>
+            <div className="modal-actions">
+              <button type="button" className="action-button" onClick={() => setPendingRouteChange(null)}>
+                Cancel
+              </button>
+              <button type="button" className="action-button is-danger" onClick={confirmRouteChange}>
+                Confirm routing change
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }
