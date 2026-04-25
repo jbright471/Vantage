@@ -1,8 +1,13 @@
+import { lazy, Suspense, useState } from "react";
 import { ModelsPage } from "./features/models/ModelsPage";
 import { NodesPage } from "./features/nodes/NodesPage";
 import { RoutingPage } from "./features/routing/RoutingPage";
 import { RunsPage } from "./features/runs/RunsPage";
 import { useEventSource } from "./hooks/useEventSource";
+
+const OperatorGuideDrawer = lazy(() =>
+  import("./features/docs/OperatorGuideDrawer").then((module) => ({ default: module.OperatorGuideDrawer })),
+);
 
 function formatRelativeSync(lastSyncAt: string | null): string {
   if (!lastSyncAt) {
@@ -46,6 +51,7 @@ function labelPrimaryNode(nodes: Array<{ node_id: string; role: string; observed
 
 export default function App() {
   const { state, streamStatus, lastSyncAt, errorMessage } = useEventSource("/api/stream");
+  const [isDocsOpen, setIsDocsOpen] = useState(false);
 
   const liveNodes = state.nodes.filter((node) => node.freshness === "live").length;
   const staleNodes = state.nodes.filter((node) => node.freshness !== "live").length;
@@ -129,6 +135,10 @@ export default function App() {
               <span className={`status-chip is-${streamStatus}`}>{labelStreamStatus(streamStatus)}</span>
               <span className="meta-chip">{primaryNodeLabel}</span>
             </div>
+            <button type="button" className="docs-trigger-button" onClick={() => setIsDocsOpen(true)}>
+              <span aria-hidden="true">?</span>
+              Docs
+            </button>
           </div>
         </header>
 
@@ -162,6 +172,12 @@ export default function App() {
         <ModelsPage models={state.models} />
         <RoutingPage rules={state.routing} availableNodes={state.nodes.map((node) => node.node_id)} />
       </section>
+
+      {isDocsOpen ? (
+        <Suspense fallback={null}>
+          <OperatorGuideDrawer isOpen={isDocsOpen} onClose={() => setIsDocsOpen(false)} />
+        </Suspense>
+      ) : null}
     </main>
   );
 }

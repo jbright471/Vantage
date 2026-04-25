@@ -5,6 +5,7 @@ unreachable_after_seconds = 30
 snapshot_retention_hours = 24
 snapshot_max_per_node = 5000
 snapshot_min_per_node = 1
+snapshot_prune_interval_seconds = 900
 run_timeout_seconds = 300
 abandoned_after_seconds = 900
 idempotency_dedupe_seconds = 30

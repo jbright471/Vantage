@@ -14,7 +14,6 @@ from backend.app.db import SessionLocal
 from backend.app.models import ModelPlacement, Node, NodeSnapshot, Run
 from backend.app.services.events import EventBroker
 from backend.app.services.polling import classify_health, extract_model_placements, normalize_snapshot
-from backend.app.services.pruning import prune_snapshots
 from backend.app.services.reconciliation import detect_config_drift, resolve_warning_records, upsert_warning_records
 from backend.app.services.state import build_full_state
 
@@ -242,18 +241,6 @@ async def run_poll_cycle(
             session.commit()
 
     with session_factory() as session:
-        summary = prune_snapshots(
-            session,
-            retention_hours=config.snapshot_retention_hours,
-            max_per_node=config.snapshot_max_per_node,
-            min_per_node=config.snapshot_min_per_node,
-        )
-        if summary.total_deleted:
-            logger.info(
-                "snapshot_pruned deleted_by_age=%s deleted_by_count=%s",
-                summary.deleted_by_age,
-                summary.deleted_by_count,
-            )
         warnings = detect_config_drift(
             configured_nodes=[{"node_id": node.node_id, "enabled": node.enabled} for node in nodes],
             observed_nodes=observed_nodes,

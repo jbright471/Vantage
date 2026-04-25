@@ -22,6 +22,7 @@ class BootstrapConfig(BaseModel):
     snapshot_retention_hours: int = 24
     snapshot_max_per_node: int = 5000
     snapshot_min_per_node: int = 1
+    snapshot_prune_interval_seconds: int = Field(default=900, ge=1)
     run_timeout_seconds: int = 300
     abandoned_after_seconds: int = 900
     idempotency_dedupe_seconds: int = 30

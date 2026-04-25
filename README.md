@@ -75,6 +75,7 @@ Local secrets belong in `.env`, which is ignored by git. See [.env.example](./.e
 ## Documentation
 
 - [Architecture](./ARCHITECTURE.md)
+- [Operator Guide](./OPERATOR_GUIDE.md)
 - [Remote Agent Contract](./AGENT_CONTRACT.md)
 - [Operations](./OPERATIONS.md)
 - [Security](./SECURITY.md)

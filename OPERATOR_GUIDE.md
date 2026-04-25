@@ -1,0 +1,194 @@
+# Vantage Operator Guide
+
+Vantage is a local-first AI control plane for operators running private models across multiple machines. This guide is the daily manual for reading the web UI, tuning the bootstrap configuration, and performing common operating tasks safely.
+
+## Core Concepts
+
+### Truth Over Appearance
+
+Vantage should report what it knows, not what looks reassuring. A node can be configured, previously healthy, and currently stale at the same time. The UI keeps those facts separate so operators can make decisions from real state instead of optimistic state.
+
+When the UI shows uncertainty, treat that uncertainty as operational data. `submitted_unverified`, `stale`, `degraded`, and `unreachable` are not cosmetic labels. They are the control plane telling you the difference between a confirmed fact and an assumption.
+
+### Observed State vs Configured State
+
+Configured state is what Vantage is told to manage. It comes from `config/vantage.bootstrap.toml` and includes registered nodes, node roles, polling cadence, retention limits, and agent authentication settings.
+
+Observed state is what Vantage has actually seen. It comes from polling local collectors, remote agents, Ollama endpoints, GPU telemetry, and run ingestion. Observed state can lag, fail, or disagree with configured state.
+
+Use this rule when troubleshooting: configuration explains intent; observation proves current reality.
+
+## Application Settings (Bootstrap Config)
+
+Primary operator configuration lives in `config/vantage.bootstrap.toml`. Vantage reads this file at backend startup, so most changes require restarting the backend container or process.
+
+### Polling and Freshness
+
+| Setting | Current Default | Operator Guidance |
+| --- | ---: | --- |
+| `poll_interval_seconds` | `5` | How often Vantage polls nodes. Lower values make the UI feel more live but increase database writes and agent traffic. For a small homelab, `5` seconds is appropriate. |
+| `stale_after_seconds` | `15` | How long since last observation before state is marked `stale`. Keep this several times larger than the poll interval to avoid false stale events during brief delays. |
+| `unreachable_after_seconds` | `30` | How long since last observation before a node is treated as `unreachable`. Tune this based on network reliability and how quickly you want operator attention. |
+
+Recommended relationship:
+
+```text
+poll_interval_seconds < stale_after_seconds < unreachable_after_seconds
+```
+
+### Snapshot Retention and Pruning
+
+Vantage stores `NodeSnapshot` rows for node health, model visibility, Ollama state, and telemetry history. Snapshot pruning protects the SQLite database from growing indefinitely.
+
+| Setting | Current Default | Operator Guidance |
+| --- | ---: | --- |
+| `snapshot_retention_hours` | `24` | Age-based retention window. Increase this if you want more short-term telemetry history. Decrease it if the database grows too quickly. |
+| `snapshot_max_per_node` | `5000` | Count cap per node. This protects against high-frequency polling or noisy nodes. |
+| `snapshot_min_per_node` | `1` | Safety floor. Vantage keeps at least this many snapshots per node even if they are older than the retention window. |
+| `snapshot_prune_interval_seconds` | `900` | How often the background pruning worker runs. `900` seconds is 15 minutes. Lower only if snapshots accumulate unusually fast. |
+
+Operational note: pruning runs inside the FastAPI process using the lifespan-managed background worker. It does not require Redis, Celery, or a separate container.
+
+### Agent Authentication
+
+| Setting | Current Default | Operator Guidance |
+| --- | --- | --- |
+| `agent_auth_token_env` | `VANTAGE_AGENT_SHARED_TOKEN` | Name of the environment variable that stores the shared token used for remote agent requests. Keep the token in `.env`, not in git. |
+
+If a remote node starts returning unauthorized responses, confirm that both the Jedi backend and remote agent process are using the same token value.
+
+## Navigating the UI
+
+### Nodes
+
+The Nodes dashboard shows machine health across the local fleet. Use it first when something feels wrong.
+
+Freshness labels:
+
+- `LIVE`: Vantage has a current observation for the node.
+- `STALE`: Vantage has seen the node before, but the last observation is older than `stale_after_seconds`.
+- `UNREACHABLE`: The node has exceeded `unreachable_after_seconds` without a fresh observation.
+
+Health and freshness are separate. A node can have a last-known healthy snapshot but still be stale or unreachable. Trust the freshness label when deciding whether the data is current.
+
+For remote workers such as Bastet, the Remote Focus section shows agent endpoint health, Ollama status, host memory, CPU usage, GPU telemetry, and recent remote runs. GPU telemetry is especially useful for confirming whether a model host is actually available for local inference work.
+
+Use `Refresh node` when you want to submit a refresh action through the control plane. If the result is `submitted_unverified`, Vantage has accepted the request but has not confirmed completion yet.
+
+### Runs
+
+Runs are the durable audit log for operator actions, capability checks, remote agent activity, and model-related events. Use Runs when you need to answer: what happened, when, on which node, and with what metadata?
+
+Important statuses:
+
+- `success`: The run completed successfully.
+- `failed`: The run failed and should be investigated.
+- `running`: The run is active or currently observed as loaded/running.
+- `submitted_unverified`: Vantage submitted the action but has not verified the final outcome.
+- `timed_out` or `abandoned`: The run did not produce a clean terminal signal in the expected window.
+
+The table shows recent runs by default. Use `View All Runs` to expand the list in place. Click a row to open the run details drawer, which includes the full Run ID, exact timestamps, observed metadata JSON, and the full run record JSON.
+
+Use exports when you need external review:
+
+- `Export CSV`: Best for spreadsheet inspection and operator handoff.
+- `Export JSON`: Best for preserving nested metadata, traces, model details, and future SIEM-style ingestion.
+
+### Models
+
+The Models dashboard shows merged inventory across all registered nodes. Vantage does not assume that a model tag on one node is identical to the same tag on another node unless placement details prove it.
+
+Key fields:
+
+- `Model Name`: The observed model tag.
+- `Node Placement`: Nodes where the model is currently visible.
+- `Coverage`: Whether the model is on a single node or replicated.
+- `Presence`: Whether visibility is node-local or cluster-wide.
+- `Actions`: Capability checks against a specific node placement.
+
+For replicated models across Jedi and Bastet, check placement before routing work. A model can exist on multiple nodes, but performance, VRAM, digest, and availability can still differ.
+
+### Routing
+
+The Routing dashboard shows preferred node order for each policy lane. It is a visibility and light-control surface for where classes of work should prefer to run.
+
+Priority classes:
+
+- `batch`: Long-running or less interactive work.
+- `interactive`: Operator-facing or latency-sensitive work.
+- `scheduled`: Automated jobs and recurring tasks.
+
+Route order is evaluated from left to right. For example, `bastet -> jedi` means Vantage should prefer Bastet first, then Jedi as the next option.
+
+Changing route preference is a configuration-impacting action. Vantage requires a confirmation modal before saving the new preferred order. Treat routing edits as operational changes, not casual UI clicks.
+
+## Daily Operations
+
+### Audit a Failed Capability Check Using the Run ID
+
+1. Open the Runs dashboard.
+2. Select the `Failed` filter.
+3. Find the failed capability check and copy the short or full Run ID.
+4. Click the row to open the Run Details drawer.
+5. Review `Status`, `Target Node`, `Started`, `Ended`, and `Observed metadata (JSON)`.
+6. Use `Copy Payload` if you need to paste the metadata into a ticket, note, or debugging session.
+7. Cross-check the target node in Nodes for freshness, Ollama status, GPU telemetry, and recent remote runs.
+8. If the failure is node-specific, run the same model capability check from Models on another placement.
+
+Interpretation guide:
+
+- Failure on one node usually points to node health, model placement, or model runtime state.
+- Failure on all nodes usually points to model compatibility, prompt format, routing assumptions, or shared Ollama/API behavior.
+- `submitted_unverified` is not success. Wait for a later observation or inspect the relevant node before treating the action as complete.
+
+### Safely Override a Routing Policy
+
+1. Open the Routing dashboard.
+2. Identify the priority class: `batch`, `interactive`, or `scheduled`.
+3. Review the current route order.
+4. Click `Prefer <node>` for the node that should become first choice.
+5. Read the confirmation modal carefully.
+6. Confirm only if the new order matches the intended operational change.
+7. Watch for the saved message and verify the route order updates.
+8. Monitor Runs and Nodes after the change to confirm the new preference does not push work toward a stale or overloaded node.
+
+Safe operating rule: never promote a node that is stale, unreachable, missing the target model, or showing unhealthy GPU/agent telemetry unless you are intentionally testing failure behavior.
+
+### Add a New Remote Worker Node
+
+1. Deploy the lightweight Vantage agent on the remote Linux worker.
+2. Configure the agent to use the same shared token referenced by `agent_auth_token_env`.
+3. Confirm the agent exposes the expected endpoints, including health, GPU, models, and runs.
+4. Add a new `[[nodes]]` entry to `config/vantage.bootstrap.toml`.
+
+Example:
+
+```toml
+[[nodes]]
+node_id = "new-worker"
+display_name = "New Worker"
+base_url = "http://192.168.50.210:9110"
+role = "remote"
+enabled = true
+```
+
+5. Restart the Vantage backend container or process so the bootstrap config is reloaded.
+6. Open Nodes and confirm the new worker appears.
+7. Wait for the node to become `LIVE`.
+8. Confirm GPU telemetry and observed model count.
+9. Open Models and confirm expected model placements.
+10. Update Routing only after the node is live and model inventory is visible.
+
+If the node appears but remains stale or unreachable, check network reachability, firewall rules, the agent service, the shared token, and the configured `base_url`.
+
+## Operator Checklist
+
+Use this quick sequence during daily checks:
+
+1. Confirm the header stream status is `Live`.
+2. Confirm Nodes are `LIVE` and not merely last-known healthy.
+3. Check Remote Focus for GPU telemetry and Ollama status.
+4. Review Runs for new `failed`, `submitted_unverified`, `timed_out`, or `abandoned` records.
+5. Confirm Models show expected placements before running capability checks.
+6. Review Routing before changing where work is preferred.
+7. Export Runs as CSV or JSON before deeper incident review.

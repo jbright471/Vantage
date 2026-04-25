@@ -4,8 +4,12 @@ import { buildRunExportUrl, fetchRuns, type RunsQuery, type RunRecord } from "..
 import { RunRow } from "./RunRow";
 
 type RunsPageProps = {
-  runs: Array<Pick<RunRecord, "run_id" | "summary" | "status" | "node_id"> & Partial<Pick<RunRecord, "started_at">>>;
+  runs: RunRecord[];
 };
+
+const DEFAULT_RUN_PREVIEW_LIMIT = 5;
+const EXPANDED_RUN_LIMIT = 500;
+type RunsViewMode = "preview" | "all";
 
 const RUN_FILTERS = [
   { label: "All", status: null },
@@ -15,22 +19,139 @@ const RUN_FILTERS = [
   { label: "Stale", status: "abandoned" },
 ];
 
+function sortRunsByStartedAt(runs: RunRecord[]): RunRecord[] {
+  return [...runs].sort((left, right) => {
+    const leftValue = left.started_at ? Date.parse(left.started_at) : 0;
+    const rightValue = right.started_at ? Date.parse(right.started_at) : 0;
+    return rightValue - leftValue;
+  });
+}
+
+function formatExactTimestamp(timestamp: string | null | undefined): string {
+  return timestamp ?? "Not recorded";
+}
+
+async function copyText(value: string) {
+  if (!navigator.clipboard) {
+    return;
+  }
+
+  await navigator.clipboard.writeText(value);
+}
+
+function RunDetailsDrawer({ run, onClose }: { run: RunRecord; onClose: () => void }) {
+  useEffect(() => {
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  const metadataPayload = run.metadata_json ?? {};
+  const metadataJson = Object.keys(metadataPayload).length
+    ? JSON.stringify(metadataPayload, null, 2)
+    : "{\n  // No extended metadata available for this run\n}";
+  const fullRunJson = JSON.stringify(run, null, 2);
+
+  return (
+    <div className="run-drawer-backdrop" role="presentation" onClick={onClose}>
+      <aside
+        className="run-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="run-drawer-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="drawer-header">
+          <div>
+            <p className="section-kicker">Run details</p>
+            <h3 id="run-drawer-title">Run Details</h3>
+            <p className="drawer-run-id">{run.run_id}</p>
+          </div>
+          <button type="button" className="drawer-close-button" aria-label="Close run details" onClick={onClose}>
+            X
+          </button>
+        </header>
+
+        <div className="drawer-content">
+          <dl className="run-stats-grid">
+            <div>
+              <dt>Status</dt>
+              <dd>
+                <span className={`status-chip is-${run.status}`}>{run.status}</span>
+              </dd>
+            </div>
+            <div>
+              <dt>Target Node</dt>
+              <dd>{run.node_id ?? "unknown"}</dd>
+            </div>
+            <div>
+              <dt>Started</dt>
+              <dd>{formatExactTimestamp(run.started_at)}</dd>
+            </div>
+            <div>
+              <dt>Ended</dt>
+              <dd>{formatExactTimestamp(run.ended_at)}</dd>
+            </div>
+          </dl>
+
+          <section className="drawer-section">
+            <h4>Event Summary</h4>
+            <p>{run.summary}</p>
+          </section>
+
+          <section className="json-panel" aria-label="Observed metadata JSON">
+            <div className="json-panel-header">
+              <p className="info-kicker">Observed metadata (JSON)</p>
+              <button type="button" className="text-action-button" onClick={() => void copyText(metadataJson)}>
+                Copy Payload
+              </button>
+            </div>
+            <pre>
+              <code>{metadataJson}</code>
+            </pre>
+          </section>
+
+          <section className="json-panel" aria-label="Full run JSON">
+            <div className="json-panel-header">
+              <p className="info-kicker">Full run record (JSON)</p>
+              <button type="button" className="text-action-button" onClick={() => void copyText(fullRunJson)}>
+                Copy Run JSON
+              </button>
+            </div>
+            <pre>
+              <code>{fullRunJson}</code>
+            </pre>
+          </section>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
 export function RunsPage({ runs }: RunsPageProps) {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<RunsViewMode>("preview");
+  const runLimit = viewMode === "all" ? EXPANDED_RUN_LIMIT : DEFAULT_RUN_PREVIEW_LIMIT;
   const [pageState, setPageState] = useState({
-    items: runs as RunRecord[],
+    items: sortRunsByStartedAt(runs).slice(0, DEFAULT_RUN_PREVIEW_LIMIT),
     total: runs.length,
-    limit: 10,
+    limit: DEFAULT_RUN_PREVIEW_LIMIT,
     offset: 0,
   });
   const [requestState, setRequestState] = useState<"idle" | "loading" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedRun, setSelectedRun] = useState<RunRecord | null>(null);
 
   useEffect(() => {
     const query: RunsQuery = {
       status: statusFilter,
-      limit: pageState.limit,
-      offset: pageState.offset,
+      limit: runLimit,
+      offset: 0,
     };
     let isCurrent = true;
 
@@ -62,20 +183,19 @@ export function RunsPage({ runs }: RunsPageProps) {
     return () => {
       isCurrent = false;
     };
-  }, [statusFilter, pageState.limit, pageState.offset]);
+  }, [statusFilter, runLimit]);
 
-  const orderedRuns = [...pageState.items].sort((left, right) => {
-    const leftValue = left.started_at ? Date.parse(left.started_at) : 0;
-    const rightValue = right.started_at ? Date.parse(right.started_at) : 0;
-    return rightValue - leftValue;
-  });
-  const latestRun = orderedRuns[0] ?? null;
-  const hasPreviousPage = pageState.offset > 0;
-  const hasNextPage = pageState.offset + pageState.limit < pageState.total;
+  const orderedRuns = sortRunsByStartedAt(pageState.items).slice(0, runLimit);
+  const visibleRunCount = Math.min(orderedRuns.length, pageState.total);
   const exportQuery = { status: statusFilter };
 
   function updateStatusFilter(status: string | null) {
     setStatusFilter(status);
+    setPageState((current) => ({ ...current, offset: 0 }));
+  }
+
+  function toggleRunsView() {
+    setViewMode((current) => (current === "preview" ? "all" : "preview"));
     setPageState((current) => ({ ...current, offset: 0 }));
   }
 
@@ -135,77 +255,26 @@ export function RunsPage({ runs }: RunsPageProps) {
               </thead>
               <tbody>
                 {orderedRuns.map((run) => (
-                  <RunRow key={run.run_id} run={run} />
+                  <RunRow key={run.run_id} run={run} onSelect={setSelectedRun} />
                 ))}
               </tbody>
             </table>
           </div>
-
-          {latestRun ? (
-            <aside className="summary-panel" aria-label="Latest run summary">
-              <p className="info-kicker">Run Summary</p>
-              <h3>Latest observed run</h3>
-              <p className="info-copy">Action: {latestRun.summary}</p>
-              <div className="summary-meta">
-                <div>
-                  <dt>Status</dt>
-                  <dd>
-                    <span className={`status-chip is-${latestRun.status}`}>{latestRun.status.replaceAll("_", " ")}</span>
-                  </dd>
-                </div>
-                <div>
-                  <dt>Run ID</dt>
-                  <dd>{latestRun.run_id}</dd>
-                </div>
-                <div>
-                  <dt>Node</dt>
-                  <dd>{latestRun.node_id ?? "unknown"}</dd>
-                </div>
-                <div>
-                  <dt>Started</dt>
-                  <dd>{latestRun.started_at ?? "Waiting for timestamp"}</dd>
-                </div>
-              </div>
-            </aside>
-          ) : null}
         </div>
       )}
 
-      <footer className="pagination-row" aria-label="Run pagination">
-        <button
-          type="button"
-          className="action-button"
-          disabled={!hasPreviousPage || requestState === "loading"}
-          onClick={() =>
-            setPageState((current) => ({
-              ...current,
-              offset: Math.max(0, current.offset - current.limit),
-            }))
-          }
-        >
-          Previous
-        </button>
+      <footer className="pagination-row" aria-label="Run pagination hook">
         <span className="run-meta">
           {pageState.total === 0
             ? "0 runs"
-            : `${pageState.offset + 1}-${Math.min(pageState.offset + pageState.limit, pageState.total)} of ${
-                pageState.total
-              }`}
+            : `Showing ${visibleRunCount} of ${pageState.total} ${viewMode === "all" ? "runs" : "recent runs"}`}
         </span>
-        <button
-          type="button"
-          className="action-button"
-          disabled={!hasNextPage || requestState === "loading"}
-          onClick={() =>
-            setPageState((current) => ({
-              ...current,
-              offset: current.offset + current.limit,
-            }))
-          }
-        >
-          Next
+        <button type="button" className="action-button" disabled={requestState === "loading"} onClick={toggleRunsView}>
+          {viewMode === "all" ? "Show Recent Runs" : "View All Runs"}
         </button>
       </footer>
+
+      {selectedRun ? <RunDetailsDrawer run={selectedRun} onClose={() => setSelectedRun(null)} /> : null}
     </section>
   );
 }
