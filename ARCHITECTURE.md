@@ -2,9 +2,11 @@
 
 Vantage is a local-first control plane composed of three main pieces:
 
-- `Jedi backend`: FastAPI, SQLite, SQLAlchemy, Pydantic, collectors, polling, pruning, routing, run history, and SSE streaming.
+The examples below use `jedi` as an example control-plane node name and `bastet` as an example remote worker node name. Replace them with names from your own homelab.
+
+- `Control-plane backend`: FastAPI, SQLite, SQLAlchemy, Pydantic, collectors, polling, pruning, routing, run history, and SSE streaming. In examples, this node is named `jedi`.
 - `Frontend`: Vite, React, and TypeScript operator UI for nodes, runs, models, and routing.
-- `Remote agent`: lightweight FastAPI process on Linux worker nodes such as Bastet.
+- `Remote agent`: lightweight FastAPI process on Linux worker nodes. In examples, one worker is named `bastet`.
 
 The system is intentionally an observer and coordinator. It does not replace Ollama, routers, schedulers, or host services.
 
@@ -12,13 +14,13 @@ The system is intentionally an observer and coordinator. It does not replace Oll
 
 ```mermaid
 flowchart LR
-    Browser["React/Vite UI<br/>127.0.0.1:5173"]
-    Backend["Jedi FastAPI Backend<br/>127.0.0.1:8000"]
+    Browser["React/Vite UI<br/><operator-host>:5173"]
+    Backend["Control-Plane FastAPI Backend<br/><control-plane-host>:8000<br/>example: jedi"]
     DB["SQLite<br/>vantage.sqlite3"]
-    LocalCollectors["Jedi Local Collectors"]
-    OllamaJ["Jedi Ollama Endpoints<br/>11434 / 11435"]
-    Agent["Bastet Agent<br/>192.168.50.209:9110"]
-    OllamaB["Bastet Ollama<br/>11435"]
+    LocalCollectors["Local Collectors<br/>example: jedi"]
+    OllamaJ["Local Ollama Endpoints<br/>11434 / 11435"]
+    Agent["Remote Agent<br/><remote-agent-ip>:9110<br/>example: bastet"]
+    OllamaB["Remote Ollama<br/>11435"]
     GPU["nvidia-smi"]
 
     Browser -- "SSE /api/stream" --> Backend
@@ -36,9 +38,9 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     participant UI as React UI
-    participant API as Jedi FastAPI
+    participant API as Control-Plane FastAPI
     participant DB as SQLite
-    participant Agent as Bastet Agent
+    participant Agent as Remote Agent
     participant Ollama as Ollama
 
     UI->>API: Open EventSource /api/stream

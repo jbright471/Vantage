@@ -1,11 +1,13 @@
 # Remote Agent Contract
 
-The Vantage remote agent is a lightweight FastAPI service intended to run on Linux worker nodes such as Bastet.
+The Vantage remote agent is a lightweight FastAPI service intended to run on Linux worker nodes.
 
-Default Bastet endpoint:
+The examples below use `jedi` as an example control-plane node name and `bastet` as an example remote worker node name. Replace them with names from your own homelab.
+
+Example remote agent endpoint:
 
 ```text
-http://192.168.50.209:9110
+http://<remote-agent-ip>:9110
 ```
 
 ## Authentication
@@ -111,7 +113,7 @@ Current examples include loaded Ollama models and capability-check runs.
       "run_id": "086af75060fb0680c77aad586646becf8d7e80b2c01bd4c096e724e27ce3e6e8",
       "source_type": "remote_agent",
       "detail_type": "ollama_loaded_model",
-      "source_id": "ollama-ps:http://127.0.0.1:11435:gemma4:e4b",
+      "source_id": "ollama-ps:http://<ollama-host>:11435:gemma4:e4b",
       "node_id": "bastet",
       "model_name": "gemma4:e4b",
       "action_type": "infer",
@@ -121,7 +123,7 @@ Current examples include loaded Ollama models and capability-check runs.
       "duration_ms": null,
       "summary": "Model gemma4:e4b is currently loaded on bastet",
       "metadata_json": {
-        "base_url": "http://127.0.0.1:11435"
+        "base_url": "http://<ollama-host>:11435"
       }
     }
   ]

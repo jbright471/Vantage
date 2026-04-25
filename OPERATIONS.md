@@ -2,6 +2,8 @@
 
 This guide covers running Vantage locally with Docker Compose and deploying the lightweight remote agent to Linux worker nodes.
 
+The examples below use `jedi` as an example control-plane node name and `bastet` as an example remote worker node name. Replace them with names from your own homelab.
+
 ## Local Development
 
 Requirements:
@@ -75,10 +77,10 @@ http://<host>:5173
 
 The remote agent is a FastAPI service managed by systemd.
 
-Current service file:
+Example service file path:
 
 ```text
-deploy/bastet/vantage-agent.service
+deploy/<example-node>/vantage-agent.service
 ```
 
 Default port:
@@ -95,7 +97,7 @@ On the worker node:
 sudo mkdir -p /opt/vantage
 sudo chown "$USER":"$USER" /opt/vantage
 python3 -m venv /opt/vantage/.venv
-/opt/vantage/.venv/bin/python -m pip install -r /opt/vantage/deploy/bastet/requirements-agent.txt
+/opt/vantage/.venv/bin/python -m pip install -r /opt/vantage/deploy/<example-node>/requirements-agent.txt
 ```
 
 Copy the `agent/` package and deployment files into `/opt/vantage`.
@@ -112,7 +114,7 @@ chmod 600 /opt/vantage/vantage-agent.env
 Install the service:
 
 ```bash
-sudo cp /opt/vantage/deploy/bastet/vantage-agent.service /etc/systemd/system/vantage-agent.service
+sudo cp /opt/vantage/deploy/<example-node>/vantage-agent.service /etc/systemd/system/vantage-agent.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now vantage-agent
 ```
@@ -128,20 +130,20 @@ systemctl status vantage-agent --no-pager
 Unauthenticated requests should fail:
 
 ```powershell
-Invoke-WebRequest http://192.168.50.209:9110/health -SkipHttpErrorCheck
+Invoke-WebRequest http://<remote-agent-ip>:9110/health -SkipHttpErrorCheck
 ```
 
 Authenticated requests should pass:
 
 ```powershell
 $token = (Get-Content .env | Where-Object { $_ -like 'VANTAGE_AGENT_SHARED_TOKEN=*' }).Split('=',2)[1]
-Invoke-RestMethod http://192.168.50.209:9110/health -Headers @{ Authorization = "Bearer $token" }
+Invoke-RestMethod http://<remote-agent-ip>:9110/health -Headers @{ Authorization = "Bearer $token" }
 ```
 
 The control plane should show the node as healthy:
 
 ```powershell
-Invoke-RestMethod http://127.0.0.1:8000/api/nodes
+Invoke-RestMethod http://<control-plane-host>:8000/api/nodes
 ```
 
 ## Database Protection

@@ -2,6 +2,8 @@
 
 Vantage is designed as a local-first control plane for private AI infrastructure.
 
+The examples below use `jedi` as an example control-plane node name and `bastet` as an example remote worker node name. Replace them with names from your own homelab.
+
 ## Security Posture
 
 - Vantage is intended for trusted LAN or VPN environments.
@@ -12,7 +14,7 @@ Vantage is designed as a local-first control plane for private AI infrastructure
 
 ## Agent Authentication
 
-The Bastet agent reads:
+The remote agent reads this environment variable. For example, an operator might run it on a worker node named `bastet`:
 
 ```text
 VANTAGE_AGENT_SHARED_TOKEN
@@ -24,12 +26,12 @@ When configured, all agent endpoints require:
 Authorization: Bearer <token>
 ```
 
-The Jedi backend sends this header when the same environment variable is available to the backend container.
+The control-plane backend sends this header when the same environment variable is available to the backend container. For example, an operator might run the backend on a node named `jedi`.
 
 Local files:
 
 - `.env`: local backend/container secret file, ignored by git
-- `/opt/vantage/vantage-agent.env`: remote agent secret file on Bastet
+- `/opt/vantage/vantage-agent.env`: remote agent secret file on the worker node
 - `.env.example`: committed example with no secret value
 
 ## Local-First Data Handling

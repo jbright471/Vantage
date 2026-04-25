@@ -1,10 +1,12 @@
 # Vantage Phase 1 Implementation Plan
 
+Sanitization note: ControlPlane / control-plane and WorkerA / worker-a are placeholder node names used for documentation examples. Replace them with your own homelab node names and network values.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the Phase 1 MVP of Vantage: a local-first control plane that truthfully shows nodes, runs, models, and routing visibility across Jedi and Bastet.
+**Goal:** Build the Phase 1 MVP of Vantage: a local-first control plane that truthfully shows nodes, runs, models, and routing visibility across ControlPlane and WORKER_A.
 
-**Architecture:** Vantage is a FastAPI control plane on Jedi with SQLite persistence, SSE streaming, and a lightweight FastAPI agent on Bastet. The backend owns config loading, polling, persistence, and event streaming; the frontend consumes a full-state-on-connect SSE stream and renders Nodes, Runs, Models, and Routing surfaces without inventing state.
+**Architecture:** Vantage is a FastAPI control plane on ControlPlane with SQLite persistence, SSE streaming, and a lightweight FastAPI agent on WORKER_A. The backend owns config loading, polling, persistence, and event streaming; the frontend consumes a full-state-on-connect SSE stream and renders Nodes, Runs, Models, and Routing surfaces without inventing state.
 
 **Tech Stack:** Python 3.14, FastAPI, SQLAlchemy, Pydantic, SQLite, pytest, httpx, React, TypeScript, Vite, Vitest, Testing Library
 
@@ -13,7 +15,7 @@
 ## File Structure
 
 - `pyproject.toml`
-  Python dependencies and pytest configuration for both the backend and Bastet agent.
+  Python dependencies and pytest configuration for both the backend and WORKER_A agent.
 - `.gitignore`
   Ignore Python caches, virtualenvs, SQLite files, Node modules, and local logs.
 - `config/vantage.bootstrap.toml`
@@ -33,19 +35,19 @@
 - `backend/app/api/`
   REST and SSE endpoints for health, nodes, runs, models, routing, warnings, and actions.
 - `backend/app/collectors/local.py`
-  Jedi local collectors for GPU stats, Ollama models, and local service health.
+  ControlPlane local collectors for GPU stats, Ollama models, and local service health.
 - `backend/app/collectors/remote.py`
-  HTTP client for the Bastet agent contract.
+  HTTP client for the WORKER_A agent contract.
 - `backend/app/services/`
   Bootstrap seeding, polling, pruning, event publication, actions, and reconciliation.
 - `agent/app/main.py`
-  Bastet FastAPI agent entrypoint.
+  WORKER_A FastAPI agent entrypoint.
 - `agent/app/schemas.py`
-  Pydantic response contracts for Bastet agent endpoints.
+  Pydantic response contracts for WORKER_A agent endpoints.
 - `agent/app/collectors.py`
-  Bastet collectors for health, GPU, models, and optional local run feed.
-- `deploy/bastet/vantage-agent.service`
-  systemd unit file for the Bastet agent.
+  WORKER_A collectors for health, GPU, models, and optional local run feed.
+- `deploy/WORKER_A/vantage-agent.service`
+  systemd unit file for the WORKER_A agent.
 - `frontend/`
   Vite React TypeScript app for the operator UI.
 - `frontend/src/api/client.ts`
@@ -63,7 +65,7 @@
 - `tests/backend/`
   Backend unit, integration, SSE, action, pruning, and reconciliation tests.
 - `tests/agent/`
-  Bastet agent contract tests.
+  WORKER_A agent contract tests.
 - `scripts/manual-smoke.ps1`
   Manual smoke commands for local operator verification.
 
@@ -103,8 +105,8 @@ stale_after_seconds = 15
 unreachable_after_seconds = 30
 
 [[nodes]]
-node_id = "jedi"
-display_name = "Jedi"
+node_id = "ControlPlane"
+display_name = "ControlPlane"
 base_url = "http://127.0.0.1:9000"
 role = "primary"
 enabled = true
@@ -116,7 +118,7 @@ enabled = true
 
     assert config.app_name == "Vantage"
     assert config.poll_interval_seconds == 5
-    assert config.nodes[0].node_id == "jedi"
+    assert config.nodes[0].node_id == "ControlPlane"
     assert config.nodes[0].role == "primary"
 ```
 
@@ -188,16 +190,16 @@ abandoned_after_seconds = 900
 idempotency_dedupe_seconds = 30
 
 [[nodes]]
-node_id = "jedi"
-display_name = "Jedi"
+node_id = "ControlPlane"
+display_name = "ControlPlane"
 base_url = "http://127.0.0.1:8000"
 role = "primary"
 enabled = true
 
 [[nodes]]
-node_id = "bastet"
-display_name = "Bastet"
-base_url = "http://192.168.50.209:9100"
+node_id = "WORKER_A"
+display_name = "WORKER_A"
+base_url = "http://<remote-agent-ip>:9100"
 role = "remote"
 enabled = true
 ```
@@ -319,7 +321,7 @@ git add .gitignore pyproject.toml config/vantage.bootstrap.toml backend/app fron
 git commit -m "chore: bootstrap vantage workspace"
 ```
 
-## Task 2: Build The Bastet Agent Contract
+## Task 2: Build The WORKER_A Agent Contract
 
 **Files:**
 - Create: `agent/app/__init__.py`
@@ -327,9 +329,9 @@ git commit -m "chore: bootstrap vantage workspace"
 - Create: `agent/app/collectors.py`
 - Create: `agent/app/main.py`
 - Create: `tests/agent/test_contract.py`
-- Create: `deploy/bastet/vantage-agent.service`
+- Create: `deploy/WORKER_A/vantage-agent.service`
 
-- [ ] **Step 1: Write the failing Bastet agent contract test**
+- [ ] **Step 1: Write the failing WORKER_A agent contract test**
 
 ```python
 # tests/agent/test_contract.py
@@ -339,7 +341,7 @@ from agent.app.main import app
 
 
 def test_agent_exposes_health_gpu_and_models(monkeypatch) -> None:
-    monkeypatch.setattr("agent.app.collectors.get_health", lambda: {"status": "ok", "node_id": "bastet"})
+    monkeypatch.setattr("agent.app.collectors.get_health", lambda: {"status": "ok", "node_id": "WORKER_A"})
     monkeypatch.setattr(
         "agent.app.collectors.get_gpu_stats",
         lambda: [{"name": "RTX 3090", "memory_total_mb": 24576, "temperature_c": 42}],
@@ -370,7 +372,7 @@ Expected:
 E   ModuleNotFoundError: No module named 'agent.app.main'
 ```
 
-- [ ] **Step 3: Implement the Bastet FastAPI agent and systemd unit**
+- [ ] **Step 3: Implement the WORKER_A FastAPI agent and systemd unit**
 
 ```python
 # agent/app/schemas.py
@@ -409,7 +411,7 @@ import subprocess
 
 
 def get_health() -> dict:
-    return {"status": "ok", "node_id": "bastet"}
+    return {"status": "ok", "node_id": "WORKER_A"}
 
 
 def get_gpu_stats() -> list[dict]:
@@ -456,7 +458,7 @@ from fastapi import FastAPI
 from agent.app.collectors import get_gpu_stats, get_health, get_models
 from agent.app.schemas import GpuResponse, HealthResponse, ModelsResponse
 
-app = FastAPI(title="Vantage Bastet Agent")
+app = FastAPI(title="Vantage WORKER_A Agent")
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -480,16 +482,16 @@ def runs() -> dict:
 ```
 
 ```ini
-# deploy/bastet/vantage-agent.service
+# deploy/WORKER_A/vantage-agent.service
 [Unit]
-Description=Vantage Bastet Agent
+Description=Vantage WORKER_A Agent
 After=network.target
 
 [Service]
 WorkingDirectory=/opt/vantage
 ExecStart=/opt/vantage/.venv/bin/uvicorn agent.app.main:app --host 0.0.0.0 --port 9100
 Restart=always
-User=bastet
+User=WORKER_A
 
 [Install]
 WantedBy=multi-user.target
@@ -512,8 +514,8 @@ Expected:
 - [ ] **Step 5: Commit the agent contract**
 
 ```powershell
-git add agent tests/agent deploy/bastet/vantage-agent.service
-git commit -m "feat: add vantage bastet agent contract"
+git add agent tests/agent deploy/WORKER_A/vantage-agent.service
+git commit -m "feat: add vantage WORKER_A agent contract"
 ```
 
 ## Task 3: Build Backend Persistence And Bootstrap Seeding
@@ -546,8 +548,8 @@ def test_seed_nodes_from_config_inserts_without_duplicates() -> None:
     config = BootstrapConfig(
         nodes=[
             BootstrapNode(
-                node_id="jedi",
-                display_name="Jedi",
+                node_id="ControlPlane",
+                display_name="ControlPlane",
                 base_url="http://127.0.0.1:8000",
                 role="primary",
                 enabled=True,
@@ -829,7 +831,7 @@ from backend.app.services.polling import classify_health, normalize_snapshot, ex
 
 def test_classify_health_marks_partial_failure_as_degraded() -> None:
     snapshot = {
-        "node_id": "bastet",
+        "node_id": "WORKER_A",
         "captured_at": datetime.now(UTC),
         "gpu_json": [],
         "cpu_json": {"usage_percent": 12},
@@ -844,11 +846,11 @@ def test_classify_health_marks_partial_failure_as_degraded() -> None:
 
 def test_extract_model_placements_creates_rows_per_model() -> None:
     placements = extract_model_placements(
-        node_id="bastet",
+        node_id="WORKER_A",
         ollama_payload={"models": [{"name": "qwen3.6:latest", "digest": "sha256:abc"}]},
     )
 
-    assert placements[0]["node_id"] == "bastet"
+    assert placements[0]["node_id"] == "WORKER_A"
     assert placements[0]["model_name"] == "qwen3.6:latest"
 ```
 
@@ -899,7 +901,7 @@ E   ModuleNotFoundError: No module named 'backend.app.services.polling'
 import httpx
 
 
-class BastetClient:
+class WORKER_AClient:
     def __init__(self, base_url: str) -> None:
         self.base_url = base_url.rstrip("/")
 
@@ -1265,8 +1267,8 @@ describe("NodesPage", () => {
       <NodesPage
         nodes={[
           {
-            node_id: "bastet",
-            display_name: "Bastet",
+            node_id: "WORKER_A",
+            display_name: "WORKER_A",
             observed_status: "degraded",
             freshness: "stale",
             last_seen_at: "2026-04-22T12:00:00Z",
@@ -1275,7 +1277,7 @@ describe("NodesPage", () => {
       />,
     );
 
-    expect(screen.getByText("Bastet")).toBeInTheDocument();
+    expect(screen.getByText("WORKER_A")).toBeInTheDocument();
     expect(screen.getByText("degraded")).toBeInTheDocument();
     expect(screen.getByText(/stale/i)).toBeInTheDocument();
   });
@@ -1431,15 +1433,15 @@ describe("RunsPage", () => {
         runs={[
           {
             run_id: "run-1",
-            summary: "Restart Bastet agent",
+            summary: "Restart WORKER_A agent",
             status: "submitted_unverified",
-            node_id: "bastet",
+            node_id: "WORKER_A",
           },
         ]}
       />,
     );
 
-    expect(screen.getByText("Restart Bastet agent")).toBeInTheDocument();
+    expect(screen.getByText("Restart WORKER_A agent")).toBeInTheDocument();
     expect(screen.getByText("submitted_unverified")).toBeInTheDocument();
   });
 });
@@ -1572,14 +1574,14 @@ describe("ModelsPage", () => {
         models={[
           {
             model_name: "qwen3.6:latest",
-            placements: ["jedi", "bastet"],
+            placements: ["ControlPlane", "WORKER_A"],
           },
         ]}
       />,
     );
 
     expect(screen.getByText("qwen3.6:latest")).toBeInTheDocument();
-    expect(screen.getByText("jedi, bastet")).toBeInTheDocument();
+    expect(screen.getByText("ControlPlane, WORKER_A")).toBeInTheDocument();
   });
 });
 ```
@@ -1599,14 +1601,14 @@ describe("RoutingPage", () => {
           {
             rule_id: "scheduled-default",
             priority_class: "scheduled",
-            preferred_nodes: ["jedi", "bastet"],
+            preferred_nodes: ["ControlPlane", "WORKER_A"],
           },
         ]}
       />,
     );
 
     expect(screen.getByText("scheduled")).toBeInTheDocument();
-    expect(screen.getByText("jedi → bastet")).toBeInTheDocument();
+    expect(screen.getByText("ControlPlane → WORKER_A")).toBeInTheDocument();
   });
 });
 ```
@@ -1737,14 +1739,14 @@ from backend.app.services.actions import build_action_run_payload, build_idempot
 def test_build_idempotency_key_is_stable_for_same_request() -> None:
     left = build_idempotency_key(
         action_type="restart-agent",
-        target_node_id="bastet",
+        target_node_id="WORKER_A",
         target_resource_id="agent",
         payload={"service": "vantage-agent"},
         dedupe_window=30,
     )
     right = build_idempotency_key(
         action_type="restart-agent",
-        target_node_id="bastet",
+        target_node_id="WORKER_A",
         target_resource_id="agent",
         payload={"service": "vantage-agent"},
         dedupe_window=30,
@@ -1754,10 +1756,10 @@ def test_build_idempotency_key_is_stable_for_same_request() -> None:
 
 
 def test_build_action_run_payload_uses_submitted_unverified() -> None:
-    payload = build_action_run_payload(node_id="bastet", summary="Refresh node bastet")
+    payload = build_action_run_payload(node_id="WORKER_A", summary="Refresh node WORKER_A")
 
     assert payload["status"] == "submitted_unverified"
-    assert payload["node_id"] == "bastet"
+    assert payload["node_id"] == "WORKER_A"
 ```
 
 ```python
@@ -1767,12 +1769,12 @@ from backend.app.services.reconciliation import detect_config_drift
 
 def test_detect_config_drift_flags_enabled_node_without_recent_snapshot() -> None:
     warnings = detect_config_drift(
-        configured_nodes=[{"node_id": "bastet", "enabled": True}],
+        configured_nodes=[{"node_id": "WORKER_A", "enabled": True}],
         observed_nodes={},
     )
 
     assert warnings[0]["warning_type"] == "config_drift"
-    assert warnings[0]["node_id"] == "bastet"
+    assert warnings[0]["node_id"] == "WORKER_A"
 ```
 
 - [ ] **Step 2: Run the tests to verify the hardening services are missing**
@@ -1919,7 +1921,7 @@ Invoke-RestMethod http://127.0.0.1:8000/api/health
 Invoke-RestMethod http://127.0.0.1:8000/api/nodes
 Invoke-RestMethod http://127.0.0.1:8000/api/runs
 Invoke-WebRequest http://127.0.0.1:8000/api/stream -Headers @{Accept='text/event-stream'}
-Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/actions/refresh-node/bastet
+Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/actions/refresh-node/WORKER_A
 ```
 
 - [ ] **Step 4: Register the action route and rerun the hardening tests**
@@ -1975,7 +1977,7 @@ git commit -m "feat: add action layer and reconciliation warnings"
 - `Runs` surface: covered by Tasks 5 and 7
 - `Models` surface: covered by Tasks 4, 5, and 8
 - `Routing` visibility: covered by Task 8
-- Bastet agent from day one: covered by Task 2
+- WORKER_A agent from day one: covered by Task 2
 - SSE full-state-on-connect and reconnect contract: covered by Task 5 and consumed in Task 6
 - snapshot pruning: covered by Task 4
 - reconciliation warnings: covered by Task 9

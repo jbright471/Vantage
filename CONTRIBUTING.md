@@ -15,7 +15,7 @@ npm install
 Run the Docker development stack:
 
 ```powershell
-cd C:\Users\brigh\Documents\JoJo\30-Projects\Vantage
+cd ./vantage
 Copy-Item .env.example .env
 python -c "import secrets; print('VANTAGE_AGENT_SHARED_TOKEN=' + secrets.token_urlsafe(48))" | Set-Content .env
 docker compose up --build -d

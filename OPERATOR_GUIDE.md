@@ -2,6 +2,8 @@
 
 Vantage is a local-first AI control plane for operators running private models across multiple machines. This guide is the daily manual for reading the web UI, tuning the bootstrap configuration, and performing common operating tasks safely.
 
+The examples below use `jedi` as an example control-plane node name and `bastet` as an example remote worker node name. Replace them with names from your own homelab.
+
 ## Core Concepts
 
 ### Truth Over Appearance
@@ -55,7 +57,7 @@ Operational note: pruning runs inside the FastAPI process using the lifespan-man
 | --- | --- | --- |
 | `agent_auth_token_env` | `VANTAGE_AGENT_SHARED_TOKEN` | Name of the environment variable that stores the shared token used for remote agent requests. Keep the token in `.env`, not in git. |
 
-If a remote node starts returning unauthorized responses, confirm that both the Jedi backend and remote agent process are using the same token value.
+If a remote node starts returning unauthorized responses, confirm that both the control-plane backend and remote agent process are using the same token value.
 
 ## Navigating the UI
 
@@ -71,7 +73,7 @@ Freshness labels:
 
 Health and freshness are separate. A node can have a last-known healthy snapshot but still be stale or unreachable. Trust the freshness label when deciding whether the data is current.
 
-For remote workers such as Bastet, the Remote Focus section shows agent endpoint health, Ollama status, host memory, CPU usage, GPU telemetry, and recent remote runs. GPU telemetry is especially useful for confirming whether a model host is actually available for local inference work.
+For remote workers such as example node `bastet`, the Remote Focus section shows agent endpoint health, Ollama status, host memory, CPU usage, GPU telemetry, and recent remote runs. GPU telemetry is especially useful for confirming whether a model host is actually available for local inference work.
 
 Use `Refresh node` when you want to submit a refresh action through the control plane. If the result is `submitted_unverified`, Vantage has accepted the request but has not confirmed completion yet.
 
@@ -106,7 +108,7 @@ Key fields:
 - `Presence`: Whether visibility is node-local or cluster-wide.
 - `Actions`: Capability checks against a specific node placement.
 
-For replicated models across Jedi and Bastet, check placement before routing work. A model can exist on multiple nodes, but performance, VRAM, digest, and availability can still differ.
+For replicated models across example nodes such as `jedi` and `bastet`, check placement before routing work. A model can exist on multiple nodes, but performance, VRAM, digest, and availability can still differ.
 
 ### Routing
 
@@ -118,7 +120,7 @@ Priority classes:
 - `interactive`: Operator-facing or latency-sensitive work.
 - `scheduled`: Automated jobs and recurring tasks.
 
-Route order is evaluated from left to right. For example, `bastet -> jedi` means Vantage should prefer Bastet first, then Jedi as the next option.
+Route order is evaluated from left to right. For example, `bastet -> jedi` means Vantage should prefer the example `bastet` worker first, then the example `jedi` node as the next option.
 
 Changing route preference is a configuration-impacting action. Vantage requires a confirmation modal before saving the new preferred order. Treat routing edits as operational changes, not casual UI clicks.
 
@@ -167,7 +169,7 @@ Example:
 [[nodes]]
 node_id = "new-worker"
 display_name = "New Worker"
-base_url = "http://192.168.50.210:9110"
+base_url = "http://<remote-agent-ip>:9110"
 role = "remote"
 enabled = true
 ```

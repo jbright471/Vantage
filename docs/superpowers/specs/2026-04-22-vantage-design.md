@@ -1,12 +1,14 @@
 # Vantage Design
 
+Sanitization note: ControlPlane / control-plane and WorkerA / worker-a are placeholder node names used for documentation examples. Replace them with your own homelab node names and network values.
+
 ## Status
 
 Draft for review
 
 ## Summary
 
-`Vantage` is a local-first control plane for serious private AI setups. The product monitors nodes, models, routing, and runs across multiple machines while preserving independent operation of existing services such as `ollama_router`, `autoskill`, Task Scheduler jobs, and Bastet systemd services.
+`Vantage` is a local-first control plane for serious private AI setups. The product monitors nodes, models, routing, and runs across multiple machines while preserving independent operation of existing services such as `ollama_router`, `autoskill`, Task Scheduler jobs, and WORKER_A systemd services.
 
 The MVP is intentionally focused:
 
@@ -19,7 +21,7 @@ The MVP is intentionally focused:
 
 ## Product Positioning
 
-Primary initial user: the current single-operator local AI homelab on `Jedi` and `Bastet`.
+Primary initial user: the current single-operator local AI homelab on `ControlPlane` and `WORKER_A`.
 
 Product direction: design the MVP for one operator first, but keep the abstractions clean enough to expand to advanced local-AI operators later.
 
@@ -38,7 +40,7 @@ Working pitch:
 - `Freshness is first-class`
   Every live panel must expose when the data was last updated.
 - `Independent operation is preserved`
-  If the control plane is down, `ollama_router`, `autoskill`, Task Scheduler jobs, and Bastet services keep running.
+  If the control plane is down, `ollama_router`, `autoskill`, Task Scheduler jobs, and WORKER_A services keep running.
 - `Every action is auditable`
   Any action initiated by the control plane creates a durable run record.
 
@@ -46,8 +48,8 @@ Working pitch:
 
 ### Included
 
-- Local-first control plane backend on `Jedi`
-- Lightweight node agent on `Bastet`
+- Local-first control plane backend on `ControlPlane`
+- Lightweight node agent on `WORKER_A`
 - Node registry and bootstrap config
 - Persistent snapshots and run history
 - Live SSE updates to the UI
@@ -64,20 +66,20 @@ Working pitch:
 - Broad multi-operator packaging polish
 - Large routing-rule editing surface if the underlying config path is still moving
 
-Note: lightweight node-to-node agent authentication is still allowed in Phase 1. What is excluded here is human-facing product auth, not machine-to-machine trust between the Jedi control plane and Bastet agent.
+Note: lightweight node-to-node agent authentication is still allowed in Phase 1. What is excluded here is human-facing product auth, not machine-to-machine trust between the ControlPlane control plane and WORKER_A agent.
 
 ## Architecture
 
-The MVP uses a local-first architecture with one main application on `Jedi` and one lightweight remote agent on `Bastet`.
+The MVP uses a local-first architecture with one main application on `ControlPlane` and one lightweight remote agent on `WORKER_A`.
 
 ### Runtime Layers
 
 1. `UI layer`
    React/Vite frontend for nodes, runs, models, routing visibility, warnings, and operator actions.
 2. `Control API`
-   FastAPI backend on `Jedi` that owns persistence, polling, normalization, streaming, action orchestration, pruning, and later reconciliation.
+   FastAPI backend on `ControlPlane` that owns persistence, polling, normalization, streaming, action orchestration, pruning, and later reconciliation.
 3. `Collectors`
-   Local collectors on `Jedi` plus an HTTP node agent on `Bastet`.
+   Local collectors on `ControlPlane` plus an HTTP node agent on `WORKER_A`.
 4. `Execution adapters`
    Action wrappers for refresh, restart, and later routing reloads or eval triggers.
 
@@ -88,7 +90,7 @@ The MVP uses a local-first architecture with one main application on `Jedi` and 
 - Validation: `Pydantic`
 - Persistence: `SQLite + SQLAlchemy`
 - Streaming: `SSE`
-- Remote node contract: lightweight `FastAPI` agent on `Bastet`
+- Remote node contract: lightweight `FastAPI` agent on `WORKER_A`
 - Logging: structured JSON logs from the start
 
 ### Why FastAPI
@@ -97,23 +99,23 @@ The MVP uses a local-first architecture with one main application on `Jedi` and 
 - Good support for concurrent polling and HTTP integration work
 - Clean Pydantic-based contracts across backend and agent boundaries
 
-### Why a Bastet Agent From Day One
+### Why a WORKER_A Agent From Day One
 
-The remote-node contract should be real immediately. Building the agent early prevents the Jedi backend from accidentally assuming everything is local and keeps node collection uniformly HTTP-based.
+The remote-node contract should be real immediately. Building the agent early prevents the ControlPlane backend from accidentally assuming everything is local and keeps node collection uniformly HTTP-based.
 
-The Bastet agent does not need to be sophisticated. A small systemd-managed FastAPI process exposing a minimal contract is sufficient for MVP.
+The WORKER_A agent does not need to be sophisticated. A small systemd-managed FastAPI process exposing a minimal contract is sufficient for MVP.
 
 ## Component Layout
 
 ```mermaid
 flowchart LR
-    UI["React/Vite UI"] --> API["Jedi FastAPI Control Plane"]
+    UI["React/Vite UI"] --> API["ControlPlane FastAPI Control Plane"]
     API --> DB["SQLite"]
-    API --> JLOCAL["Local Collectors on Jedi"]
-    API --> BASTET["Bastet Agent"]
+    API --> JLOCAL["Local Collectors on ControlPlane"]
+    API --> WORKER_A["WORKER_A Agent"]
     API --> SSE["SSE Stream"]
     JLOCAL --> OLLAMAJ["Local Ollama + Router + Scheduler State"]
-    BASTET --> OLLAMAB["Bastet GPU / Ollama / Service State"]
+    WORKER_A --> OLLAMAB["WORKER_A GPU / Ollama / Service State"]
 ```
 
 ## Node Agent Contract
@@ -259,7 +261,7 @@ The product needs an explicit config layer so setup and recovery do not depend o
 
 ### Tier 1: Bootstrap Config
 
-A local file on `Jedi` seeds the system with:
+A local file on `ControlPlane` seeds the system with:
 
 - node IDs and names
 - base URLs
@@ -296,8 +298,8 @@ Startup behavior:
 
 ## Data Flow
 
-1. Bastet agent exposes node state over HTTP.
-2. Jedi backend polls local collectors and remote agents on a short cadence.
+1. WORKER_A agent exposes node state over HTTP.
+2. ControlPlane backend polls local collectors and remote agents on a short cadence.
 3. Fresh snapshots are normalized and persisted.
 4. Significant events create `Run` records.
 5. The backend streams a full-state event on new SSE connection.
@@ -436,7 +438,7 @@ Phase 1 should include only a very small first action set.
 Candidates:
 
 - refresh node now
-- restart Bastet agent
+- restart WORKER_A agent
 - trigger router config reload
 
 Rules:
@@ -460,7 +462,7 @@ Cover:
 
 ### Contract Tests
 
-Validate Bastet agent responses against strict Pydantic models for:
+Validate WORKER_A agent responses against strict Pydantic models for:
 
 - `/health`
 - `/gpu`
@@ -469,9 +471,9 @@ Validate Bastet agent responses against strict Pydantic models for:
 
 ### Integration Tests
 
-Run the Jedi backend against:
+Run the ControlPlane backend against:
 
-- fake Bastet agent
+- fake WORKER_A agent
 - fake Ollama endpoint
 - temporary SQLite DB
 - simulated event sources for scheduler and autoskill state
@@ -488,7 +490,7 @@ Verify:
 
 Simulate:
 
-- Bastet unreachable
+- WORKER_A unreachable
 - partial agent failure
 - stale snapshots
 - duplicate action submissions
@@ -497,7 +499,7 @@ Simulate:
 
 ### Manual Smoke Tests
 
-- stop Bastet agent and observe stale then unreachable state
+- stop WORKER_A agent and observe stale then unreachable state
 - restart backend and confirm UI full-state re-sync
 - trigger a control-plane action and confirm `submitted_unverified` appears honestly
 - verify pruning runs as expected
@@ -524,7 +526,7 @@ Acceptance:
 - persistence layer is live
 - contracts are defined before collectors exist
 
-### Milestone 2: Bastet Agent
+### Milestone 2: WORKER_A Agent
 
 Build:
 
@@ -612,8 +614,8 @@ Acceptance:
 
 The first version is ready to ship when all of the following are true:
 
-- Bastet agent is running
-- Jedi backend polls local and remote state truthfully
+- WORKER_A agent is running
+- ControlPlane backend polls local and remote state truthfully
 - Nodes view shows live health and freshness clearly
 - Runs view is durable and trustworthy
 - Models view correctly merges inventory across nodes
@@ -638,5 +640,5 @@ Build on top of the run system rather than around it:
 
 ## Open Notes
 
-- Keep the collector interface abstract enough that the Bastet Python agent can later be replaced by a single-binary agent without rewriting the control plane.
+- Keep the collector interface abstract enough that the WORKER_A Python agent can later be replaced by a single-binary agent without rewriting the control plane.
 - Do not plan around a rewrite. Keep Python architecture clean so a future Rust agent remains an option, not a dependency.
