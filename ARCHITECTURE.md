@@ -5,7 +5,7 @@ Vantage is a local-first control plane composed of three main pieces:
 The examples below use `jedi` as an example control-plane node name and `bastet` as an example remote worker node name. Replace them with names from your own homelab.
 
 - `Control-plane backend`: FastAPI, SQLite, SQLAlchemy, Pydantic, collectors, polling, pruning, routing, run history, and SSE streaming. In examples, this node is named `jedi`.
-- `Frontend`: Vite, React, and TypeScript operator UI for nodes, runs, models, and routing.
+- `Frontend`: Vite, React, and TypeScript operator UI for nodes, runs, models, routing, warning review, and in-app documentation.
 - `Remote agent`: lightweight FastAPI process on Linux worker nodes. In examples, one worker is named `bastet`.
 
 The system is intentionally an observer and coordinator. It does not replace Ollama, routers, schedulers, or host services.
@@ -62,9 +62,11 @@ Vantage keeps three kinds of state separate:
 
 - `Configured state`: node registry, routing rules, thresholds, and bootstrap settings.
 - `Observed state`: snapshots and run records collected from machines and agents.
-- `Derived display state`: UI classifications such as `healthy`, `stale`, `degraded`, and `unreachable`.
+- `Derived display state`: UI classifications such as `healthy`, `stale`, `degraded`, `unreachable`, attention summaries, and warning visibility.
 
 A node can be configured as enabled, last observed as healthy, and currently stale. Those are different facts and should not collapse into one field.
+
+The frontend keeps derived state lightweight and reversible. The attention ribbon summarizes operator signals, the warning strip caps visible warning records by default, and node heartbeat meters visualize freshness decay without changing persisted truth.
 
 ## Persistence
 
@@ -109,3 +111,4 @@ Vantage prefers explicit uncertainty:
 - partial agent failures become degraded state
 - submitted actions can remain `submitted_unverified`
 - routing and model placement are shown as observed, not assumed
+- routing overrides repeat target node state through text, color, and icons before saving configured preference changes

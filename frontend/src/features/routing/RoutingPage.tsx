@@ -5,6 +5,15 @@ import { updateRoutingRule, type RoutingRuleRecord } from "../../api/client";
 type RoutingPageProps = {
   rules: Array<Pick<RoutingRuleRecord, "rule_id" | "priority_class" | "preferred_nodes"> & Partial<Pick<RoutingRuleRecord, "model_name">>>;
   availableNodes: string[];
+  nodeSummaries?: NodeRouteSummary[];
+};
+
+type NodeRouteSummary = {
+  node_id: string;
+  display_name: string;
+  observed_status: string;
+  freshness: string;
+  model_count: number;
 };
 
 type PendingRouteChange = {
@@ -22,7 +31,19 @@ function formatModelScope(modelName: string | null | undefined): string {
   return modelName;
 }
 
-export function RoutingPage({ rules, availableNodes }: RoutingPageProps) {
+function stateIcon(value: string): string {
+  if (value === "healthy" || value === "live") {
+    return "✓";
+  }
+
+  if (value === "unreachable" || value === "failed") {
+    return "!";
+  }
+
+  return "△";
+}
+
+export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: RoutingPageProps) {
   const [preferredNodesByRule, setPreferredNodesByRule] = useState<Record<string, string[]>>({});
   const [saveStateByRule, setSaveStateByRule] = useState<
     Record<string, { phase: "idle" | "saving" | "saved" | "error"; message?: string }>
@@ -35,6 +56,11 @@ export function RoutingPage({ rules, availableNodes }: RoutingPageProps) {
   }));
   const uniqueTargetNodes = new Set(effectiveRules.flatMap((rule) => rule.preferred_nodes));
   const priorityClasses = new Set(orderedRules.map((rule) => rule.priority_class));
+  const nodeSummaryById = new Map(nodeSummaries.map((node) => [node.node_id, node]));
+  const pendingTargetNode = pendingRouteChange ? nodeSummaryById.get(pendingRouteChange.nodeId) : undefined;
+  const pendingTargetRequiresOverride = pendingTargetNode
+    ? pendingTargetNode.observed_status !== "healthy" || pendingTargetNode.freshness !== "live"
+    : false;
 
   useEffect(() => {
     setPreferredNodesByRule((current) => {
@@ -234,12 +260,44 @@ export function RoutingPage({ rules, availableNodes }: RoutingPageProps) {
                 <dd>{pendingRouteChange.nextOrder.join(" → ")}</dd>
               </div>
             </dl>
+            {pendingTargetNode ? (
+              <div className="routing-safety-panel">
+                <p className="info-kicker">Target node state</p>
+                <div className="state-token-row">
+                  <span className={`state-token is-${pendingTargetNode.observed_status}`}>
+                    <span className="state-icon" aria-hidden="true">
+                      {stateIcon(pendingTargetNode.observed_status)}
+                    </span>
+                    {pendingTargetNode.observed_status}
+                  </span>
+                  <span className={`state-token is-${pendingTargetNode.freshness}`}>
+                    <span className="state-icon" aria-hidden="true">
+                      {stateIcon(pendingTargetNode.freshness)}
+                    </span>
+                    {pendingTargetNode.freshness}
+                  </span>
+                  <span className="meta-chip">{pendingTargetNode.model_count} models</span>
+                </div>
+                {pendingTargetRequiresOverride ? (
+                  <p className="inline-warning">
+                    This node is not currently healthy and live. Confirm only if you are intentionally testing or
+                    redirecting work with that risk.
+                  </p>
+                ) : (
+                  <p className="info-copy">The target node is currently healthy and live.</p>
+                )}
+              </div>
+            ) : null}
             <div className="modal-actions">
               <button type="button" className="action-button" onClick={() => setPendingRouteChange(null)}>
                 Cancel
               </button>
-              <button type="button" className="action-button is-danger" onClick={confirmRouteChange}>
-                Confirm routing change
+              <button
+                type="button"
+                className={pendingTargetRequiresOverride ? "action-button is-override" : "action-button"}
+                onClick={confirmRouteChange}
+              >
+                {pendingTargetRequiresOverride ? "Confirm override" : "Confirm routing change"}
               </button>
             </div>
           </section>

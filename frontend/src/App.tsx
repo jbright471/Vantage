@@ -49,9 +49,26 @@ function labelPrimaryNode(nodes: Array<{ node_id: string; role: string; observed
   return `${primaryNode.node_id.toUpperCase()}: ${status}`;
 }
 
+function summarizeAttention(
+  nodes: Array<{ observed_status: string; freshness: string }>,
+  pendingRuns: number,
+  warningCount: number,
+): string {
+  const staleNodes = nodes.filter((node) => node.freshness !== "live").length;
+  const degradedNodes = nodes.filter((node) => node.observed_status !== "healthy").length;
+  const issueCount = staleNodes + degradedNodes + pendingRuns + warningCount;
+
+  if (issueCount === 0) {
+    return "All lanes nominal";
+  }
+
+  return `${issueCount} signals need attention`;
+}
+
 export default function App() {
   const { state, streamStatus, lastSyncAt, errorMessage } = useEventSource("/api/stream");
   const [isDocsOpen, setIsDocsOpen] = useState(false);
+  const [showAllWarnings, setShowAllWarnings] = useState(false);
 
   const liveNodes = state.nodes.filter((node) => node.freshness === "live").length;
   const staleNodes = state.nodes.filter((node) => node.freshness !== "live").length;
@@ -60,6 +77,11 @@ export default function App() {
   const mirroredModels = state.models.filter((model) => model.placements.length > 1).length;
   const activePolicyCount = state.routing.filter((rule) => rule.preferred_nodes.length > 0).length;
   const primaryNodeLabel = labelPrimaryNode(state.nodes);
+  const attentionSummary = summarizeAttention(state.nodes, pendingRuns, state.warnings.length);
+  const needsAttention = degradedNodes > 0 || staleNodes > 0 || pendingRuns > 0 || state.warnings.length > 0;
+  const visibleWarningLimit = showAllWarnings ? state.warnings.length : 2;
+  const visibleWarnings = state.warnings.slice(0, visibleWarningLimit);
+  const hiddenWarningCount = Math.max(0, state.warnings.length - visibleWarnings.length);
 
   return (
     <main className="command-shell">
@@ -122,7 +144,7 @@ export default function App() {
         <header className="command-header">
           <div>
             <p className="section-kicker">CONTROL_PLANE</p>
-            <h2 className="command-title">Local AI operations command center</h2>
+            <h2 className="command-title">Local AI Command Center</h2>
             <p className="command-copy">
               Vantage keeps observed state, configured state, and last-known freshness visibly separate so operators
               can trust what they are seeing under load.
@@ -134,6 +156,13 @@ export default function App() {
             <div className="header-status-row">
               <span className={`status-chip is-${streamStatus}`}>{labelStreamStatus(streamStatus)}</span>
               <span className="meta-chip">{primaryNodeLabel}</span>
+            </div>
+            <div className="attention-ribbon" aria-label="Operator attention summary">
+              <span className={needsAttention ? "attention-dot is-active" : "attention-dot"} />
+              <strong>{attentionSummary}</strong>
+              <small>
+                {degradedNodes} degraded / {staleNodes} stale / {state.warnings.length} warnings / {pendingRuns} pending
+              </small>
             </div>
             <button type="button" className="docs-trigger-button" onClick={() => setIsDocsOpen(true)}>
               <span aria-hidden="true">?</span>
@@ -167,10 +196,49 @@ export default function App() {
 
         {errorMessage ? <p className="inline-warning">{errorMessage}</p> : null}
 
+        {state.warnings.length > 0 ? (
+          <section className="warning-strip" aria-label="Active warnings">
+            <div>
+              <p className="section-kicker">Warnings</p>
+              <h2>Configuration drift and operator notices</h2>
+            </div>
+            <div className="warning-list">
+              {visibleWarnings.map((warning) => (
+                <article key={warning.warning_id} className="warning-item">
+                  <span className={`status-chip is-${warning.severity}`}>{warning.severity}</span>
+                  <div>
+                    <strong>{warning.summary}</strong>
+                    <p>{warning.node_id ? `${warning.warning_type} / ${warning.node_id}` : warning.warning_type}</p>
+                  </div>
+                </article>
+              ))}
+              {state.warnings.length > 2 ? (
+                <button
+                  type="button"
+                  className="warning-expand-button"
+                  onClick={() => setShowAllWarnings((current) => !current)}
+                >
+                  {showAllWarnings ? "Show fewer warnings" : `+${hiddenWarningCount} more`}
+                </button>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
         <NodesPage nodes={state.nodes} runs={state.runs} />
         <RunsPage runs={state.runs} />
         <ModelsPage models={state.models} />
-        <RoutingPage rules={state.routing} availableNodes={state.nodes.map((node) => node.node_id)} />
+        <RoutingPage
+          rules={state.routing}
+          availableNodes={state.nodes.map((node) => node.node_id)}
+          nodeSummaries={state.nodes.map((node) => ({
+            node_id: node.node_id,
+            display_name: node.display_name,
+            observed_status: node.observed_status,
+            freshness: node.freshness,
+            model_count: node.model_count,
+          }))}
+        />
       </section>
 
       {isDocsOpen ? (

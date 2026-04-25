@@ -1,3 +1,5 @@
+import type { CSSProperties } from "react";
+
 import type { NodeRecord } from "../../api/client";
 
 type NodeCardProps = {
@@ -38,14 +40,79 @@ function formatLastSeen(value: string | null): string {
 
 function describeFreshness(value: string): string {
   if (value === "live") {
-    return "Current sample";
+    return "Current observation";
   }
 
   if (value === "stale") {
     return "Observation delayed";
   }
 
+  if (value === "unreachable") {
+    return "Last-known only";
+  }
+
   return "Awaiting sync";
+}
+
+function formatSignalAge(value: string | null): string {
+  if (!value) {
+    return "No signal yet";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.valueOf())) {
+    return "Timestamp unknown";
+  }
+
+  const elapsedMs = Math.max(0, Date.now() - parsed.getTime());
+
+  if (elapsedMs < 10_000) {
+    return `${elapsedMs}ms`;
+  }
+
+  const elapsedSeconds = Math.floor(elapsedMs / 1000);
+
+  if (elapsedSeconds < 60) {
+    return `${(elapsedMs / 1000).toFixed(1)}s`;
+  }
+
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes}m ago`;
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+
+  if (elapsedHours < 48) {
+    return `${elapsedHours}h ago`;
+  }
+
+  return `${Math.floor(elapsedHours / 24)}d ago`;
+}
+
+function freshnessLevel(value: string): number {
+  if (value === "live") {
+    return 92;
+  }
+
+  if (value === "stale") {
+    return 52;
+  }
+
+  return 18;
+}
+
+function freshnessOpacity(value: string): number {
+  if (value === "live") {
+    return 1;
+  }
+
+  if (value === "stale") {
+    return 0.58;
+  }
+
+  return 0.32;
 }
 
 export function NodeCard({ node, onRefresh, refreshState }: NodeCardProps) {
@@ -56,8 +123,13 @@ export function NodeCard({ node, onRefresh, refreshState }: NodeCardProps) {
   const refreshStatus = refreshState?.status ?? null;
   const refreshMessage = refreshState?.message ?? null;
 
+  const freshnessStyle = {
+    "--freshness-level": `${freshnessLevel(node.freshness)}%`,
+    "--freshness-opacity": String(freshnessOpacity(node.freshness)),
+  } as CSSProperties & Record<"--freshness-level" | "--freshness-opacity", string>;
+
   return (
-    <article className="node-card">
+    <article className={`node-card freshness-${node.freshness}`}>
       <div className="node-card-header">
         <div>
           <p className="node-eyebrow">{node.node_id}</p>
@@ -72,6 +144,16 @@ export function NodeCard({ node, onRefresh, refreshState }: NodeCardProps) {
         <span className="meta-chip">{isEnabled ? "enabled" : "disabled"}</span>
       </div>
 
+      <div className="freshness-strip" aria-label={`${node.display_name} heartbeat freshness`}>
+        <div className="freshness-strip-header">
+          <span>Heartbeat</span>
+          <strong className="telemetry-value">{formatSignalAge(node.last_seen_at)}</strong>
+        </div>
+        <div className="freshness-meter" style={freshnessStyle}>
+          <span />
+        </div>
+      </div>
+
       <dl className="node-metrics">
         <div className="node-metric">
           <dt>Origin</dt>
@@ -84,6 +166,10 @@ export function NodeCard({ node, onRefresh, refreshState }: NodeCardProps) {
         <div className="node-metric">
           <dt>Freshness</dt>
           <dd>{describeFreshness(node.freshness)}</dd>
+        </div>
+        <div className="node-metric">
+          <dt>Signal age</dt>
+          <dd className="telemetry-value">{formatSignalAge(node.last_seen_at)}</dd>
         </div>
         <div className="node-metric">
           <dt>Observation model</dt>

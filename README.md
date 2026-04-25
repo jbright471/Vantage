@@ -21,10 +21,12 @@ Vantage exists to make that state visible and actionable without taking ownershi
 ## Features
 
 - Live node health for local and remote machines
+- Attention ribbon and warning strip for stale, degraded, and drift states
+- Heartbeat freshness meters with visual decay
 - GPU telemetry from remote Linux workers
 - Merged model inventory across nodes
 - Model placement details with Ollama digests
-- Operator-editable routing preference order
+- Operator-editable routing preference order with strict override confirmation
 - Remote run ingestion from node agents
 - Backend-filtered run history with pagination
 - CSV and JSON audit exports for run history

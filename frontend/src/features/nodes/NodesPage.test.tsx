@@ -33,6 +33,8 @@ describe("NodesPage", () => {
     expect(screen.getByText("Bastet")).toBeTruthy();
     expect(screen.getByText("degraded")).toBeTruthy();
     expect(screen.getByText(/stale/i)).toBeTruthy();
+    expect(screen.getByText("Heartbeat")).toBeTruthy();
+    expect(screen.getByText("Signal age")).toBeTruthy();
   });
 
   it("submits a refresh action and keeps the status explicitly unverified", async () => {

@@ -61,6 +61,18 @@ If a remote node starts returning unauthorized responses, confirm that both the 
 
 ## Navigating the UI
 
+### Command Header and Warnings
+
+The command header gives the fastest read on whether Vantage needs operator attention. The attention ribbon summarizes degraded nodes, stale nodes, active warnings, and pending runs without requiring you to scan every section first.
+
+Active warnings appear in a compact warning strip below the fleet summary. Vantage shows the first two warnings by default to avoid pushing live telemetry below the fold. Use the `+N more` control when you need to expand the list during drift review.
+
+Color semantics are intentionally strict:
+
+- Green indicates current healthy state.
+- Amber indicates stale observations, degraded health, config drift, or other warning-level conditions.
+- Red is reserved for hard failure states such as unreachable nodes and failed runs.
+
 ### Nodes
 
 The Nodes dashboard shows machine health across the local fleet. Use it first when something feels wrong.
@@ -72,6 +84,8 @@ Freshness labels:
 - `UNREACHABLE`: The node has exceeded `unreachable_after_seconds` without a fresh observation.
 
 Health and freshness are separate. A node can have a last-known healthy snapshot but still be stale or unreachable. Trust the freshness label when deciding whether the data is current.
+
+Each node card includes a heartbeat freshness meter and monospace signal age. The meter fades as freshness decays so stale data looks physically weaker before a node becomes unreachable. Treat the heartbeat as a visual confidence indicator, not just decoration.
 
 For remote workers such as example node `bastet`, the Remote Focus section shows agent endpoint health, Ollama status, host memory, CPU usage, GPU telemetry, and recent remote runs. GPU telemetry is especially useful for confirming whether a model host is actually available for local inference work.
 
@@ -124,6 +138,8 @@ Route order is evaluated from left to right. For example, `bastet -> jedi` means
 
 Changing route preference is a configuration-impacting action. Vantage requires a confirmation modal before saving the new preferred order. Treat routing edits as operational changes, not casual UI clicks.
 
+The confirmation modal repeats target node state using text, color, and state icons. If the target node is stale, degraded, or otherwise not live and healthy, Vantage changes the final action to `Confirm override`. That lower-emphasis button is deliberate friction: read the warning and proceed only when the risk is intentional.
+
 ## Daily Operations
 
 ### Audit a Failed Capability Check Using the Run ID
@@ -150,9 +166,11 @@ Interpretation guide:
 3. Review the current route order.
 4. Click `Prefer <node>` for the node that should become first choice.
 5. Read the confirmation modal carefully.
-6. Confirm only if the new order matches the intended operational change.
-7. Watch for the saved message and verify the route order updates.
-8. Monitor Runs and Nodes after the change to confirm the new preference does not push work toward a stale or overloaded node.
+6. Check the target node state tokens and warning copy.
+7. Use `Confirm override` only when you intentionally want to route toward a stale or degraded node.
+8. Confirm only if the new order matches the intended operational change.
+9. Watch for the saved message and verify the route order updates.
+10. Monitor Runs and Nodes after the change to confirm the new preference does not push work toward a stale or overloaded node.
 
 Safe operating rule: never promote a node that is stale, unreachable, missing the target model, or showing unhealthy GPU/agent telemetry unless you are intentionally testing failure behavior.
 
@@ -188,9 +206,11 @@ If the node appears but remains stale or unreachable, check network reachability
 Use this quick sequence during daily checks:
 
 1. Confirm the header stream status is `Live`.
-2. Confirm Nodes are `LIVE` and not merely last-known healthy.
-3. Check Remote Focus for GPU telemetry and Ollama status.
-4. Review Runs for new `failed`, `submitted_unverified`, `timed_out`, or `abandoned` records.
-5. Confirm Models show expected placements before running capability checks.
-6. Review Routing before changing where work is preferred.
-7. Export Runs as CSV or JSON before deeper incident review.
+2. Check the attention ribbon for degraded nodes, stale nodes, warnings, and pending runs.
+3. Expand the warning strip if more than two warnings are active.
+4. Confirm Nodes are `LIVE` and not merely last-known healthy.
+5. Check Remote Focus for GPU telemetry and Ollama status.
+6. Review Runs for new `failed`, `submitted_unverified`, `timed_out`, or `abandoned` records.
+7. Confirm Models show expected placements before running capability checks.
+8. Review Routing before changing where work is preferred.
+9. Export Runs as CSV or JSON before deeper incident review.
