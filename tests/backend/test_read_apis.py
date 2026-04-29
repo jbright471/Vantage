@@ -10,12 +10,14 @@ def test_nodes_runs_models_routing_and_warnings_endpoints_exist() -> None:
         models = client.get("/api/models")
         routing = client.get("/api/routing")
         warnings = client.get("/api/warnings")
+        evals = client.get("/api/evals/suites")
 
         assert nodes.status_code == 200
         assert runs.status_code == 200
         assert models.status_code == 200
         assert routing.status_code == 200
         assert warnings.status_code == 200
+        assert evals.status_code == 200
 
         jedi = next(node for node in nodes.json() if node["node_id"] == "jedi")
 
@@ -27,4 +29,5 @@ def test_nodes_runs_models_routing_and_warnings_endpoints_exist() -> None:
         assert isinstance(models.json(), list)
         assert isinstance(routing.json(), list)
         assert isinstance(warnings.json(), list)
+        assert isinstance(evals.json(), list)
         assert any(rule["rule_id"] == "interactive-default" for rule in routing.json())

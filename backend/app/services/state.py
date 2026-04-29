@@ -125,6 +125,7 @@ def get_warnings_state(session: Session) -> list[dict]:
             "warning_type": warning.warning_type,
             "severity": warning.severity,
             "node_id": warning.node_id,
+            "status": warning.status,
             "summary": warning.summary,
         }
         for warning in warnings

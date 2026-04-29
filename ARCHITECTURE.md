@@ -66,7 +66,7 @@ Vantage keeps three kinds of state separate:
 
 A node can be configured as enabled, last observed as healthy, and currently stale. Those are different facts and should not collapse into one field.
 
-The frontend keeps derived state lightweight and reversible. The attention ribbon summarizes operator signals, the warning strip caps visible warning records by default, and node heartbeat meters visualize freshness decay without changing persisted truth.
+The frontend keeps derived state lightweight and reversible. The attention ribbon summarizes operator signals, the warning strip caps visible warning records by default, node heartbeat meters visualize freshness decay without changing persisted truth, and node diagnostics explain degraded state from observed errors.
 
 ## Persistence
 
@@ -79,8 +79,11 @@ SQLite is the Phase 1 database. The main tables are:
 - `routing_rules` and `routing_rule_nodes`: preferred routing order
 - `warning_records`: durable warning state
 - `app_settings`: future runtime-managed settings
+- `eval_suites` and `eval_cases`: Phase 2 prompt-suite foundations
 
 `NodeSnapshot` is pruned automatically by age and by per-node count so continuous polling does not grow the database forever.
+
+Warnings can move from `active` to `acknowledged` without being deleted. Reconciliation reuses acknowledged warnings for the same condition instead of recreating a new active warning every poll, then marks them resolved when the underlying drift disappears.
 
 ## Streaming Model
 
@@ -102,6 +105,10 @@ The current agent contract covers:
 
 The agent is deliberately small so it can eventually become a single binary without forcing a backend rewrite.
 
+## Eval Model
+
+Phase 2 starts with an Eval Lab foundation rather than immediate scoring. `EvalSuite` groups prompt cases, and `EvalCase` stores individual prompts plus expected metadata. Execution, scoring, and model comparison will build on the existing `Run` history instead of creating a separate truth source.
+
 ## Failure Behavior
 
 Vantage prefers explicit uncertainty:
@@ -112,3 +119,5 @@ Vantage prefers explicit uncertainty:
 - submitted actions can remain `submitted_unverified`
 - routing and model placement are shown as observed, not assumed
 - routing overrides repeat target node state through text, color, and icons before saving configured preference changes
+- diagnostics suggest remediation from observed state but do not silently mutate config or restart host services
+- warning acknowledgement is an allowlisted remediation action and creates an audit `Run`

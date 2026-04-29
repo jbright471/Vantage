@@ -3,7 +3,9 @@ import { ModelsPage } from "./features/models/ModelsPage";
 import { NodesPage } from "./features/nodes/NodesPage";
 import { RoutingPage } from "./features/routing/RoutingPage";
 import { RunsPage } from "./features/runs/RunsPage";
+import { EvalsPage } from "./features/evals/EvalsPage";
 import { useEventSource } from "./hooks/useEventSource";
+import { acknowledgeWarning } from "./api/client";
 
 const OperatorGuideDrawer = lazy(() =>
   import("./features/docs/OperatorGuideDrawer").then((module) => ({ default: module.OperatorGuideDrawer })),
@@ -69,7 +71,10 @@ export default function App() {
   const { state, streamStatus, lastSyncAt, errorMessage } = useEventSource("/api/stream");
   const [isDocsOpen, setIsDocsOpen] = useState(false);
   const [showAllWarnings, setShowAllWarnings] = useState(false);
+  const [acknowledgedWarningIds, setAcknowledgedWarningIds] = useState<Set<string>>(() => new Set());
+  const [warningActionState, setWarningActionState] = useState<Record<string, "idle" | "saving" | "error">>({});
 
+  const activeWarnings = state.warnings.filter((warning) => !acknowledgedWarningIds.has(warning.warning_id));
   const liveNodes = state.nodes.filter((node) => node.freshness === "live").length;
   const staleNodes = state.nodes.filter((node) => node.freshness !== "live").length;
   const degradedNodes = state.nodes.filter((node) => node.observed_status !== "healthy").length;
@@ -77,11 +82,22 @@ export default function App() {
   const mirroredModels = state.models.filter((model) => model.placements.length > 1).length;
   const activePolicyCount = state.routing.filter((rule) => rule.preferred_nodes.length > 0).length;
   const primaryNodeLabel = labelPrimaryNode(state.nodes);
-  const attentionSummary = summarizeAttention(state.nodes, pendingRuns, state.warnings.length);
-  const needsAttention = degradedNodes > 0 || staleNodes > 0 || pendingRuns > 0 || state.warnings.length > 0;
-  const visibleWarningLimit = showAllWarnings ? state.warnings.length : 2;
-  const visibleWarnings = state.warnings.slice(0, visibleWarningLimit);
-  const hiddenWarningCount = Math.max(0, state.warnings.length - visibleWarnings.length);
+  const attentionSummary = summarizeAttention(state.nodes, pendingRuns, activeWarnings.length);
+  const needsAttention = degradedNodes > 0 || staleNodes > 0 || pendingRuns > 0 || activeWarnings.length > 0;
+  const visibleWarningLimit = showAllWarnings ? activeWarnings.length : 2;
+  const visibleWarnings = activeWarnings.slice(0, visibleWarningLimit);
+  const hiddenWarningCount = Math.max(0, activeWarnings.length - visibleWarnings.length);
+
+  async function handleAcknowledgeWarning(warningId: string) {
+    setWarningActionState((current) => ({ ...current, [warningId]: "saving" }));
+    try {
+      await acknowledgeWarning(warningId);
+      setAcknowledgedWarningIds((current) => new Set(current).add(warningId));
+      setWarningActionState((current) => ({ ...current, [warningId]: "idle" }));
+    } catch {
+      setWarningActionState((current) => ({ ...current, [warningId]: "error" }));
+    }
+  }
 
   return (
     <main className="command-shell">
@@ -109,6 +125,10 @@ export default function App() {
             <span>route Routing</span>
             <strong>{activePolicyCount}</strong>
           </a>
+          <a href="#evals-title">
+            <span>science Evals</span>
+            <strong>2</strong>
+          </a>
         </nav>
 
         <section className="rail-panel">
@@ -130,7 +150,7 @@ export default function App() {
             </div>
             <div>
               <dt>Warnings</dt>
-              <dd>{state.warnings.length}</dd>
+              <dd>{activeWarnings.length}</dd>
             </div>
             <div>
               <dt>Pending</dt>
@@ -161,7 +181,7 @@ export default function App() {
               <span className={needsAttention ? "attention-dot is-active" : "attention-dot"} />
               <strong>{attentionSummary}</strong>
               <small>
-                {degradedNodes} degraded / {staleNodes} stale / {state.warnings.length} warnings / {pendingRuns} pending
+                {degradedNodes} degraded / {staleNodes} stale / {activeWarnings.length} warnings / {pendingRuns} pending
               </small>
             </div>
             <button type="button" className="docs-trigger-button" onClick={() => setIsDocsOpen(true)}>
@@ -196,7 +216,7 @@ export default function App() {
 
         {errorMessage ? <p className="inline-warning">{errorMessage}</p> : null}
 
-        {state.warnings.length > 0 ? (
+        {activeWarnings.length > 0 ? (
           <section className="warning-strip" aria-label="Active warnings">
             <div>
               <p className="section-kicker">Warnings</p>
@@ -209,10 +229,21 @@ export default function App() {
                   <div>
                     <strong>{warning.summary}</strong>
                     <p>{warning.node_id ? `${warning.warning_type} / ${warning.node_id}` : warning.warning_type}</p>
+                    {warningActionState[warning.warning_id] === "error" ? (
+                      <p className="warning-action-error">Acknowledge failed. Try again.</p>
+                    ) : null}
                   </div>
+                  <button
+                    type="button"
+                    className="warning-ack-button"
+                    disabled={warningActionState[warning.warning_id] === "saving"}
+                    onClick={() => void handleAcknowledgeWarning(warning.warning_id)}
+                  >
+                    {warningActionState[warning.warning_id] === "saving" ? "Acknowledging..." : "Acknowledge"}
+                  </button>
                 </article>
               ))}
-              {state.warnings.length > 2 ? (
+              {activeWarnings.length > 2 ? (
                 <button
                   type="button"
                   className="warning-expand-button"
@@ -239,6 +270,7 @@ export default function App() {
             model_count: node.model_count,
           }))}
         />
+        <EvalsPage />
       </section>
 
       {isDocsOpen ? (

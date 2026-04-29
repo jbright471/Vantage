@@ -86,11 +86,30 @@ export type RoutingRuleRecord = {
   preferred_nodes: string[];
 };
 
+export type EvalCaseRecord = {
+  case_id: string;
+  name: string;
+  prompt: string;
+  expected_json: Record<string, unknown>;
+  sort_order: number;
+};
+
+export type EvalSuiteRecord = {
+  suite_id: string;
+  name: string;
+  description: string;
+  created_at: string;
+  metadata_json: Record<string, unknown>;
+  case_count: number;
+  cases: EvalCaseRecord[];
+};
+
 export type WarningRecord = {
   warning_id: string;
   warning_type: string;
   severity: string;
   node_id: string | null;
+  status?: string;
   summary: string;
 };
 
@@ -230,4 +249,33 @@ export async function updateRoutingRule(ruleId: string, preferredNodes: string[]
   }
 
   return (await response.json()) as RoutingRuleRecord;
+}
+
+export async function acknowledgeWarning(warningId: string): Promise<WarningRecord & { run_id: string }> {
+  const response = await fetch(`/api/warnings/${encodeURIComponent(warningId)}/acknowledge`, {
+    method: "PATCH",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Warning acknowledgement failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as WarningRecord & { run_id: string };
+}
+
+export async function fetchEvalSuites(): Promise<EvalSuiteRecord[]> {
+  const response = await fetch("/api/evals/suites", {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval suites request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalSuiteRecord[];
 }

@@ -67,6 +67,8 @@ The command header gives the fastest read on whether Vantage needs operator atte
 
 Active warnings appear in a compact warning strip below the fleet summary. Vantage shows the first two warnings by default to avoid pushing live telemetry below the fold. Use the `+N more` control when you need to expand the list during drift review.
 
+Use `Acknowledge` when you have reviewed a warning and want it removed from the active operator queue. Acknowledgement does not delete history; Vantage stores the warning as acknowledged and creates an audit run for the action. If the underlying condition clears later, reconciliation resolves the warning.
+
 Color semantics are intentionally strict:
 
 - Green indicates current healthy state.
@@ -90,6 +92,8 @@ Each node card includes a heartbeat freshness meter and monospace signal age. Th
 For remote workers such as example node `bastet`, the Remote Focus section shows agent endpoint health, Ollama status, host memory, CPU usage, GPU telemetry, and recent remote runs. GPU telemetry is especially useful for confirming whether a model host is actually available for local inference work.
 
 Use `Refresh node` when you want to submit a refresh action through the control plane. If the result is `submitted_unverified`, Vantage has accepted the request but has not confirmed completion yet.
+
+Use `Diagnose` when a node is degraded, stale, unreachable, or has observed subsystem errors. The diagnostics drawer explains the primary issue from current observed state, lists endpoint-level failures such as Ollama connection errors, and provides suggested remediation steps. Diagnostics do not mutate configuration or restart services; they are the safe bridge between visibility and future allowlisted remediation actions.
 
 ### Runs
 
@@ -140,6 +144,12 @@ Changing route preference is a configuration-impacting action. Vantage requires 
 
 The confirmation modal repeats target node state using text, color, and state icons. If the target node is stale, degraded, or otherwise not live and healthy, Vantage changes the final action to `Confirm override`. That lower-emphasis button is deliberate friction: read the warning and proceed only when the risk is intentional.
 
+### Evals
+
+The Eval Lab is the Phase 2 foundation for prompt-suite testing. The current surface shows suite and case inventory so operators can see whether evaluation definitions exist before Vantage adds execution, score history, and comparison views.
+
+Treat Eval Lab as preparation, not proof. Until eval runs are recorded as durable `Run` records with scores and metadata, use Models capability checks for live one-off validation.
+
 ## Daily Operations
 
 ### Audit a Failed Capability Check Using the Run ID
@@ -151,7 +161,8 @@ The confirmation modal repeats target node state using text, color, and state ic
 5. Review `Status`, `Target Node`, `Started`, `Ended`, and `Observed metadata (JSON)`.
 6. Use `Copy Payload` if you need to paste the metadata into a ticket, note, or debugging session.
 7. Cross-check the target node in Nodes for freshness, Ollama status, GPU telemetry, and recent remote runs.
-8. If the failure is node-specific, run the same model capability check from Models on another placement.
+8. Open `Diagnose` on the target node if it is degraded, stale, or showing endpoint errors.
+9. If the failure is node-specific, run the same model capability check from Models on another placement.
 
 Interpretation guide:
 
@@ -208,9 +219,12 @@ Use this quick sequence during daily checks:
 1. Confirm the header stream status is `Live`.
 2. Check the attention ribbon for degraded nodes, stale nodes, warnings, and pending runs.
 3. Expand the warning strip if more than two warnings are active.
-4. Confirm Nodes are `LIVE` and not merely last-known healthy.
-5. Check Remote Focus for GPU telemetry and Ollama status.
-6. Review Runs for new `failed`, `submitted_unverified`, `timed_out`, or `abandoned` records.
-7. Confirm Models show expected placements before running capability checks.
-8. Review Routing before changing where work is preferred.
-9. Export Runs as CSV or JSON before deeper incident review.
+4. Acknowledge warnings only after reviewing their summary and affected node.
+5. Confirm Nodes are `LIVE` and not merely last-known healthy.
+6. Use `Diagnose` for degraded, stale, unreachable, or subsystem-error nodes.
+7. Check Remote Focus for GPU telemetry and Ollama status.
+8. Review Runs for new `failed`, `submitted_unverified`, `timed_out`, or `abandoned` records.
+9. Confirm Models show expected placements before running capability checks.
+10. Check Eval Lab for prompt-suite readiness when comparing model behavior.
+11. Review Routing before changing where work is preferred.
+12. Export Runs as CSV or JSON before deeper incident review.

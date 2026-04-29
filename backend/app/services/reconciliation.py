@@ -36,7 +36,7 @@ def upsert_warning_records(session: Session, warnings: list[dict]) -> None:
             select(WarningRecord).where(
                 WarningRecord.warning_type == payload["warning_type"],
                 WarningRecord.node_id == payload["node_id"],
-                WarningRecord.status == "active",
+                WarningRecord.status.in_(("active", "acknowledged")),
             )
         )
         if existing:
@@ -54,7 +54,7 @@ def resolve_warning_records(session: Session, warning_type: str, active_node_ids
     active_warnings = session.scalars(
         select(WarningRecord).where(
             WarningRecord.warning_type == warning_type,
-            WarningRecord.status == "active",
+            WarningRecord.status.in_(("active", "acknowledged")),
         )
     ).all()
     now = datetime.now(UTC)
@@ -65,3 +65,18 @@ def resolve_warning_records(session: Session, warning_type: str, active_node_ids
             warning.last_seen_at = now
 
     session.commit()
+
+
+def acknowledge_warning_record(session: Session, warning_id: str) -> WarningRecord | None:
+    warning = session.get(WarningRecord, warning_id)
+    if warning is None:
+        return None
+    if warning.status == "active":
+        warning.status = "acknowledged"
+        warning.last_seen_at = datetime.now(UTC)
+        metadata_json = dict(warning.metadata_json)
+        metadata_json["acknowledged_at"] = warning.last_seen_at.isoformat()
+        warning.metadata_json = metadata_json
+    session.commit()
+    session.refresh(warning)
+    return warning

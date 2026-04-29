@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from backend.app.api.actions import router as actions_router
 from backend.app.api.docs import router as docs_router
+from backend.app.api.evals import router as evals_router
 from backend.app.api.health import router as health_router
 from backend.app.api.models import router as models_router
 from backend.app.api.nodes import router as nodes_router
@@ -62,6 +63,7 @@ app = FastAPI(title="Vantage Control Plane", lifespan=lifespan)
 app.include_router(health_router, prefix="/api")
 app.include_router(actions_router, prefix="/api")
 app.include_router(docs_router, prefix="/api")
+app.include_router(evals_router, prefix="/api")
 app.include_router(nodes_router, prefix="/api")
 app.include_router(runs_router, prefix="/api")
 app.include_router(models_router, prefix="/api")

@@ -23,6 +23,8 @@ Vantage exists to make that state visible and actionable without taking ownershi
 - Live node health for local and remote machines
 - Attention ribbon and warning strip for stale, degraded, and drift states
 - Heartbeat freshness meters with visual decay
+- Node diagnostics with observed errors and suggested remediation
+- Warning acknowledgement with durable audit records
 - GPU telemetry from remote Linux workers
 - Merged model inventory across nodes
 - Model placement details with Ollama digests
@@ -31,6 +33,7 @@ Vantage exists to make that state visible and actionable without taking ownershi
 - Backend-filtered run history with pagination
 - CSV and JSON audit exports for run history
 - Local LLM capability checks from the Models surface
+- Phase 2 Eval Lab foundation for prompt suites
 - SSE-based live UI updates
 - SQLite persistence with bounded snapshot pruning
 - Shared-token authentication for node agents
@@ -77,6 +80,7 @@ Local secrets belong in `.env`, which is ignored by git. See [.env.example](./.e
 ## Documentation
 
 - [Architecture](./ARCHITECTURE.md)
+- [Roadmap](./ROADMAP.md)
 - [Operator Guide](./OPERATOR_GUIDE.md)
 - [Remote Agent Contract](./AGENT_CONTRACT.md)
 - [Operations](./OPERATIONS.md)
@@ -85,7 +89,7 @@ Local secrets belong in `.env`, which is ignored by git. See [.env.example](./.e
 
 ## Project Status
 
-Vantage is an active Phase 1 build. The current version is useful for a single local AI operator and is intentionally conservative about distributed control, authentication, and packaging.
+Vantage is an active Phase 1.6 build. The current version is useful for a single local AI operator and is intentionally conservative about distributed control, authentication, and packaging.
 
 ## License
 

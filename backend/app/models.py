@@ -103,3 +103,24 @@ class WarningRecord(Base):
     status: Mapped[str] = mapped_column(String, nullable=False, default="active")
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class EvalSuite(Base):
+    __tablename__ = "eval_suites"
+
+    suite_id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
+    metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+
+class EvalCase(Base):
+    __tablename__ = "eval_cases"
+
+    case_id: Mapped[str] = mapped_column(String, primary_key=True)
+    suite_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    expected_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

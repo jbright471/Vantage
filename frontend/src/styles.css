@@ -382,7 +382,7 @@ select {
 
 .warning-item {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
   gap: 12px;
   align-items: start;
   padding: 10px;
@@ -400,6 +400,32 @@ select {
   margin: 4px 0 0;
   color: var(--muted);
   font-size: 0.78rem;
+}
+
+.warning-action-error {
+  color: var(--danger) !important;
+}
+
+.warning-ack-button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(182, 196, 255, 0.32);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--primary-soft);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.warning-ack-button:hover:not(:disabled) {
+  border-color: rgba(182, 196, 255, 0.72);
+  background: rgba(46, 102, 255, 0.08);
+}
+
+.warning-ack-button:disabled {
+  cursor: wait;
+  opacity: 0.68;
 }
 
 .warning-expand-button {
@@ -916,6 +942,17 @@ select {
   border-color: rgba(255, 181, 151, 0.86);
 }
 
+.action-button.is-secondary {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(141, 144, 161, 0.42);
+  color: var(--ink);
+}
+
+.action-button.is-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(182, 196, 255, 0.5);
+}
+
 .action-button:disabled {
   cursor: wait;
   opacity: 0.72;
@@ -1283,6 +1320,10 @@ select {
   width: min(820px, 100%);
 }
 
+.diagnostics-drawer {
+  width: min(680px, 100%);
+}
+
 .drawer-header {
   display: flex;
   gap: 16px;
@@ -1413,6 +1454,51 @@ select {
   word-break: break-word;
 }
 
+.diagnostic-error-list,
+.diagnostic-steps {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.diagnostic-error {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid rgba(255, 181, 151, 0.28);
+  border-radius: 7px;
+  background: rgba(255, 181, 151, 0.055);
+}
+
+.diagnostic-error strong {
+  color: var(--warning);
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
+}
+
+.diagnostic-error p {
+  margin: 0;
+  color: var(--ink);
+  font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.diagnostic-steps {
+  padding-left: 1.2rem;
+}
+
+.diagnostic-steps li {
+  color: var(--ink);
+  line-height: 1.55;
+}
+
+.diagnostic-steps li::marker {
+  color: var(--primary-soft);
+  font-weight: 700;
+}
+
 @keyframes drawer-slide-in {
   from {
     transform: translateX(24px);
@@ -1480,5 +1566,14 @@ select {
 
   .run-stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .warning-item {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .warning-ack-button {
+    grid-column: 2;
+    width: fit-content;
   }
 }

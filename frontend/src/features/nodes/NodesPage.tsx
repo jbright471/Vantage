@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { submitRefreshNode, type NodeRecord, type RunRecord } from "../../api/client";
 import { NodeCard } from "./NodeCard";
+import { NodeDiagnosticsDrawer } from "./NodeDiagnosticsDrawer";
 import { RemoteFocusPanel } from "./RemoteFocusPanel";
 
 type NodesPageProps = {
@@ -27,6 +28,7 @@ type NodesPageProps = {
 };
 
 export function NodesPage({ nodes, runs }: NodesPageProps) {
+  const [selectedDiagnosticNode, setSelectedDiagnosticNode] = useState<NodesPageProps["nodes"][number] | null>(null);
   const [refreshStateByNode, setRefreshStateByNode] = useState<
     Record<
       string,
@@ -97,6 +99,7 @@ export function NodesPage({ nodes, runs }: NodesPageProps) {
               key={node.node_id}
               node={node}
               onRefresh={handleRefresh}
+              onDiagnose={() => setSelectedDiagnosticNode(node)}
               refreshState={refreshStateByNode[node.node_id]}
             />
           ))}
@@ -104,6 +107,9 @@ export function NodesPage({ nodes, runs }: NodesPageProps) {
       )}
 
       <RemoteFocusPanel nodes={orderedNodes as NodeRecord[]} runs={runs as RunRecord[]} />
+      {selectedDiagnosticNode ? (
+        <NodeDiagnosticsDrawer node={selectedDiagnosticNode} onClose={() => setSelectedDiagnosticNode(null)} />
+      ) : null}
     </section>
   );
 }

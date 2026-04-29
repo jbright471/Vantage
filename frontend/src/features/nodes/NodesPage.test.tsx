@@ -37,6 +37,43 @@ describe("NodesPage", () => {
     expect(screen.getByText("Signal age")).toBeTruthy();
   });
 
+  it("opens diagnostics for a degraded node with endpoint guidance", () => {
+    render(
+      <NodesPage
+        nodes={[
+          {
+            node_id: "jedi",
+            base_url: "http://127.0.0.1:8000",
+            display_name: "Jedi",
+            observed_status: "degraded",
+            freshness: "live",
+            last_seen_at: "2026-04-22T12:00:00Z",
+            gpu_stats: [],
+            cpu_usage_percent: null,
+            memory_used_mb: null,
+            ollama_status: "error",
+            ollama_errors: [
+              {
+                base_url: "http://host.docker.internal:11435",
+                error: "[Errno 101] Network is unreachable",
+              },
+            ],
+            model_count: 4,
+          },
+        ]}
+        runs={[]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /diagnose/i }));
+
+    expect(screen.getByRole("dialog", { name: /jedi/i })).toBeTruthy();
+    expect(screen.getByText(/one or more ollama endpoints failed/i)).toBeTruthy();
+    expect(screen.getByText("http://host.docker.internal:11435")).toBeTruthy();
+    expect(screen.getByText(/confirm the backend container can route/i)).toBeTruthy();
+    expect(screen.getByText(/diagnosing from observed state only/i)).toBeTruthy();
+  });
+
   it("submits a refresh action and keeps the status explicitly unverified", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
