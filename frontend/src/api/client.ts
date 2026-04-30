@@ -104,6 +104,16 @@ export type EvalSuiteRecord = {
   cases: EvalCaseRecord[];
 };
 
+export type EvalAttemptRecord = {
+  attempt_id: string;
+  suite_id: string;
+  suite_name: string;
+  model_name: string;
+  node_id: string;
+  run_count: number;
+  runs: RunRecord[];
+};
+
 export type WarningRecord = {
   warning_id: string;
   warning_type: string;
@@ -278,4 +288,76 @@ export async function fetchEvalSuites(): Promise<EvalSuiteRecord[]> {
   }
 
   return (await response.json()) as EvalSuiteRecord[];
+}
+
+export async function createEvalSuite(payload: { name: string; description: string }): Promise<EvalSuiteRecord> {
+  const response = await fetch("/api/evals/suites", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval suite creation failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalSuiteRecord;
+}
+
+export async function createEvalCase(
+  suiteId: string,
+  payload: { name: string; prompt: string; expected_json: Record<string, unknown> },
+): Promise<EvalSuiteRecord> {
+  const response = await fetch(`/api/evals/suites/${encodeURIComponent(suiteId)}/cases`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval case creation failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalSuiteRecord;
+}
+
+export async function queueEvalAttempt(
+  suiteId: string,
+  payload: { model_name: string; node_id: string },
+): Promise<EvalAttemptRecord> {
+  const response = await fetch(`/api/evals/suites/${encodeURIComponent(suiteId)}/attempts`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval attempt queueing failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalAttemptRecord;
+}
+
+export async function executeEvalRun(runId: string): Promise<RunRecord> {
+  const response = await fetch(`/api/evals/runs/${encodeURIComponent(runId)}/execute`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval run execution failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as RunRecord;
 }

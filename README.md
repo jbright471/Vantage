@@ -33,7 +33,7 @@ Vantage exists to make that state visible and actionable without taking ownershi
 - Backend-filtered run history with pagination
 - CSV and JSON audit exports for run history
 - Local LLM capability checks from the Models surface
-- Phase 2 Eval Lab foundation for prompt suites
+- Phase 2 Eval Lab foundation for prompt suites, prompt cases, executable eval runs, and simple JSON scoring
 - SSE-based live UI updates
 - SQLite persistence with bounded snapshot pruning
 - Shared-token authentication for node agents
@@ -89,7 +89,7 @@ Local secrets belong in `.env`, which is ignored by git. See [.env.example](./.e
 
 ## Project Status
 
-Vantage is an active Phase 1.6 build. The current version is useful for a single local AI operator and is intentionally conservative about distributed control, authentication, and packaging.
+Vantage is an active Phase 2 foundation build. The current version is useful for a single local AI operator and is intentionally conservative about distributed control, authentication, and packaging.
 
 ## License
 

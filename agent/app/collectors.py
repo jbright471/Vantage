@@ -2,8 +2,10 @@ from collections.abc import Sequence
 from collections import deque
 from datetime import UTC, datetime
 import hashlib
+import json
 import os
 import subprocess
+from typing import Any
 from uuid import uuid4
 
 import httpx
@@ -103,6 +105,33 @@ def _active_model_runs() -> list[dict]:
 def _record_run(run: dict) -> dict:
     RECENT_RUNS.appendleft(run)
     return run
+
+
+def _score_expected_json(response_text: str, expected_json: dict[str, Any]) -> dict[str, Any]:
+    if not expected_json:
+        return {"passed": True, "score": None, "reason": "no_expected_json"}
+    try:
+        parsed = json.loads(response_text)
+    except json.JSONDecodeError:
+        return {"passed": False, "score": 0.0, "reason": "response_not_json"}
+    if not isinstance(parsed, dict):
+        return {"passed": False, "score": 0.0, "reason": "response_json_not_object"}
+    missing_or_mismatched = [key for key, value in expected_json.items() if parsed.get(key) != value]
+    passed = len(missing_or_mismatched) == 0
+    return {
+        "passed": passed,
+        "score": 1.0 if passed else 0.0,
+        "reason": "expected_subset_matched" if passed else "expected_subset_mismatch",
+        "missing_or_mismatched": missing_or_mismatched,
+    }
+
+
+def _parse_response_json(response_text: str) -> dict | list | None:
+    try:
+        parsed = json.loads(response_text)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, (dict, list)) else None
 
 
 def get_health() -> dict:
@@ -220,3 +249,75 @@ def run_capability_check(model_name: str, *, prompt: str | None = None) -> dict:
         }
     )
     return failure
+
+
+def run_eval_attempt(model_name: str, *, prompt: str, expected_json: dict | None = None) -> dict:
+    started_at = datetime.now(UTC)
+    payload = {
+        "model": model_name,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": 0,
+        },
+    }
+    expected = expected_json or {}
+    errors: list[dict] = []
+
+    for base_url in resolve_ollama_base_urls():
+        try:
+            response = httpx.post(f"{base_url}/api/generate", json=payload, timeout=90.0)
+            response.raise_for_status()
+            response_text = str(response.json().get("response", ""))
+            score = _score_expected_json(response_text, expected)
+            ended_at = datetime.now(UTC)
+            return _record_run(
+                {
+                    "run_id": str(uuid4()),
+                    "source_type": "eval",
+                    "detail_type": "eval_attempt",
+                    "source_id": f"eval-attempt:bastet:{model_name}",
+                    "node_id": "bastet",
+                    "model_name": model_name,
+                    "action_type": "eval",
+                    "status": "success" if score.get("passed") is not False else "failed",
+                    "started_at": started_at,
+                    "ended_at": ended_at,
+                    "duration_ms": int((ended_at - started_at).total_seconds() * 1000),
+                    "summary": f"Eval attempt completed for {model_name} on bastet",
+                    "metadata_json": {
+                        "base_url": base_url,
+                        "prompt": prompt,
+                        "expected_json": expected,
+                        "response_text": response_text,
+                        "response_preview": response_text[:500],
+                        "response_json": _parse_response_json(response_text),
+                        "score": score,
+                    },
+                }
+            )
+        except Exception as exc:
+            errors.append({"base_url": base_url, "error": str(exc)})
+
+    ended_at = datetime.now(UTC)
+    return _record_run(
+        {
+            "run_id": str(uuid4()),
+            "source_type": "eval",
+            "detail_type": "eval_attempt",
+            "source_id": f"eval-attempt:bastet:{model_name}",
+            "node_id": "bastet",
+            "model_name": model_name,
+            "action_type": "eval",
+            "status": "failed",
+            "started_at": started_at,
+            "ended_at": ended_at,
+            "duration_ms": int((ended_at - started_at).total_seconds() * 1000),
+            "summary": f"Eval attempt failed for {model_name} on bastet",
+            "metadata_json": {
+                "prompt": prompt,
+                "expected_json": expected,
+                "errors": errors,
+            },
+        }
+    )

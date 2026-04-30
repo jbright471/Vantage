@@ -79,7 +79,7 @@ SQLite is the Phase 1 database. The main tables are:
 - `routing_rules` and `routing_rule_nodes`: preferred routing order
 - `warning_records`: durable warning state
 - `app_settings`: future runtime-managed settings
-- `eval_suites` and `eval_cases`: Phase 2 prompt-suite foundations
+- `eval_suites` and `eval_cases`: Phase 2 prompt-suite foundations; queued eval attempts are stored as `Run` records with `detail_type = "eval_attempt"`
 
 `NodeSnapshot` is pruned automatically by age and by per-node count so continuous polling does not grow the database forever.
 
@@ -102,12 +102,13 @@ The current agent contract covers:
 - Ollama model inventory
 - current remote runs and loaded models
 - capability-check execution
+- eval-attempt execution for prompt-suite cases
 
 The agent is deliberately small so it can eventually become a single binary without forcing a backend rewrite.
 
 ## Eval Model
 
-Phase 2 starts with an Eval Lab foundation rather than immediate scoring. `EvalSuite` groups prompt cases, and `EvalCase` stores individual prompts plus expected metadata. Execution, scoring, and model comparison will build on the existing `Run` history instead of creating a separate truth source.
+Phase 2 starts with an Eval Lab foundation rather than immediate comparison dashboards. `EvalSuite` groups prompt cases, and `EvalCase` stores individual prompts plus expected metadata. Operators can create suites and cases, then queue suite attempts against a selected model placement. Each queued case becomes a durable `Run` record with `source_type = "eval"` and `detail_type = "eval_attempt"`. Execution updates that same Run with response text, parsed JSON when possible, and a simple JSON-subset score. Broader score history and model comparison views will build on the existing `Run` history instead of creating a separate truth source.
 
 ## Failure Behavior
 

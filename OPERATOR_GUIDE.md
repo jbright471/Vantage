@@ -146,9 +146,9 @@ The confirmation modal repeats target node state using text, color, and state ic
 
 ### Evals
 
-The Eval Lab is the Phase 2 foundation for prompt-suite testing. The current surface shows suite and case inventory so operators can see whether evaluation definitions exist before Vantage adds execution, score history, and comparison views.
+The Eval Lab is the Phase 2 foundation for prompt-suite testing. The current surface lets operators create prompt suites, add prompt cases, queue eval attempt `Run` records for a selected model placement, execute queued runs, and review suite/case inventory before Vantage adds richer score history and comparison views.
 
-Treat Eval Lab as preparation, not proof. Until eval runs are recorded as durable `Run` records with scores and metadata, use Models capability checks for live one-off validation.
+Treat eval scores as simple JSON-subset checks. A passing score means the response parsed as JSON and contained the expected key/value pairs for that case; it does not prove broader model quality.
 
 ## Daily Operations
 

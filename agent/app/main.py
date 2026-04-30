@@ -2,7 +2,15 @@ from fastapi import Depends, FastAPI
 
 from agent.app.auth import require_agent_auth
 from agent.app import collectors
-from agent.app.schemas import CapabilityCheckRequest, GpuResponse, HealthResponse, ModelsResponse, RunInfo, RunsResponse
+from agent.app.schemas import (
+    CapabilityCheckRequest,
+    EvalAttemptRequest,
+    GpuResponse,
+    HealthResponse,
+    ModelsResponse,
+    RunInfo,
+    RunsResponse,
+)
 
 app = FastAPI(title="Vantage Bastet Agent", dependencies=[Depends(require_agent_auth)])
 
@@ -30,3 +38,12 @@ def runs() -> dict:
 @app.post("/capability-check", response_model=RunInfo)
 def capability_check(request: CapabilityCheckRequest) -> dict:
     return collectors.run_capability_check(request.model_name, prompt=request.prompt)
+
+
+@app.post("/eval-attempt", response_model=RunInfo)
+def eval_attempt(request: EvalAttemptRequest) -> dict:
+    return collectors.run_eval_attempt(
+        request.model_name,
+        prompt=request.prompt,
+        expected_json=request.expected_json,
+    )

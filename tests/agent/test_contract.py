@@ -65,3 +65,34 @@ def test_agent_exposes_runs_and_capability_check(monkeypatch) -> None:
 
     assert client.get("/runs").json()["runs"][0]["run_id"] == "run-1"
     assert client.post("/capability-check", json={"model_name": "qwen3.6:latest"}).json()["status"] == "success"
+
+
+def test_agent_exposes_eval_attempt(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "agent.app.collectors.run_eval_attempt",
+        lambda model_name, prompt, expected_json=None: {
+            "run_id": "run-3",
+            "source_type": "eval",
+            "detail_type": "eval_attempt",
+            "source_id": f"eval-attempt:bastet:{model_name}",
+            "node_id": "bastet",
+            "model_name": model_name,
+            "action_type": "eval",
+            "status": "success",
+            "started_at": "2026-04-23T12:05:00+00:00",
+            "ended_at": "2026-04-23T12:05:01+00:00",
+            "duration_ms": 1000,
+            "summary": f"Eval attempt passed for {model_name} on bastet",
+            "metadata_json": {"response_text": "{}", "score": {"passed": True, "score": 1.0}},
+        },
+    )
+
+    client = TestClient(app)
+
+    response = client.post(
+        "/eval-attempt",
+        json={"model_name": "qwen3.6:latest", "prompt": "Return JSON", "expected_json": {}},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["detail_type"] == "eval_attempt"

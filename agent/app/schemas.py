@@ -51,3 +51,9 @@ class RunsResponse(BaseModel):
 class CapabilityCheckRequest(BaseModel):
     model_name: str
     prompt: str | None = None
+
+
+class EvalAttemptRequest(BaseModel):
+    model_name: str
+    prompt: str
+    expected_json: dict | None = None

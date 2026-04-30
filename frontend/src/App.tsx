@@ -79,6 +79,7 @@ export default function App() {
   const staleNodes = state.nodes.filter((node) => node.freshness !== "live").length;
   const degradedNodes = state.nodes.filter((node) => node.observed_status !== "healthy").length;
   const pendingRuns = state.runs.filter((run) => ["submitted_unverified", "running"].includes(run.status)).length;
+  const evalRunCount = state.runs.filter((run) => run.detail_type === "eval_attempt").length;
   const mirroredModels = state.models.filter((model) => model.placements.length > 1).length;
   const activePolicyCount = state.routing.filter((rule) => rule.preferred_nodes.length > 0).length;
   const primaryNodeLabel = labelPrimaryNode(state.nodes);
@@ -127,7 +128,7 @@ export default function App() {
           </a>
           <a href="#evals-title">
             <span>science Evals</span>
-            <strong>2</strong>
+            <strong>{evalRunCount}</strong>
           </a>
         </nav>
 
@@ -270,7 +271,7 @@ export default function App() {
             model_count: node.model_count,
           }))}
         />
-        <EvalsPage />
+        <EvalsPage models={state.models} runs={state.runs} />
       </section>
 
       {isDocsOpen ? (

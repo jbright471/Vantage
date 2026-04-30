@@ -1,4 +1,4 @@
-from agent.app.collectors import get_models, get_runs, resolve_ollama_base_urls, run_capability_check
+from agent.app.collectors import get_models, get_runs, resolve_ollama_base_urls, run_capability_check, run_eval_attempt
 
 
 class FakeResponse:
@@ -61,3 +61,18 @@ def test_run_capability_check_records_recent_success(monkeypatch) -> None:
 
     assert run["status"] == "success"
     assert run["detail_type"] == "capability_check"
+
+
+def test_run_eval_attempt_records_response_and_score(monkeypatch) -> None:
+    class FakePostResponse(FakeResponse):
+        def json(self) -> dict:
+            return {"response": '{"answer":42,"notes":"ok"}'}
+
+    monkeypatch.setattr("agent.app.collectors.httpx.post", lambda *args, **kwargs: FakePostResponse({}))
+    monkeypatch.delenv("VANTAGE_AGENT_OLLAMA_BASE_URLS", raising=False)
+
+    run = run_eval_attempt("gemma4:e4b", prompt="Return answer", expected_json={"answer": 42})
+
+    assert run["status"] == "success"
+    assert run["detail_type"] == "eval_attempt"
+    assert run["metadata_json"]["score"]["passed"] is True

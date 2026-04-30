@@ -35,7 +35,8 @@ Status: in progress.
 Status: foundation in progress.
 
 - Eval Lab API and UI foundation.
-- Prompt suites.
-- Run storage for eval attempts.
+- Prompt suites and prompt cases.
+- Queued `Run` storage for eval attempts.
+- Executable eval runs with simple JSON-subset scoring.
 - Score history.
 - Comparison views across model placements and nodes.

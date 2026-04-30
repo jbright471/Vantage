@@ -102,7 +102,7 @@ Returns model inventory discovered from configured Ollama endpoints.
 
 Returns recent agent-side operational events.
 
-Current examples include loaded Ollama models and capability-check runs.
+Current examples include loaded Ollama models, capability-check runs, and eval-attempt runs.
 
 ### Response
 
@@ -168,6 +168,32 @@ Runs a compact inference check against a model available to the agent.
 
 Returns a `RunInfo` object with `detail_type` set to `capability_check` and `status` set to `success` or `failed`.
 
+## POST /eval-attempt
+
+Runs one prompt-suite eval case against a model available to the agent.
+
+### Request
+
+```json
+{
+  "model_name": "gemma4:e4b",
+  "prompt": "Return a compact JSON object with an answer field.",
+  "expected_json": {
+    "answer": 42
+  }
+}
+```
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `model_name` | string | Yes | Ollama model tag to evaluate. |
+| `prompt` | string | Yes | Prompt text from the eval case. |
+| `expected_json` | object or null | No | Expected key/value subset used for simple JSON scoring. |
+
+### Response
+
+Returns a `RunInfo` object with `detail_type` set to `eval_attempt`. The agent stores the raw response preview, parsed JSON when available, and a simple `score` object in `metadata_json`.
+
 ## Failure States
 
 The control plane treats remote agent errors as operational state:
@@ -176,3 +202,4 @@ The control plane treats remote agent errors as operational state:
 - one endpoint failure while others respond: node becomes `degraded`
 - auth failure: remote collection fails until token configuration matches
 - failed capability check: durable `Run` record with `status: failed`
+- failed eval attempt: durable `Run` record with `status: failed` and score/error metadata
