@@ -22,8 +22,10 @@ Vantage exists to make that state visible and actionable without taking ownershi
 
 - Live node health for local and remote machines
 - Attention ribbon and warning strip for stale, degraded, and drift states
+- Eval schedule health warnings for failed auto-executed prompt suites
 - Heartbeat freshness meters with visual decay
 - Node diagnostics with observed errors and suggested remediation
+- Verified node refresh remediation with durable action results
 - Warning acknowledgement with durable audit records
 - GPU telemetry from remote Linux workers
 - Merged model inventory across nodes
@@ -33,7 +35,7 @@ Vantage exists to make that state visible and actionable without taking ownershi
 - Backend-filtered run history with pagination
 - CSV and JSON audit exports for run history
 - Local LLM capability checks from the Models surface
-- Phase 2 Eval Lab foundation for prompt suites, prompt cases, executable eval runs, and simple JSON scoring
+- Phase 2 Eval Lab foundation for prompt suites, executable eval runs, JSON scoring, placement comparison, case analysis, score drilldowns, recurring eval schedules, and opt-in auto-execution
 - SSE-based live UI updates
 - SQLite persistence with bounded snapshot pruning
 - Shared-token authentication for node agents
@@ -73,6 +75,9 @@ Primary bootstrap config lives at [config/vantage.bootstrap.toml](./config/vanta
 | `unreachable_after_seconds` | Marks stale nodes unreachable | `30` |
 | `snapshot_retention_hours` | Age-based snapshot pruning | `24` |
 | `snapshot_max_per_node` | Count cap per node | `5000` |
+| `snapshot_min_per_node` | Minimum retained snapshots per node | `1` |
+| `snapshot_prune_interval_seconds` | Background snapshot pruning cadence | `900` |
+| `eval_schedule_interval_seconds` | Background due-schedule check cadence | `60` |
 | `agent_auth_token_env` | Env var used for agent bearer auth | `VANTAGE_AGENT_SHARED_TOKEN` |
 
 Local secrets belong in `.env`, which is ignored by git. See [.env.example](./.env.example).

@@ -48,6 +48,7 @@ Vantage stores `NodeSnapshot` rows for node health, model visibility, Ollama sta
 | `snapshot_max_per_node` | `5000` | Count cap per node. This protects against high-frequency polling or noisy nodes. |
 | `snapshot_min_per_node` | `1` | Safety floor. Vantage keeps at least this many snapshots per node even if they are older than the retention window. |
 | `snapshot_prune_interval_seconds` | `900` | How often the background pruning worker runs. `900` seconds is 15 minutes. Lower only if snapshots accumulate unusually fast. |
+| `eval_schedule_interval_seconds` | `60` | How often the background eval scheduler checks for due schedules. Keep this modest; schedules can queue work and may auto-execute trusted eval suites when explicitly enabled. |
 
 Operational note: pruning runs inside the FastAPI process using the lifespan-managed background worker. It does not require Redis, Celery, or a separate container.
 
@@ -91,7 +92,7 @@ Each node card includes a heartbeat freshness meter and monospace signal age. Th
 
 For remote workers such as example node `bastet`, the Remote Focus section shows agent endpoint health, Ollama status, host memory, CPU usage, GPU telemetry, and recent remote runs. GPU telemetry is especially useful for confirming whether a model host is actually available for local inference work.
 
-Use `Refresh node` when you want to submit a refresh action through the control plane. If the result is `submitted_unverified`, Vantage has accepted the request but has not confirmed completion yet.
+Use `Refresh node` when you want Vantage to retry one collector pass for that node. The action creates a durable Run record and closes as `success` when Vantage verifies a fresh observation, or `failed` when the collector cannot complete. `submitted_unverified` remains reserved for actions that have been accepted but not independently confirmed.
 
 Use `Diagnose` when a node is degraded, stale, unreachable, or has observed subsystem errors. The diagnostics drawer explains the primary issue from current observed state, lists endpoint-level failures such as Ollama connection errors, and provides suggested remediation steps. Diagnostics do not mutate configuration or restart services; they are the safe bridge between visibility and future allowlisted remediation actions.
 
@@ -146,9 +147,15 @@ The confirmation modal repeats target node state using text, color, and state ic
 
 ### Evals
 
-The Eval Lab is the Phase 2 foundation for prompt-suite testing. The current surface lets operators create prompt suites, add prompt cases, queue eval attempt `Run` records for a selected model placement, execute queued runs, and review suite/case inventory before Vantage adds richer score history and comparison views.
+The Eval Lab is the Phase 2 foundation for prompt-suite testing. The current surface lets operators create prompt suites, add prompt cases, queue eval attempt `Run` records for a selected model placement, execute queued runs, compare recent pass rates by model placement, identify low-performing cases, inspect recent scored responses, and create recurring schedules.
 
 Treat eval scores as simple JSON-subset checks. A passing score means the response parsed as JSON and contained the expected key/value pairs for that case; it does not prove broader model quality.
+
+Use `Inspect score` on a recent scored run when you need to see the exact case, target placement, score reason, missing or mismatched expected fields, response preview, and parsed response JSON.
+
+Recurring eval schedules create queued eval attempts when due. Queue-only is the safe default. If `Auto-execute when due` is enabled for a schedule, Vantage immediately executes and scores each due eval case through the normal eval runner. Use auto-execute only for trusted suites and placements because it will trigger real model calls on the configured interval.
+
+If an auto-executed schedule produces failed eval runs, Vantage creates an active `eval_schedule_failure` warning so the issue appears in the normal operator attention lane. A later clean scheduled execution resolves that warning automatically.
 
 ## Daily Operations
 
@@ -162,7 +169,8 @@ Treat eval scores as simple JSON-subset checks. A passing score means the respon
 6. Use `Copy Payload` if you need to paste the metadata into a ticket, note, or debugging session.
 7. Cross-check the target node in Nodes for freshness, Ollama status, GPU telemetry, and recent remote runs.
 8. Open `Diagnose` on the target node if it is degraded, stale, or showing endpoint errors.
-9. If the failure is node-specific, run the same model capability check from Models on another placement.
+9. Use `Refresh node` to retry one collector pass and confirm whether the condition is still present.
+10. If the failure is node-specific, run the same model capability check from Models on another placement.
 
 Interpretation guide:
 

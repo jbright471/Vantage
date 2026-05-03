@@ -114,6 +114,63 @@ export type EvalAttemptRecord = {
   runs: RunRecord[];
 };
 
+export type EvalScheduleRecord = {
+  schedule_id: string;
+  suite_id: string;
+  suite_name: string | null;
+  model_name: string;
+  node_id: string;
+  interval_minutes: number;
+  enabled: boolean;
+  auto_execute: boolean;
+  created_at: string;
+  updated_at: string;
+  next_run_at: string;
+  last_queued_at: string | null;
+  metadata_json: Record<string, unknown>;
+};
+
+export type EvalScoreAggregate = {
+  run_count: number;
+  passed_count: number;
+  failed_count: number;
+  pass_rate: number;
+  latest_started_at: string | null;
+  model_name?: string;
+  node_id?: string;
+  suite_id?: string;
+  suite_name?: string;
+  case_id?: string;
+  case_name?: string;
+};
+
+export type EvalScoreRunRecord = {
+  run_id: string;
+  suite_id: string;
+  suite_name: string;
+  case_id: string;
+  case_name: string;
+  model_name: string;
+  node_id: string;
+  status: string;
+  passed: boolean;
+  score: number | null;
+  reason?: string | null;
+  missing_or_mismatched?: string[];
+  response_preview?: string;
+  response_json?: unknown;
+  started_at: string;
+  duration_ms: number | null;
+};
+
+export type EvalScoreHistoryRecord = {
+  total_runs: number;
+  placements: EvalScoreAggregate[];
+  suites: EvalScoreAggregate[];
+  cases: EvalScoreAggregate[];
+  recent_runs: EvalScoreRunRecord[];
+};
+
 export type WarningRecord = {
   warning_id: string;
   warning_type: string;
@@ -290,6 +347,34 @@ export async function fetchEvalSuites(): Promise<EvalSuiteRecord[]> {
   return (await response.json()) as EvalSuiteRecord[];
 }
 
+export async function fetchEvalScoreHistory(): Promise<EvalScoreHistoryRecord> {
+  const response = await fetch("/api/evals/score-history", {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval score history request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalScoreHistoryRecord;
+}
+
+export async function fetchEvalSchedules(): Promise<EvalScheduleRecord[]> {
+  const response = await fetch("/api/evals/schedules", {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval schedules request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalScheduleRecord[];
+}
+
 export async function createEvalSuite(payload: { name: string; description: string }): Promise<EvalSuiteRecord> {
   const response = await fetch("/api/evals/suites", {
     method: "POST",
@@ -305,6 +390,47 @@ export async function createEvalSuite(payload: { name: string; description: stri
   }
 
   return (await response.json()) as EvalSuiteRecord;
+}
+
+export async function createEvalSchedule(payload: {
+  suite_id: string;
+  model_name: string;
+  node_id: string;
+  interval_minutes: number;
+  enabled: boolean;
+  auto_execute: boolean;
+}): Promise<EvalScheduleRecord> {
+  const response = await fetch("/api/evals/schedules", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval schedule creation failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalScheduleRecord;
+}
+
+export async function updateEvalSchedule(scheduleId: string, payload: { enabled: boolean }): Promise<EvalScheduleRecord> {
+  const response = await fetch(`/api/evals/schedules/${encodeURIComponent(scheduleId)}`, {
+    method: "PATCH",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval schedule update failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalScheduleRecord;
 }
 
 export async function createEvalCase(

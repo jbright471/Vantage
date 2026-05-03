@@ -10,7 +10,13 @@ from backend.app.api.models import _agent_auth_headers
 from backend.app.config import DEFAULT_BOOTSTRAP_CONFIG_PATH, load_bootstrap_config
 from backend.app.db import SessionLocal
 from backend.app.models import EvalCase, EvalSuite, ModelPlacement, Node, Run
-from backend.app.services.evals import execute_eval_run
+from backend.app.services.eval_schedules import (
+    create_eval_schedule,
+    list_eval_schedules,
+    serialize_eval_schedule,
+    update_eval_schedule,
+)
+from backend.app.services.evals import build_score_history, execute_eval_run, queue_eval_case_runs
 from backend.app.services.runs import serialize_run
 
 router = APIRouter()
@@ -30,6 +36,20 @@ class EvalCaseCreate(BaseModel):
 class EvalAttemptCreate(BaseModel):
     model_name: str = Field(min_length=1)
     node_id: str = Field(min_length=1)
+
+
+class EvalScheduleCreate(BaseModel):
+    suite_id: str = Field(min_length=1)
+    model_name: str = Field(min_length=1)
+    node_id: str = Field(min_length=1)
+    interval_minutes: int = Field(ge=1, le=10080)
+    enabled: bool = True
+    auto_execute: bool = False
+
+
+class EvalScheduleUpdate(BaseModel):
+    enabled: bool | None = None
+    auto_execute: bool | None = None
 
 
 def _serialize_suites(suites: list[EvalSuite], cases: list[EvalCase]) -> list[dict]:
@@ -76,6 +96,54 @@ def list_eval_suites() -> list[dict]:
         cases = session.scalars(select(EvalCase).order_by(EvalCase.suite_id, EvalCase.sort_order, EvalCase.name)).all()
 
     return _serialize_suites(suites, cases)
+
+
+@router.get("/evals/score-history")
+def get_eval_score_history() -> dict:
+    with SessionLocal() as session:
+        return build_score_history(session)
+
+
+@router.get("/evals/schedules")
+def get_eval_schedules() -> list[dict]:
+    with SessionLocal() as session:
+        return list_eval_schedules(session)
+
+
+@router.post("/evals/schedules", status_code=201)
+def create_schedule(payload: EvalScheduleCreate) -> dict:
+    with SessionLocal() as session:
+        try:
+            schedule = create_eval_schedule(
+                session,
+                suite_id=payload.suite_id,
+                model_name=payload.model_name,
+                node_id=payload.node_id,
+                interval_minutes=payload.interval_minutes,
+                enabled=payload.enabled,
+                auto_execute=payload.auto_execute,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        session.commit()
+        suite = session.get(EvalSuite, schedule.suite_id)
+        return serialize_eval_schedule(schedule, suite.name if suite else None)
+
+
+@router.patch("/evals/schedules/{schedule_id}")
+def update_schedule(schedule_id: str, payload: EvalScheduleUpdate) -> dict:
+    with SessionLocal() as session:
+        schedule = update_eval_schedule(
+            session,
+            schedule_id,
+            enabled=payload.enabled,
+            auto_execute=payload.auto_execute,
+        )
+        if schedule is None:
+            raise HTTPException(status_code=404, detail=f"Unknown eval schedule '{schedule_id}'")
+        session.commit()
+        suite = session.get(EvalSuite, schedule.suite_id)
+        return serialize_eval_schedule(schedule, suite.name if suite else None)
 
 
 @router.post("/evals/suites", status_code=201)
@@ -144,45 +212,27 @@ def queue_eval_attempt(suite_id: str, payload: EvalAttemptCreate) -> dict:
         if not cases:
             raise HTTPException(status_code=409, detail=f"Eval suite '{suite_id}' has no cases to queue")
 
-        attempt_id = str(uuid4())
         started_at = datetime.now(UTC)
-        runs: list[Run] = []
-        for eval_case in cases:
-            run = Run(
-                run_id=str(uuid4()),
-                source_type="eval",
-                detail_type="eval_attempt",
-                source_id=f"eval-suite:{suite_id}:case:{eval_case.case_id}",
-                node_id=payload.node_id,
-                model_name=payload.model_name,
-                action_type="eval",
-                status="queued",
-                started_at=started_at,
-                summary=f"Queued eval case '{eval_case.name}' for {payload.model_name} on {payload.node_id}",
-                metadata_json={
-                    "attempt_id": attempt_id,
-                    "suite_id": suite.suite_id,
-                    "suite_name": suite.name,
-                    "case_id": eval_case.case_id,
-                    "case_name": eval_case.name,
-                    "prompt": eval_case.prompt,
-                    "expected_json": eval_case.expected_json,
-                    "sort_order": eval_case.sort_order,
-                },
-            )
-            session.add(run)
-            runs.append(run)
+        result = queue_eval_case_runs(
+            session,
+            suite=suite,
+            cases=cases,
+            model_name=payload.model_name,
+            node_id=payload.node_id,
+            trigger="manual",
+            started_at=started_at,
+        )
 
         session.commit()
 
         return {
-            "attempt_id": attempt_id,
+            "attempt_id": result["attempt_id"],
             "suite_id": suite.suite_id,
             "suite_name": suite.name,
             "model_name": payload.model_name,
             "node_id": payload.node_id,
-            "run_count": len(runs),
-            "runs": [serialize_run(run) for run in runs],
+            "run_count": result["run_count"],
+            "runs": [serialize_run(run) for run in result["runs"]],
         }
 
 

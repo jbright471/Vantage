@@ -79,7 +79,7 @@ SQLite is the Phase 1 database. The main tables are:
 - `routing_rules` and `routing_rule_nodes`: preferred routing order
 - `warning_records`: durable warning state
 - `app_settings`: future runtime-managed settings
-- `eval_suites` and `eval_cases`: Phase 2 prompt-suite foundations; queued eval attempts are stored as `Run` records with `detail_type = "eval_attempt"`
+- `eval_suites`, `eval_cases`, and `eval_schedules`: Phase 2 prompt-suite foundations; queued eval attempts are stored as `Run` records with `detail_type = "eval_attempt"`
 
 `NodeSnapshot` is pruned automatically by age and by per-node count so continuous polling does not grow the database forever.
 
@@ -108,7 +108,9 @@ The agent is deliberately small so it can eventually become a single binary with
 
 ## Eval Model
 
-Phase 2 starts with an Eval Lab foundation rather than immediate comparison dashboards. `EvalSuite` groups prompt cases, and `EvalCase` stores individual prompts plus expected metadata. Operators can create suites and cases, then queue suite attempts against a selected model placement. Each queued case becomes a durable `Run` record with `source_type = "eval"` and `detail_type = "eval_attempt"`. Execution updates that same Run with response text, parsed JSON when possible, and a simple JSON-subset score. Broader score history and model comparison views will build on the existing `Run` history instead of creating a separate truth source.
+Phase 2 starts with an Eval Lab foundation rather than a separate eval database. `EvalSuite` groups prompt cases, and `EvalCase` stores individual prompts plus expected metadata. Operators can create suites and cases, then queue suite attempts against a selected model placement. `EvalSchedule` stores recurring rules for a suite and model placement. Queue-only scheduling is the safe default. When `auto_execute` is explicitly enabled on a schedule, the same lightweight FastAPI lifespan worker queues due eval `Run` records and immediately executes them through the normal eval runner. This avoids Redis, Celery, or a separate scheduler while preserving the Runs ledger as the durable truth. Failed auto-executed schedules create deterministic `eval_schedule_failure` warnings, and later clean scheduled runs resolve those warnings instead of leaving stale alarm state.
+
+Each queued case becomes a durable `Run` record with `source_type = "eval"` and `detail_type = "eval_attempt"`. Execution updates that same Run with response text, parsed JSON when possible, and a simple JSON-subset score. Score history, placement comparison views, case-level failure analysis, and score-detail drilldowns are derived from the existing `Run` history instead of creating a separate truth source.
 
 ## Failure Behavior
 
@@ -122,3 +124,4 @@ Vantage prefers explicit uncertainty:
 - routing overrides repeat target node state through text, color, and icons before saving configured preference changes
 - diagnostics suggest remediation from observed state but do not silently mutate config or restart host services
 - warning acknowledgement is an allowlisted remediation action and creates an audit `Run`
+- verified node refresh is an allowlisted remediation action that retries one collector pass and closes the audit `Run` as `success` or `failed`

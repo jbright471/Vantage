@@ -11,7 +11,7 @@ from backend.app.collectors.local import collect_local_snapshot
 from backend.app.collectors.remote import BastetClient
 from backend.app.config import BootstrapConfig
 from backend.app.db import SessionLocal
-from backend.app.models import ModelPlacement, Node, NodeSnapshot, Run
+from backend.app.models import ModelPlacement, Node, NodeSnapshot, Run, WarningRecord
 from backend.app.services.events import EventBroker
 from backend.app.services.polling import classify_health, extract_model_placements, normalize_snapshot
 from backend.app.services.reconciliation import detect_config_drift, resolve_warning_records, upsert_warning_records
@@ -257,6 +257,55 @@ async def run_poll_cycle(
         await broker.publish("full_state", state)
 
     return state
+
+
+async def run_single_node_poll(
+    node_id: str,
+    config: BootstrapConfig,
+    session_factory: Callable = SessionLocal,
+) -> dict:
+    with session_factory() as session:
+        node = session.get(Node, node_id)
+        if node is None:
+            raise ValueError(f"Unknown node '{node_id}'")
+        if not node.enabled:
+            raise ValueError(f"Node '{node_id}' is disabled")
+
+    raw_snapshot = await collect_snapshot_for_node(node, config)
+
+    with session_factory() as session:
+        persisted_node = session.get(Node, node_id)
+        if persisted_node is None:
+            raise ValueError(f"Unknown node '{node_id}'")
+        normalized = persist_node_observation(session, persisted_node, raw_snapshot)
+        if persisted_node.role == "remote":
+            persist_remote_runs(
+                session,
+                persisted_node.node_id,
+                raw_snapshot.get("runs_json", []),
+                _timestamp(raw_snapshot.get("captured_at", datetime.now(UTC))),
+            )
+
+        active_drift = session.scalars(
+            select(WarningRecord).where(
+                WarningRecord.warning_type == "config_drift",
+                WarningRecord.node_id == node_id,
+                WarningRecord.status.in_(("active", "acknowledged")),
+            )
+        ).all()
+        for warning in active_drift:
+            warning.status = "resolved"
+            warning.last_seen_at = datetime.now(UTC)
+
+        session.commit()
+        return {
+            "node_id": node_id,
+            "captured_at": _timestamp(normalized["captured_at"]).isoformat(),
+            "observed_status": classify_health(normalized),
+            "ollama_status": normalized["ollama_json"].get("status"),
+            "model_count": len(normalized["ollama_json"].get("models", [])),
+            "error_count": len(normalized["ollama_json"].get("errors", [])),
+        }
 
 
 async def poll_forever(

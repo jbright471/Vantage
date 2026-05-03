@@ -3,12 +3,157 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 import httpx
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.config import BootstrapConfig
-from backend.app.models import Node, Run
+from backend.app.models import EvalCase, EvalSuite, Node, Run
+
+
+def queue_eval_case_runs(
+    session: Session,
+    *,
+    suite: EvalSuite,
+    cases: list[EvalCase],
+    model_name: str,
+    node_id: str,
+    trigger: str = "manual",
+    schedule_id: str | None = None,
+    started_at: datetime | None = None,
+) -> dict[str, Any]:
+    attempt_id = str(uuid4())
+    queued_at = started_at or datetime.now(UTC)
+    runs: list[Run] = []
+
+    for eval_case in cases:
+        metadata: dict[str, Any] = {
+            "attempt_id": attempt_id,
+            "suite_id": suite.suite_id,
+            "suite_name": suite.name,
+            "case_id": eval_case.case_id,
+            "case_name": eval_case.name,
+            "prompt": eval_case.prompt,
+            "expected_json": eval_case.expected_json,
+            "sort_order": eval_case.sort_order,
+            "trigger": trigger,
+        }
+        if schedule_id is not None:
+            metadata["schedule_id"] = schedule_id
+
+        run = Run(
+            run_id=str(uuid4()),
+            source_type="eval",
+            detail_type="eval_attempt",
+            source_id=f"eval-suite:{suite.suite_id}:case:{eval_case.case_id}",
+            node_id=node_id,
+            model_name=model_name,
+            action_type="eval",
+            status="queued",
+            started_at=queued_at,
+            summary=f"Queued eval case '{eval_case.name}' for {model_name} on {node_id}",
+            metadata_json=metadata,
+        )
+        session.add(run)
+        runs.append(run)
+
+    return {
+        "attempt_id": attempt_id,
+        "suite_id": suite.suite_id,
+        "suite_name": suite.name,
+        "model_name": model_name,
+        "node_id": node_id,
+        "run_count": len(runs),
+        "runs": runs,
+    }
+
+
+def build_score_history(session: Session) -> dict[str, Any]:
+    runs = session.scalars(
+        select(Run)
+        .where(Run.detail_type == "eval_attempt")
+        .where(Run.status.in_(["success", "failed"]))
+        .order_by(Run.started_at.desc())
+    ).all()
+    scored_runs: list[dict[str, Any]] = []
+    for run in runs:
+        row = _score_history_row(run)
+        if row is not None:
+            scored_runs.append(row)
+
+    placements = _aggregate_score_rows(scored_runs, ["model_name", "node_id"])
+    suites = _aggregate_score_rows(scored_runs, ["suite_id", "suite_name"])
+    cases = _aggregate_score_rows(scored_runs, ["suite_id", "suite_name", "case_id", "case_name"])
+
+    return {
+        "total_runs": len(scored_runs),
+        "placements": placements,
+        "suites": suites,
+        "cases": cases,
+        "recent_runs": scored_runs[:20],
+    }
+
+
+def _score_history_row(run: Run) -> dict[str, Any] | None:
+    metadata = run.metadata_json or {}
+    score = metadata.get("score")
+    if not isinstance(score, dict) or not isinstance(score.get("passed"), bool):
+        return None
+
+    return {
+        "run_id": run.run_id,
+        "suite_id": str(metadata.get("suite_id") or "unknown"),
+        "suite_name": str(metadata.get("suite_name") or "Unknown suite"),
+        "case_id": str(metadata.get("case_id") or "unknown"),
+        "case_name": str(metadata.get("case_name") or "Unknown case"),
+        "model_name": run.model_name or "unknown",
+        "node_id": run.node_id,
+        "status": run.status,
+        "passed": score["passed"],
+        "score": score.get("score"),
+        "reason": score.get("reason"),
+        "missing_or_mismatched": score.get("missing_or_mismatched", []),
+        "response_preview": str(metadata.get("response_preview") or ""),
+        "response_json": metadata.get("response_json"),
+        "started_at": run.started_at.isoformat(),
+        "duration_ms": run.duration_ms,
+    }
+
+
+def _aggregate_score_rows(rows: list[dict[str, Any]], keys: list[str]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, ...], dict[str, Any]] = {}
+    for row in rows:
+        group_key = tuple(str(row[key]) for key in keys)
+        if group_key not in grouped:
+            grouped[group_key] = {key: row[key] for key in keys}
+            grouped[group_key].update({"run_count": 0, "passed_count": 0, "failed_count": 0, "latest_started_at": None})
+
+        group = grouped[group_key]
+        group["run_count"] += 1
+        if row["passed"]:
+            group["passed_count"] += 1
+        else:
+            group["failed_count"] += 1
+        if group["latest_started_at"] is None or row["started_at"] > group["latest_started_at"]:
+            group["latest_started_at"] = row["started_at"]
+
+    aggregates = []
+    for group in grouped.values():
+        run_count = group["run_count"]
+        group["pass_rate"] = round(group["passed_count"] / run_count, 4) if run_count else 0.0
+        aggregates.append(group)
+
+    return sorted(
+        aggregates,
+        key=lambda row: (
+            -row["pass_rate"],
+            -row["run_count"],
+            str(row.get("model_name") or row.get("suite_name")),
+            str(row.get("case_name") or ""),
+        ),
+    )
 
 
 def score_expected_json(response_text: str, expected_json: dict[str, Any]) -> dict[str, Any]:

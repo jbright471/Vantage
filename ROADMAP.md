@@ -29,6 +29,7 @@ Status: in progress.
 - Require strict confirmation for any action that changes configured state.
 - Keep host-level service control behind a local node agent rather than the Docker backend container.
 - Shipped first allowlisted action: acknowledge active warnings while preserving durable history.
+- Shipped verified refresh action: retry one node poll and close the action run as `success` or `failed`.
 
 ## Phase 2: Evaluations
 
@@ -38,5 +39,9 @@ Status: foundation in progress.
 - Prompt suites and prompt cases.
 - Queued `Run` storage for eval attempts.
 - Executable eval runs with simple JSON-subset scoring.
-- Score history.
-- Comparison views across model placements and nodes.
+- Score history aggregated from eval `Run` records.
+- Placement comparison views across models and nodes.
+- Case-level failure analysis and score-detail drilldowns.
+- Recurring eval schedules that queue due eval attempts without external task infrastructure.
+- Opt-in auto-execution for due eval schedules while keeping queue-only scheduling as the safe default.
+- Eval schedule health warnings that surface failed auto-executions in the operator attention lane.

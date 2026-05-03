@@ -74,16 +74,19 @@ describe("NodesPage", () => {
     expect(screen.getByText(/diagnosing from observed state only/i)).toBeTruthy();
   });
 
-  it("submits a refresh action and keeps the status explicitly unverified", async () => {
+  it("submits a refresh action and renders verified completion", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
       json: async () => ({
         run_id: "run-1",
-        summary: "Refresh Bastet node",
-        status: "submitted_unverified",
+        summary: "Refresh node bastet verified",
+        status: "success",
         node_id: "bastet",
         started_at: "2026-04-22T12:00:00Z",
+        ended_at: "2026-04-22T12:00:01Z",
+        duration_ms: 1000,
         idempotency_key: "refresh-bastet",
+        metadata_json: { verified: true },
       }),
     } as Response);
 
@@ -112,10 +115,10 @@ describe("NodesPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /refresh node/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/completion has not been verified yet/i)).toBeTruthy();
+      expect(screen.getByText(/refresh verified/i)).toBeTruthy();
     });
 
-    expect(screen.getByText("submitted_unverified")).toBeTruthy();
+    expect(screen.getByText("success")).toBeTruthy();
     expect(globalThis.fetch).toHaveBeenCalledWith("/api/actions/refresh-node/bastet", {
       method: "POST",
       headers: {

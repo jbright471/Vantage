@@ -8,10 +8,25 @@ describe("EvalsPage", () => {
   });
 
   it("renders the eval lab foundation empty state", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => [],
-    } as Response);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "/api/evals/score-history") {
+        return {
+          ok: true,
+          json: async () => ({ total_runs: 0, placements: [], suites: [], cases: [], recent_runs: [] }),
+        } as Response;
+      }
+      if (url === "/api/evals/schedules") {
+        return {
+          ok: true,
+          json: async () => [],
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => [],
+      } as Response;
+    });
 
     render(<EvalsPage />);
 
@@ -49,19 +64,28 @@ describe("EvalsPage", () => {
         },
       ],
     };
-    vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => [],
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => createdSuite,
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => suiteWithCase,
-      } as Response);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/api/evals/score-history") {
+        return {
+          ok: true,
+          json: async () => ({ total_runs: 0, placements: [], suites: [], cases: [], recent_runs: [] }),
+        } as Response;
+      }
+      if (url === "/api/evals/schedules") {
+        return {
+          ok: true,
+          json: async () => [],
+        } as Response;
+      }
+      if (url === "/api/evals/suites" && init?.method === "POST") {
+        return { ok: true, json: async () => createdSuite } as Response;
+      }
+      if (url === "/api/evals/suites/suite-1/cases") {
+        return { ok: true, json: async () => suiteWithCase } as Response;
+      }
+      return { ok: true, json: async () => [] } as Response;
+    });
 
     render(<EvalsPage />);
 
@@ -115,14 +139,71 @@ describe("EvalsPage", () => {
         },
       ],
     };
-    vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => [suite],
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "/api/evals/score-history") {
+        return {
+          ok: true,
+          json: async () => ({
+            total_runs: 1,
+            placements: [
+              {
+                model_name: "llama3.2:latest",
+                node_id: "jedi",
+                run_count: 1,
+                passed_count: 1,
+                failed_count: 0,
+                pass_rate: 1,
+                latest_started_at: "2026-04-29T12:01:00Z",
+              },
+            ],
+            suites: [],
+            cases: [
+              {
+                suite_id: "suite-1",
+                suite_name: "Reasoning Smoke",
+                case_id: "case-1",
+                case_name: "JSON Answer",
+                run_count: 1,
+                passed_count: 1,
+                failed_count: 0,
+                pass_rate: 1,
+                latest_started_at: "2026-04-29T12:01:00Z",
+              },
+            ],
+            recent_runs: [
+              {
+                run_id: "run-1",
+                suite_id: "suite-1",
+                suite_name: "Reasoning Smoke",
+                case_id: "case-1",
+                case_name: "JSON Answer",
+                model_name: "llama3.2:latest",
+                node_id: "jedi",
+                status: "success",
+                passed: true,
+                score: 1,
+                reason: "expected_subset_matched",
+                missing_or_mismatched: [],
+                response_preview: "{\"shape\":\"answer\"}",
+                response_json: { shape: "answer" },
+                started_at: "2026-04-29T12:01:00Z",
+                duration_ms: 1000,
+              },
+            ],
+          }),
+        } as Response;
+      }
+      if (url === "/api/evals/schedules") {
+        return {
+          ok: true,
+          json: async () => [],
+        } as Response;
+      }
+      if (url === "/api/evals/suites/suite-1/attempts") {
+        return {
+          ok: true,
+          json: async () => ({
           attempt_id: "attempt-1",
           suite_id: "suite-1",
           suite_name: "Reasoning Smoke",
@@ -144,10 +225,12 @@ describe("EvalsPage", () => {
             },
           ],
         }),
-      } as Response)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
+        } as Response;
+      }
+      if (url === "/api/evals/runs/run-1/execute") {
+        return {
+          ok: true,
+          json: async () => ({
           run_id: "run-1",
           summary: "Eval case 'JSON Answer' passed for llama3.2:latest on jedi",
           status: "success",
@@ -161,7 +244,13 @@ describe("EvalsPage", () => {
           duration_ms: 1000,
           metadata_json: { score: { passed: true, score: 1 } },
         }),
-      } as Response);
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => [suite],
+      } as Response;
+    });
 
     render(
       <EvalsPage
@@ -196,5 +285,110 @@ describe("EvalsPage", () => {
     await waitFor(() => {
       expect(screen.getByText("success")).toBeTruthy();
     });
+    expect(screen.getByText("Placement comparison")).toBeTruthy();
+    expect(screen.getAllByText("100%").length).toBeGreaterThan(0);
+    expect(screen.getByText("Lowest passing cases")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /inspect score/i }));
+
+    expect(screen.getByText("Score detail")).toBeTruthy();
+    expect(screen.getByText("expected_subset_matched")).toBeTruthy();
+    expect(screen.getByText("{\"shape\":\"answer\"}")).toBeTruthy();
+  });
+
+  it("creates a recurring eval schedule", async () => {
+    const suite = {
+      suite_id: "suite-1",
+      name: "Reasoning Smoke",
+      description: "Short checks",
+      created_at: "2026-04-29T12:00:00Z",
+      metadata_json: {},
+      case_count: 1,
+      cases: [
+        {
+          case_id: "case-1",
+          name: "JSON Answer",
+          prompt: "Return JSON",
+          expected_json: { shape: "answer" },
+          sort_order: 0,
+        },
+      ],
+    };
+    const createdSchedule = {
+      schedule_id: "schedule-1",
+      suite_id: "suite-1",
+      suite_name: "Reasoning Smoke",
+      model_name: "llama3.2:latest",
+      node_id: "jedi",
+      interval_minutes: 30,
+      enabled: true,
+      auto_execute: true,
+      created_at: "2026-04-29T12:00:00Z",
+      updated_at: "2026-04-29T12:00:00Z",
+      next_run_at: "2026-04-29T12:30:00Z",
+      last_queued_at: null,
+      metadata_json: {},
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/api/evals/score-history") {
+        return {
+          ok: true,
+          json: async () => ({ total_runs: 0, placements: [], suites: [], cases: [], recent_runs: [] }),
+        } as Response;
+      }
+      if (url === "/api/evals/schedules" && init?.method === "POST") {
+        return {
+          ok: true,
+          json: async () => createdSchedule,
+        } as Response;
+      }
+      if (url === "/api/evals/schedules") {
+        return {
+          ok: true,
+          json: async () => [],
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => [suite],
+      } as Response;
+    });
+
+    render(
+      <EvalsPage
+        models={[
+          {
+            model_name: "llama3.2:latest",
+            placements: ["jedi"],
+            placement_details: [{ node_id: "jedi", model_digest: null, available: true }],
+          },
+        ]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Reasoning Smoke").length).toBeGreaterThan(0);
+    });
+
+    fireEvent.change(screen.getByLabelText("Schedule suite"), {
+      target: { value: "suite-1" },
+    });
+    fireEvent.change(screen.getByLabelText("Schedule placement"), {
+      target: { value: "llama3.2:latest::jedi" },
+    });
+    fireEvent.change(screen.getByLabelText("Interval minutes"), {
+      target: { value: "30" },
+    });
+    fireEvent.click(screen.getByLabelText("Auto-execute when due"));
+    fireEvent.click(screen.getByRole("button", { name: /create schedule/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Recurring eval schedules")).toBeTruthy();
+    });
+    expect(screen.getByText("Every 30 min")).toBeTruthy();
+    expect(screen.getByText("Auto-execute")).toBeTruthy();
+    expect(screen.getByText(/Next queue:/)).toBeTruthy();
+    expect(screen.getByText(/8:30/)).toBeTruthy();
   });
 });

@@ -124,3 +124,20 @@ class EvalCase(Base):
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     expected_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class EvalSchedule(Base):
+    __tablename__ = "eval_schedules"
+
+    schedule_id: Mapped[str] = mapped_column(String, primary_key=True)
+    suite_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    model_name: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    node_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    interval_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    auto_execute: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
+    next_run_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    last_queued_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)

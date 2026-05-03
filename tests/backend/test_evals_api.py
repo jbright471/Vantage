@@ -1,10 +1,13 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from backend.app.db import SessionLocal
 from backend.app.main import app
-from backend.app.models import ModelPlacement
+from backend.app.models import EvalSchedule, ModelPlacement, Run, WarningRecord
+from backend.app.services.eval_schedules import queue_due_eval_schedules
+from backend.app.workers.eval_scheduler import run_due_eval_schedules
 
 
 def test_create_eval_suite_and_case() -> None:
@@ -163,3 +166,374 @@ def test_execute_queued_eval_attempt_updates_run_with_score(monkeypatch) -> None
     assert run["status"] == "success"
     assert run["metadata_json"]["score"]["passed"] is True
     assert run["metadata_json"]["response_json"]["answer"] == 42
+
+
+def test_score_history_endpoint_returns_eval_aggregates(monkeypatch) -> None:
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"response": '{"answer": 42}'}
+
+    model_name = "history-eval-test-model:latest"
+    monkeypatch.setattr("backend.app.services.evals.httpx.post", lambda *args, **kwargs: FakeResponse())
+
+    with TestClient(app) as client:
+        suite_response = client.post(
+            "/api/evals/suites",
+            json={"name": "History Suite", "description": "History aggregation"},
+        )
+        suite = suite_response.json()
+        client.post(
+            f"/api/evals/suites/{suite['suite_id']}/cases",
+            json={"name": "Answer Case", "prompt": "Return answer 42 as JSON.", "expected_json": {"answer": 42}},
+        )
+
+        with SessionLocal() as session:
+            session.add(
+                ModelPlacement(
+                    node_id="jedi",
+                    model_name=model_name,
+                    model_digest="sha256:history",
+                    available=True,
+                    last_seen_at=datetime.now(UTC),
+                )
+            )
+            session.commit()
+
+        queue_response = client.post(
+            f"/api/evals/suites/{suite['suite_id']}/attempts",
+            json={"model_name": model_name, "node_id": "jedi"},
+        )
+        run_id = queue_response.json()["runs"][0]["run_id"]
+        client.post(f"/api/evals/runs/{run_id}/execute")
+
+        response = client.get("/api/evals/score-history")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_runs"] >= 1
+    assert any(placement["model_name"] == model_name for placement in payload["placements"])
+
+
+def test_create_eval_schedule_and_list_it() -> None:
+    model_name = "schedule-api-test-model:latest"
+    with TestClient(app) as client:
+        suite_response = client.post(
+            "/api/evals/suites",
+            json={"name": "Scheduled Suite", "description": "Runs on an interval"},
+        )
+        suite = suite_response.json()
+        client.post(
+            f"/api/evals/suites/{suite['suite_id']}/cases",
+            json={"name": "Scheduled Case", "prompt": "Return JSON.", "expected_json": {"ok": True}},
+        )
+
+        with SessionLocal() as session:
+            session.add(
+                ModelPlacement(
+                    node_id="jedi",
+                    model_name=model_name,
+                    model_digest="sha256:schedule-api",
+                    available=True,
+                    last_seen_at=datetime.now(UTC),
+                )
+            )
+            session.commit()
+
+        create_response = client.post(
+            "/api/evals/schedules",
+            json={
+                "suite_id": suite["suite_id"],
+                "model_name": model_name,
+                "node_id": "jedi",
+                "interval_minutes": 30,
+                "enabled": True,
+                "auto_execute": True,
+            },
+        )
+        list_response = client.get("/api/evals/schedules")
+
+    assert create_response.status_code == 201
+    created = create_response.json()
+    assert created["suite_id"] == suite["suite_id"]
+    assert created["suite_name"] == "Scheduled Suite"
+    assert created["model_name"] == model_name
+    assert created["node_id"] == "jedi"
+    assert created["interval_minutes"] == 30
+    assert created["enabled"] is True
+    assert created["auto_execute"] is True
+    assert created["next_run_at"] is not None
+    assert list_response.status_code == 200
+    assert any(schedule["schedule_id"] == created["schedule_id"] for schedule in list_response.json())
+
+
+def test_due_eval_schedule_queues_runs_and_advances_next_run() -> None:
+    model_name = "schedule-service-test-model:latest"
+    now = datetime.now(UTC)
+
+    with TestClient(app) as client:
+        suite_response = client.post(
+            "/api/evals/suites",
+            json={"name": "Due Schedule Suite", "description": "Due schedule service"},
+        )
+        suite = suite_response.json()
+        client.post(
+            f"/api/evals/suites/{suite['suite_id']}/cases",
+            json={"name": "Due Case", "prompt": "Return JSON.", "expected_json": {"ok": True}},
+        )
+
+    with SessionLocal() as session:
+        session.add(
+            ModelPlacement(
+                node_id="jedi",
+                model_name=model_name,
+                model_digest="sha256:schedule-service",
+                available=True,
+                last_seen_at=now,
+            )
+        )
+        schedule = EvalSchedule(
+            schedule_id="schedule-service-test",
+            suite_id=suite["suite_id"],
+            model_name=model_name,
+            node_id="jedi",
+            interval_minutes=15,
+            enabled=True,
+            created_at=now - timedelta(minutes=30),
+            updated_at=now - timedelta(minutes=30),
+            next_run_at=now - timedelta(minutes=1),
+            metadata_json={},
+        )
+        session.add(schedule)
+        session.commit()
+
+        summary = queue_due_eval_schedules(session, now=now)
+        queued = session.scalars(
+            select(Run).where(
+                Run.detail_type == "eval_attempt",
+                Run.metadata_json["schedule_id"].as_string() == "schedule-service-test",
+            )
+        ).all()
+        refreshed_schedule = session.get(EvalSchedule, "schedule-service-test")
+
+    assert summary["schedules_checked"] >= 1
+    assert summary["schedules_queued"] == 1
+    assert summary["runs_queued"] == 1
+    assert len(queued) == 1
+    assert queued[0].status == "queued"
+    assert queued[0].metadata_json["trigger"] == "schedule"
+    assert refreshed_schedule is not None
+    assert refreshed_schedule.last_queued_at == now.replace(tzinfo=None)
+    assert refreshed_schedule.next_run_at == (now + timedelta(minutes=15)).replace(tzinfo=None)
+
+
+def test_due_auto_execute_eval_schedule_runs_and_scores(monkeypatch) -> None:
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"response": '{"ok": true}'}
+
+    model_name = "schedule-auto-exec-test-model:latest"
+    now = datetime.now(UTC)
+    monkeypatch.setattr("backend.app.services.evals.httpx.post", lambda *args, **kwargs: FakeResponse())
+
+    with TestClient(app) as client:
+        suite_response = client.post(
+            "/api/evals/suites",
+            json={"name": "Auto Execute Suite", "description": "Runs automatically"},
+        )
+        suite = suite_response.json()
+        client.post(
+            f"/api/evals/suites/{suite['suite_id']}/cases",
+            json={"name": "Auto Case", "prompt": "Return ok true.", "expected_json": {"ok": True}},
+        )
+
+    with SessionLocal() as session:
+        session.add(
+            ModelPlacement(
+                node_id="jedi",
+                model_name=model_name,
+                model_digest="sha256:schedule-auto-exec",
+                available=True,
+                last_seen_at=now,
+            )
+        )
+        session.add(
+            EvalSchedule(
+                schedule_id="schedule-auto-exec-test",
+                suite_id=suite["suite_id"],
+                model_name=model_name,
+                node_id="jedi",
+                interval_minutes=15,
+                enabled=True,
+                auto_execute=True,
+                created_at=now - timedelta(minutes=30),
+                updated_at=now - timedelta(minutes=30),
+                next_run_at=now - timedelta(minutes=1),
+                metadata_json={},
+            )
+        )
+        session.commit()
+
+    summary = run_due_eval_schedules(app.state.config)
+
+    with SessionLocal() as session:
+        run = session.scalar(
+            select(Run).where(
+                Run.detail_type == "eval_attempt",
+                Run.metadata_json["schedule_id"].as_string() == "schedule-auto-exec-test",
+            )
+        )
+        refreshed_schedule = session.get(EvalSchedule, "schedule-auto-exec-test")
+
+    assert summary["schedules_queued"] == 1
+    assert summary["runs_queued"] == 1
+    assert summary["runs_executed"] == 1
+    assert run is not None
+    assert run.status == "success"
+    assert run.metadata_json["score"]["passed"] is True
+    assert refreshed_schedule is not None
+    assert refreshed_schedule.metadata_json["last_auto_execute"]["runs_executed"] == 1
+
+
+def test_failed_auto_execute_eval_schedule_creates_warning(monkeypatch) -> None:
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"response": '{"ok": false}'}
+
+    model_name = "schedule-warning-test-model:latest"
+    now = datetime.now(UTC)
+    monkeypatch.setattr("backend.app.services.evals.httpx.post", lambda *args, **kwargs: FakeResponse())
+
+    with TestClient(app) as client:
+        suite_response = client.post(
+            "/api/evals/suites",
+            json={"name": "Warning Suite", "description": "Creates schedule warning"},
+        )
+        suite = suite_response.json()
+        client.post(
+            f"/api/evals/suites/{suite['suite_id']}/cases",
+            json={"name": "Warning Case", "prompt": "Return ok true.", "expected_json": {"ok": True}},
+        )
+
+    with SessionLocal() as session:
+        session.add(
+            ModelPlacement(
+                node_id="jedi",
+                model_name=model_name,
+                model_digest="sha256:schedule-warning",
+                available=True,
+                last_seen_at=now,
+            )
+        )
+        session.add(
+            EvalSchedule(
+                schedule_id="schedule-warning-test",
+                suite_id=suite["suite_id"],
+                model_name=model_name,
+                node_id="jedi",
+                interval_minutes=15,
+                enabled=True,
+                auto_execute=True,
+                created_at=now - timedelta(minutes=30),
+                updated_at=now - timedelta(minutes=30),
+                next_run_at=now - timedelta(minutes=1),
+                metadata_json={},
+            )
+        )
+        session.commit()
+
+    summary = run_due_eval_schedules(app.state.config)
+
+    with SessionLocal() as session:
+        warning = session.get(WarningRecord, "eval-schedule-failure:schedule-warning-test")
+
+    assert summary["runs_executed"] == 1
+    assert summary["runs_failed"] == 1
+    assert warning is not None
+    assert warning.status == "active"
+    assert warning.warning_type == "eval_schedule_failure"
+    assert warning.node_id == "jedi"
+    assert warning.metadata_json["schedule_id"] == "schedule-warning-test"
+    assert warning.metadata_json["failed_count"] == 1
+
+
+def test_clean_auto_execute_eval_schedule_resolves_existing_warning(monkeypatch) -> None:
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"response": '{"ok": true}'}
+
+    model_name = "schedule-warning-resolve-test-model:latest"
+    now = datetime.now(UTC)
+    monkeypatch.setattr("backend.app.services.evals.httpx.post", lambda *args, **kwargs: FakeResponse())
+
+    with TestClient(app) as client:
+        suite_response = client.post(
+            "/api/evals/suites",
+            json={"name": "Warning Resolve Suite", "description": "Resolves schedule warning"},
+        )
+        suite = suite_response.json()
+        client.post(
+            f"/api/evals/suites/{suite['suite_id']}/cases",
+            json={"name": "Resolve Case", "prompt": "Return ok true.", "expected_json": {"ok": True}},
+        )
+
+    with SessionLocal() as session:
+        session.add(
+            ModelPlacement(
+                node_id="jedi",
+                model_name=model_name,
+                model_digest="sha256:schedule-warning-resolve",
+                available=True,
+                last_seen_at=now,
+            )
+        )
+        session.add(
+            EvalSchedule(
+                schedule_id="schedule-warning-resolve-test",
+                suite_id=suite["suite_id"],
+                model_name=model_name,
+                node_id="jedi",
+                interval_minutes=15,
+                enabled=True,
+                auto_execute=True,
+                created_at=now - timedelta(minutes=30),
+                updated_at=now - timedelta(minutes=30),
+                next_run_at=now - timedelta(minutes=1),
+                metadata_json={},
+            )
+        )
+        session.add(
+            WarningRecord(
+                warning_id="eval-schedule-failure:schedule-warning-resolve-test",
+                warning_type="eval_schedule_failure",
+                severity="warning",
+                node_id="jedi",
+                first_seen_at=now - timedelta(minutes=20),
+                last_seen_at=now - timedelta(minutes=20),
+                status="active",
+                summary="Previous eval schedule failure",
+                metadata_json={"schedule_id": "schedule-warning-resolve-test"},
+            )
+        )
+        session.commit()
+
+    summary = run_due_eval_schedules(app.state.config)
+
+    with SessionLocal() as session:
+        warning = session.get(WarningRecord, "eval-schedule-failure:schedule-warning-resolve-test")
+
+    assert summary["runs_executed"] == 1
+    assert summary["runs_failed"] == 0
+    assert warning is not None
+    assert warning.status == "resolved"

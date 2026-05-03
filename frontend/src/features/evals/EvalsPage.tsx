@@ -2,11 +2,18 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import {
   createEvalCase,
+  createEvalSchedule,
   createEvalSuite,
   executeEvalRun,
+  fetchEvalSchedules,
+  fetchEvalScoreHistory,
   fetchEvalSuites,
   queueEvalAttempt,
+  updateEvalSchedule,
   type EvalAttemptRecord,
+  type EvalScheduleRecord,
+  type EvalScoreHistoryRecord,
+  type EvalScoreRunRecord,
   type EvalSuiteRecord,
   type ModelRecord,
   type RunRecord,
@@ -54,7 +61,16 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
   const [suiteForm, setSuiteForm] = useState({ name: "", description: "" });
   const [caseForm, setCaseForm] = useState({ suite_id: "", name: "", prompt: "", expected_json: "{}" });
   const [attemptForm, setAttemptForm] = useState({ suite_id: "", placement_key: "" });
+  const [scheduleForm, setScheduleForm] = useState({
+    suite_id: "",
+    placement_key: "",
+    interval_minutes: "60",
+    auto_execute: false,
+  });
   const [attemptResult, setAttemptResult] = useState<EvalAttemptRecord | null>(null);
+  const [schedules, setSchedules] = useState<EvalScheduleRecord[]>([]);
+  const [scoreHistory, setScoreHistory] = useState<EvalScoreHistoryRecord | null>(null);
+  const [selectedScoreRun, setSelectedScoreRun] = useState<EvalScoreRunRecord | null>(null);
   const [queuedEvalRuns, setQueuedEvalRuns] = useState<RunRecord[]>([]);
   const [executionStateByRun, setExecutionStateByRun] = useState<Record<string, "idle" | "running" | "error">>({});
   const [mutationState, setMutationState] = useState<"idle" | "saving" | "error">("idle");
@@ -78,6 +94,46 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
         }
         setRequestState("error");
         setErrorMessage(error instanceof Error ? error.message : "Eval suites request failed.");
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    fetchEvalSchedules()
+      .then((payload) => {
+        if (isCurrent) {
+          setSchedules(payload);
+        }
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setSchedules([]);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    fetchEvalScoreHistory()
+      .then((payload) => {
+        if (isCurrent) {
+          setScoreHistory(payload);
+        }
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setScoreHistory(null);
+        }
       });
 
     return () => {
@@ -130,6 +186,7 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
       setSuiteForm({ name: "", description: "" });
       setCaseForm((current) => ({ ...current, suite_id: suite.suite_id }));
       setAttemptForm((current) => ({ ...current, suite_id: suite.suite_id }));
+      setScheduleForm((current) => ({ ...current, suite_id: suite.suite_id }));
       setMutationState("idle");
     } catch (error) {
       setMutationState("error");
@@ -170,10 +227,64 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
     try {
       const run = await executeEvalRun(runId);
       upsertEvalRun(run);
+      const history = await fetchEvalScoreHistory();
+      setScoreHistory(history);
       setExecutionStateByRun((current) => ({ ...current, [runId]: "idle" }));
     } catch (error) {
       setExecutionStateByRun((current) => ({ ...current, [runId]: "error" }));
       setErrorMessage(error instanceof Error ? error.message : "Eval run execution failed.");
+    }
+  }
+
+  async function handleCreateSchedule(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMutationState("saving");
+    setErrorMessage(null);
+
+    const placement = placementOptions.find((option) => option.key === scheduleForm.placement_key);
+    if (!placement) {
+      setMutationState("error");
+      setErrorMessage("Select an available model placement before creating an eval schedule.");
+      return;
+    }
+
+    const intervalMinutes = Number.parseInt(scheduleForm.interval_minutes, 10);
+    if (!Number.isFinite(intervalMinutes) || intervalMinutes < 1) {
+      setMutationState("error");
+      setErrorMessage("Schedule interval must be at least 1 minute.");
+      return;
+    }
+
+    try {
+      const schedule = await createEvalSchedule({
+        suite_id: scheduleForm.suite_id,
+        model_name: placement.model_name,
+        node_id: placement.node_id,
+        interval_minutes: intervalMinutes,
+        enabled: true,
+        auto_execute: scheduleForm.auto_execute,
+      });
+      setSchedules((current) => [schedule, ...current.filter((item) => item.schedule_id !== schedule.schedule_id)]);
+      setMutationState("idle");
+    } catch (error) {
+      setMutationState("error");
+      setErrorMessage(error instanceof Error ? error.message : "Eval schedule creation failed.");
+    }
+  }
+
+  async function handleToggleSchedule(schedule: EvalScheduleRecord) {
+    setMutationState("saving");
+    setErrorMessage(null);
+
+    try {
+      const updated = await updateEvalSchedule(schedule.schedule_id, { enabled: !schedule.enabled });
+      setSchedules((current) =>
+        current.map((item) => (item.schedule_id === updated.schedule_id ? updated : item)),
+      );
+      setMutationState("idle");
+    } catch (error) {
+      setMutationState("error");
+      setErrorMessage(error instanceof Error ? error.message : "Eval schedule update failed.");
     }
   }
 
@@ -231,6 +342,10 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
         <article className="metric-card">
           <p className="info-kicker">Execution</p>
           <strong>{recentEvalRuns.length} queued</strong>
+        </article>
+        <article className="metric-card">
+          <p className="info-kicker">Scored</p>
+          <strong>{scoreHistory?.total_runs ?? 0}</strong>
         </article>
       </div>
 
@@ -376,7 +491,137 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
             </div>
           ) : null}
         </form>
+
+        <form className="eval-form" onSubmit={handleCreateSchedule}>
+          <div>
+            <p className="info-kicker">Recurring eval</p>
+            <h3>Create schedule</h3>
+          </div>
+          <label>
+            <span>Schedule suite</span>
+            <select
+              required
+              value={scheduleForm.suite_id}
+              onChange={(event) => setScheduleForm((current) => ({ ...current, suite_id: event.target.value }))}
+              disabled={suites.length === 0}
+            >
+              <option value="">Select suite</option>
+              {suites.map((suite) => (
+                <option key={suite.suite_id} value={suite.suite_id}>
+                  {suite.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Schedule placement</span>
+            <select
+              required
+              value={scheduleForm.placement_key}
+              onChange={(event) => setScheduleForm((current) => ({ ...current, placement_key: event.target.value }))}
+              disabled={placementOptions.length === 0}
+            >
+              <option value="">Select model on node</option>
+              {placementOptions.map((placement) => (
+                <option key={placement.key} value={placement.key}>
+                  {placement.model_name} on {placement.node_id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Interval minutes</span>
+            <input
+              required
+              type="number"
+              min="1"
+              value={scheduleForm.interval_minutes}
+              onChange={(event) =>
+                setScheduleForm((current) => ({ ...current, interval_minutes: event.target.value }))
+              }
+              disabled={suites.length === 0 || placementOptions.length === 0}
+            />
+          </label>
+          <label className="inline-check">
+            <input
+              type="checkbox"
+              checked={scheduleForm.auto_execute}
+              onChange={(event) =>
+                setScheduleForm((current) => ({ ...current, auto_execute: event.target.checked }))
+              }
+              disabled={suites.length === 0 || placementOptions.length === 0}
+            />
+            <span>Auto-execute when due</span>
+          </label>
+          <p className="action-copy">
+            Queue-only is safest. Auto-execute immediately runs and scores each due eval case.
+          </p>
+          <button
+            type="submit"
+            className="action-button"
+            disabled={mutationState === "saving" || suites.length === 0 || placementOptions.length === 0}
+          >
+            {mutationState === "saving" ? "Creating..." : "Create schedule"}
+          </button>
+        </form>
       </div>
+
+      {schedules.length > 0 ? (
+        <div className="eval-attempt-panel">
+          <div className="section-header is-compact">
+            <div>
+              <p className="section-kicker">Automation</p>
+              <h3>Recurring eval schedules</h3>
+            </div>
+            <p className="section-copy">
+              Schedules create queued eval attempts on a timer while keeping execution visible in the Runs ledger.
+            </p>
+          </div>
+          <div className="table-shell">
+            <table className="inventory-table">
+              <thead>
+                <tr>
+                  <th scope="col">Suite</th>
+                  <th scope="col">Target</th>
+                  <th scope="col">Interval</th>
+                  <th scope="col">Mode</th>
+                  <th scope="col">Next</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {schedules.map((schedule) => (
+                  <tr key={schedule.schedule_id}>
+                    <td>{schedule.suite_name ?? schedule.suite_id}</td>
+                    <td>
+                      {schedule.model_name} / {schedule.node_id}
+                    </td>
+                    <td>Every {schedule.interval_minutes} min</td>
+                    <td>{schedule.auto_execute ? "Auto-execute" : "Queue only"}</td>
+                    <td>Next queue: {formatTimestamp(schedule.next_run_at)}</td>
+                    <td>
+                      <span className={`status-chip is-${schedule.enabled ? "success" : "queued"}`}>
+                        {schedule.enabled ? "enabled" : "paused"}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="text-action-button"
+                        disabled={mutationState === "saving"}
+                        onClick={() => void handleToggleSchedule(schedule)}
+                      >
+                        {schedule.enabled ? "Pause" : "Resume"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
 
       {recentEvalRuns.length > 0 ? (
         <div className="eval-attempt-panel">
@@ -434,6 +679,126 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
         </div>
       ) : null}
 
+      {scoreHistory && scoreHistory.total_runs > 0 ? (
+        <div className="eval-attempt-panel">
+          <div className="section-header is-compact">
+            <div>
+              <p className="section-kicker">Score history</p>
+              <h3>Placement comparison</h3>
+            </div>
+            <p className="section-copy">
+              Pass rates are aggregated from executed eval Run records. Higher confidence comes from repeated cases,
+              not a single green result.
+            </p>
+          </div>
+          <div className="score-grid">
+            {scoreHistory.placements.slice(0, 6).map((placement) => (
+              <article
+                key={`${placement.model_name}-${placement.node_id}`}
+                className="score-card"
+                aria-label={`Score history for ${placement.model_name} on ${placement.node_id}`}
+              >
+                <p className="info-kicker">{placement.node_id}</p>
+                <h4>{placement.model_name}</h4>
+                <strong>{Math.round(placement.pass_rate * 100)}%</strong>
+                <div className="score-meter" aria-hidden="true">
+                  <span style={{ width: `${Math.round(placement.pass_rate * 100)}%` }} />
+                </div>
+                <p>
+                  {placement.passed_count} passed / {placement.failed_count} failed across {placement.run_count} run
+                  {placement.run_count === 1 ? "" : "s"}
+                </p>
+              </article>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {scoreHistory && scoreHistory.cases.length > 0 ? (
+        <div className="eval-attempt-panel">
+          <div className="section-header is-compact">
+            <div>
+              <p className="section-kicker">Case analysis</p>
+              <h3>Lowest passing cases</h3>
+            </div>
+            <p className="section-copy">Use this to spot prompts that repeatedly fail across placements.</p>
+          </div>
+          <div className="table-shell">
+            <table className="inventory-table">
+              <thead>
+                <tr>
+                  <th scope="col">Case</th>
+                  <th scope="col">Suite</th>
+                  <th scope="col">Pass Rate</th>
+                  <th scope="col">Runs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...scoreHistory.cases]
+                  .sort((left, right) => left.pass_rate - right.pass_rate || right.run_count - left.run_count)
+                  .slice(0, 6)
+                  .map((evalCase) => (
+                    <tr key={`${evalCase.suite_id}-${evalCase.case_id}`}>
+                      <td>{evalCase.case_name}</td>
+                      <td>{evalCase.suite_name}</td>
+                      <td>{Math.round(evalCase.pass_rate * 100)}%</td>
+                      <td>
+                        {evalCase.passed_count} passed / {evalCase.failed_count} failed
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {scoreHistory && scoreHistory.recent_runs.length > 0 ? (
+        <div className="eval-attempt-panel">
+          <div className="section-header is-compact">
+            <div>
+              <p className="section-kicker">Score details</p>
+              <h3>Recent scored runs</h3>
+            </div>
+            <p className="section-copy">Open a run to inspect score reason, response preview, and parsed JSON.</p>
+          </div>
+          <div className="table-shell">
+            <table className="inventory-table">
+              <thead>
+                <tr>
+                  <th scope="col">Case</th>
+                  <th scope="col">Target</th>
+                  <th scope="col">Result</th>
+                  <th scope="col">Started</th>
+                  <th scope="col">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scoreHistory.recent_runs.slice(0, 8).map((run) => (
+                  <tr key={run.run_id}>
+                    <td>{run.case_name}</td>
+                    <td>
+                      {run.model_name} / {run.node_id}
+                    </td>
+                    <td>
+                      <span className={`status-chip is-${run.passed ? "success" : "failed"}`}>
+                        {run.passed ? "passed" : "failed"}
+                      </span>
+                    </td>
+                    <td>{formatTimestamp(run.started_at)}</td>
+                    <td>
+                      <button type="button" className="text-action-button" onClick={() => setSelectedScoreRun(run)}>
+                        Inspect score
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
       {suites.length === 0 ? (
         <div className="empty-state">
           {requestState === "loading"
@@ -478,6 +843,80 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           </table>
         </div>
       )}
+
+      {selectedScoreRun ? (
+        <ScoreDetailDrawer run={selectedScoreRun} onClose={() => setSelectedScoreRun(null)} />
+      ) : null}
     </section>
+  );
+}
+
+function ScoreDetailDrawer({ run, onClose }: { run: EvalScoreRunRecord; onClose: () => void }) {
+  return (
+    <div className="run-drawer-backdrop" role="dialog" aria-modal="true" aria-labelledby="score-detail-title">
+      <aside className="run-drawer">
+        <header className="drawer-header">
+          <div>
+            <p className="section-kicker">Eval score</p>
+            <h3 id="score-detail-title">Score detail</h3>
+            <p className="drawer-run-id">{run.run_id}</p>
+          </div>
+          <button type="button" className="drawer-close-button" onClick={onClose} aria-label="Close score detail">
+            x
+          </button>
+        </header>
+        <div className="drawer-content">
+          <dl className="run-stats-grid">
+            <div>
+              <dt>Case</dt>
+              <dd>{run.case_name}</dd>
+            </div>
+            <div>
+              <dt>Suite</dt>
+              <dd>{run.suite_name}</dd>
+            </div>
+            <div>
+              <dt>Target</dt>
+              <dd>
+                {run.model_name} / {run.node_id}
+              </dd>
+            </div>
+            <div>
+              <dt>Result</dt>
+              <dd>{run.passed ? "passed" : "failed"}</dd>
+            </div>
+            <div>
+              <dt>Reason</dt>
+              <dd>{run.reason ?? "No reason recorded"}</dd>
+            </div>
+            <div>
+              <dt>Duration</dt>
+              <dd>{run.duration_ms === null ? "Unknown" : `${run.duration_ms}ms`}</dd>
+            </div>
+          </dl>
+
+          {run.missing_or_mismatched && run.missing_or_mismatched.length > 0 ? (
+            <section className="drawer-section">
+              <h4>Missing or mismatched</h4>
+              <p>{run.missing_or_mismatched.join(", ")}</p>
+            </section>
+          ) : null}
+
+          <section className="drawer-section">
+            <h4>Response Preview</h4>
+            <p>{run.response_preview || "No response preview recorded."}</p>
+          </section>
+
+          <section className="json-panel">
+            <div className="json-panel-header">
+              <h4>Parsed Response JSON</h4>
+            </div>
+            <pre>
+              <code>{JSON.stringify(run.response_json ?? {}, null, 2)}</code>
+            </pre>
+          </section>
+        </div>
+      </aside>
+    </div>
   );
 }

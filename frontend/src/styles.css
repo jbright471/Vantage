@@ -333,10 +333,6 @@ select {
   margin: 16px 0;
 }
 
-.metric-strip {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
 .eval-form-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -386,6 +382,23 @@ select {
   resize: vertical;
 }
 
+.eval-form .inline-check {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.06);
+  color: var(--ink);
+  text-transform: none;
+}
+
+.eval-form .inline-check input {
+  width: 16px;
+  min-height: 16px;
+  accent-color: var(--warning);
+}
+
 .eval-form input:focus,
 .eval-form textarea:focus,
 .eval-form select:focus {
@@ -404,6 +417,52 @@ select {
 
 .section-header.is-compact h3 {
   margin: 4px 0 0;
+}
+
+.score-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.score-card {
+  padding: 14px;
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  background: linear-gradient(145deg, rgba(46, 102, 255, 0.08), rgba(255, 255, 255, 0.03));
+}
+
+.score-card h4 {
+  margin: 4px 0 12px;
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+.score-card strong {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 2rem;
+  letter-spacing: -0.04em;
+}
+
+.score-card p {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.score-meter {
+  height: 8px;
+  margin: 10px 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.score-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), var(--healthy));
 }
 
 .telemetry-tile,
@@ -1613,6 +1672,7 @@ select {
   .telemetry-strip,
   .metric-strip,
   .eval-form-grid,
+  .score-grid,
   .node-metrics,
   .route-flow,
   .warning-strip {

@@ -55,7 +55,9 @@ export function NodesPage({ nodes, runs }: NodesPageProps) {
       const message =
         run.status === "submitted_unverified"
           ? "Refresh request submitted. Completion has not been verified yet."
-          : run.summary;
+          : run.status === "success"
+            ? "Refresh verified. Vantage collected a fresh observation for this node."
+            : run.summary;
 
       setRefreshStateByNode((current) => ({
         ...current,
