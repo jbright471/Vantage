@@ -78,7 +78,7 @@ SQLite is the Phase 1 database. The main tables are:
 - `runs`: actions, inferences, remote events, and meaningful operational work
 - `routing_rules` and `routing_rule_nodes`: preferred routing order
 - `warning_records`: durable warning state
-- `app_settings`: future runtime-managed settings
+- `app_settings`: runtime-managed settings such as node enabled-state overrides
 - `eval_suites`, `eval_cases`, and `eval_schedules`: Phase 2 prompt-suite foundations; queued eval attempts are stored as `Run` records with `detail_type = "eval_attempt"`
 
 `NodeSnapshot` is pruned automatically by age and by per-node count so continuous polling does not grow the database forever.
@@ -125,3 +125,5 @@ Vantage prefers explicit uncertainty:
 - diagnostics suggest remediation from observed state but do not silently mutate config or restart host services
 - warning acknowledgement is an allowlisted remediation action and creates an audit `Run`
 - verified node refresh is an allowlisted remediation action that retries one collector pass and closes the audit `Run` as `success` or `failed`
+- node quarantine is an allowlisted configured-state action that writes a runtime enabled-state override, disables polling, removes the node from routing preference lists, and records the change as an audit `Run`
+- local Ollama endpoint suppression is an allowlisted configured-state action that writes a runtime endpoint override, excludes the endpoint from local polling and capability checks, and records the change as an audit `Run`

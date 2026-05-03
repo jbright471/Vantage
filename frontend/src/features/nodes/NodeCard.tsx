@@ -19,7 +19,13 @@ type NodeCardProps = {
   node: NodeCardNode;
   onRefresh: (nodeId: string) => void;
   onDiagnose: () => void;
+  onSetEnabled: (nodeId: string, enabled: boolean) => void;
   refreshState?: {
+    phase: "idle" | "submitting" | "submitted" | "error";
+    status?: string;
+    message?: string;
+  };
+  enabledActionState?: {
     phase: "idle" | "submitting" | "submitted" | "error";
     status?: string;
     message?: string;
@@ -119,13 +125,16 @@ function freshnessOpacity(value: string): number {
   return 0.32;
 }
 
-export function NodeCard({ node, onRefresh, onDiagnose, refreshState }: NodeCardProps) {
+export function NodeCard({ node, onRefresh, onDiagnose, onSetEnabled, refreshState, enabledActionState }: NodeCardProps) {
   const role = node.role ?? "unassigned";
   const createdFrom = node.created_from ?? "runtime";
   const isEnabled = node.enabled ?? true;
   const refreshPhase = refreshState?.phase ?? "idle";
   const refreshStatus = refreshState?.status ?? null;
   const refreshMessage = refreshState?.message ?? null;
+  const enabledActionPhase = enabledActionState?.phase ?? "idle";
+  const enabledActionStatus = enabledActionState?.status ?? null;
+  const enabledActionMessage = enabledActionState?.message ?? null;
   const needsDiagnosis = node.observed_status !== "healthy" || node.freshness !== "live" || node.ollama_errors.length > 0;
 
   const freshnessStyle = {
@@ -190,19 +199,34 @@ export function NodeCard({ node, onRefresh, onDiagnose, refreshState }: NodeCard
         <button
           type="button"
           className="action-button"
-          disabled={refreshPhase === "submitting"}
+          disabled={!isEnabled || refreshPhase === "submitting"}
           onClick={() => onRefresh(node.node_id)}
         >
           {refreshPhase === "submitting" ? "Submitting refresh..." : "Refresh node"}
         </button>
 
         {refreshStatus ? <span className={`status-chip is-${refreshStatus}`}>{refreshStatus}</span> : null}
+        <button
+          type="button"
+          className={isEnabled ? "action-button is-danger" : "action-button is-secondary"}
+          disabled={enabledActionPhase === "submitting"}
+          onClick={() => onSetEnabled(node.node_id, !isEnabled)}
+        >
+          {enabledActionPhase === "submitting" ? "Submitting..." : isEnabled ? "Quarantine node" : "Re-enable node"}
+        </button>
+        {enabledActionStatus ? <span className={`status-chip is-${enabledActionStatus}`}>{enabledActionStatus}</span> : null}
         {needsDiagnosis ? (
           <button type="button" className="action-button is-secondary" onClick={onDiagnose}>
             Diagnose
           </button>
         ) : null}
       </div>
+
+      {enabledActionMessage ? (
+        <p className={`action-copy${enabledActionPhase === "error" ? " is-error" : ""}`} role="status">
+          {enabledActionMessage}
+        </p>
+      ) : null}
 
       {refreshMessage ? (
         <p className={`action-copy${refreshPhase === "error" ? " is-error" : ""}`} role="status">

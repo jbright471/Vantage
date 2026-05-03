@@ -2,18 +2,32 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.config import BootstrapConfig
-from backend.app.models import Node, RoutingRule, RoutingRuleNode
+from backend.app.models import AppSetting, Node, RoutingRule, RoutingRuleNode
+
+NODE_ENABLED_OVERRIDES_KEY = "node_enabled_overrides"
+
+
+def get_node_enabled_overrides(session: Session) -> dict[str, bool]:
+    setting = session.get(AppSetting, NODE_ENABLED_OVERRIDES_KEY)
+    if setting is None:
+        return {}
+    nodes = setting.value_json.get("nodes", {})
+    if not isinstance(nodes, dict):
+        return {}
+    return {str(node_id): bool(enabled) for node_id, enabled in nodes.items()}
 
 
 def seed_nodes_from_config(session: Session, config: BootstrapConfig) -> None:
+    enabled_overrides = get_node_enabled_overrides(session)
     for bootstrap_node in config.nodes:
+        enabled = enabled_overrides.get(bootstrap_node.node_id, bootstrap_node.enabled)
         existing = session.scalar(select(Node).where(Node.node_id == bootstrap_node.node_id))
         if existing:
             if existing.created_from == "bootstrap":
                 existing.display_name = bootstrap_node.display_name
                 existing.base_url = bootstrap_node.base_url
                 existing.role = bootstrap_node.role
-                existing.enabled = bootstrap_node.enabled
+                existing.enabled = enabled
             continue
         session.add(
             Node(
@@ -21,7 +35,7 @@ def seed_nodes_from_config(session: Session, config: BootstrapConfig) -> None:
                 display_name=bootstrap_node.display_name,
                 base_url=bootstrap_node.base_url,
                 role=bootstrap_node.role,
-                enabled=bootstrap_node.enabled,
+                enabled=enabled,
                 created_from="bootstrap",
             )
         )

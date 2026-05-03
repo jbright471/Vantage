@@ -23,13 +23,15 @@ Status: shipped.
 
 ## Phase 1.7: Guided Remediation
 
-Status: in progress.
+Status: shipped.
 
 - Add allowlisted actions such as retry poll, acknowledge warning, and disable a known-bad endpoint.
 - Require strict confirmation for any action that changes configured state.
 - Keep host-level service control behind a local node agent rather than the Docker backend container.
 - Shipped first allowlisted action: acknowledge active warnings while preserving durable history.
 - Shipped verified refresh action: retry one node poll and close the action run as `success` or `failed`.
+- Shipped node quarantine action: disable or re-enable a node in Vantage, remove quarantined nodes from routing preference lists, and record the action as `success`.
+- Shipped local endpoint suppression action: disable a known-bad local Ollama endpoint from Diagnostics and skip it during polling and capability checks.
 
 ## Phase 2: Evaluations
 

@@ -127,6 +127,144 @@ describe("NodesPage", () => {
     });
   });
 
+  it("requires confirmation before quarantining a node", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        run_id: "run-quarantine",
+        summary: "Quarantine node bastet applied",
+        status: "success",
+        node_id: "bastet",
+        started_at: "2026-04-22T12:00:00Z",
+        ended_at: "2026-04-22T12:00:01Z",
+        duration_ms: 1000,
+        idempotency_key: "quarantine-bastet",
+        metadata_json: {
+          previous_enabled: true,
+          requested_enabled: false,
+          removed_from_routing_rules: ["batch-default"],
+        },
+      }),
+    } as Response);
+
+    render(
+      <NodesPage
+        nodes={[
+          {
+            node_id: "bastet",
+            base_url: "http://192.168.50.209:9110",
+            display_name: "Bastet",
+            observed_status: "healthy",
+            freshness: "live",
+            last_seen_at: "2026-04-22T12:00:00Z",
+            gpu_stats: [],
+            cpu_usage_percent: null,
+            memory_used_mb: null,
+            ollama_status: "ok",
+            ollama_errors: [],
+            model_count: 0,
+            enabled: true,
+          },
+        ]}
+        runs={[]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /quarantine node/i }));
+
+    expect(screen.getByRole("dialog", { name: /confirm node quarantine/i })).toBeTruthy();
+    expect(screen.getByText(/host services are not stopped/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /confirm quarantine/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/bastet quarantined/i)).toBeTruthy();
+    });
+
+    expect(screen.getByText("disabled")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /re-enable node/i })).toBeTruthy();
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/actions/nodes/bastet/enabled", {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ enabled: false }),
+    });
+  });
+
+  it("requires confirmation before disabling a failing local Ollama endpoint", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        run_id: "run-endpoint",
+        summary: "Disable local Ollama endpoint http://127.0.0.1:11435 applied",
+        status: "success",
+        node_id: "jedi",
+        started_at: "2026-04-22T12:00:00Z",
+        ended_at: "2026-04-22T12:00:01Z",
+        duration_ms: 1000,
+        idempotency_key: "endpoint-jedi",
+        metadata_json: {
+          endpoint_url: "http://127.0.0.1:11435",
+          requested_disabled: true,
+        },
+      }),
+    } as Response);
+
+    render(
+      <NodesPage
+        nodes={[
+          {
+            node_id: "jedi",
+            base_url: "http://127.0.0.1:8000",
+            display_name: "Jedi",
+            observed_status: "degraded",
+            freshness: "live",
+            last_seen_at: "2026-04-22T12:00:00Z",
+            gpu_stats: [],
+            cpu_usage_percent: null,
+            memory_used_mb: null,
+            ollama_status: "error",
+            ollama_errors: [
+              {
+                base_url: "http://127.0.0.1:11435",
+                error: "Connection refused",
+              },
+            ],
+            model_count: 4,
+            role: "primary",
+          },
+        ]}
+        runs={[]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /diagnose/i }));
+    fireEvent.click(screen.getByRole("button", { name: /disable endpoint/i }));
+
+    expect(screen.getByRole("dialog", { name: /confirm endpoint disable/i })).toBeTruthy();
+    expect(screen.getByText(/ollama service itself is not stopped/i)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /confirm disable endpoint/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/endpoint disabled/i)).toBeTruthy();
+    });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/actions/nodes/jedi/local-ollama-endpoint", {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        endpoint_url: "http://127.0.0.1:11435",
+        disabled: true,
+      }),
+    });
+  });
+
   it("renders the remote focus panel with bastet telemetry and recent runs", () => {
     render(
       <NodesPage

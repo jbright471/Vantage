@@ -17,6 +17,15 @@ type DiagnosticNode = Pick<
 type NodeDiagnosticsDrawerProps = {
   node: DiagnosticNode;
   onClose: () => void;
+  onDisableEndpoint?: (nodeId: string, endpointUrl: string) => void;
+  endpointActionState?: Record<
+    string,
+    {
+      phase: "idle" | "submitting" | "submitted" | "error";
+      status?: string;
+      message?: string;
+    }
+  >;
 };
 
 function formatTimestamp(value: string | null): string {
@@ -59,7 +68,7 @@ function remediationForError(error: OllamaErrorRecord): string[] {
   if (message.includes("connection refused") || message.includes("actively refused")) {
     return [
       `Confirm the service expected at ${endpoint} is running.`,
-      "If the endpoint is no longer intentional, remove it from `local_ollama_base_urls` and restart Vantage.",
+      "If the endpoint is no longer intentional, use Disable endpoint from this drawer or remove it from `local_ollama_base_urls` and restart Vantage.",
       "Use Refresh node after the service or config is corrected.",
     ];
   }
@@ -87,8 +96,14 @@ function remediationForError(error: OllamaErrorRecord): string[] {
   ];
 }
 
-export function NodeDiagnosticsDrawer({ node, onClose }: NodeDiagnosticsDrawerProps) {
+export function NodeDiagnosticsDrawer({
+  node,
+  onClose,
+  onDisableEndpoint,
+  endpointActionState = {},
+}: NodeDiagnosticsDrawerProps) {
   const hasOllamaErrors = node.ollama_errors.length > 0;
+  const canManageLocalEndpoints = node.role !== "remote";
   const suggestedSteps = hasOllamaErrors
     ? node.ollama_errors.flatMap(remediationForError)
     : [
@@ -155,6 +170,31 @@ export function NodeDiagnosticsDrawer({ node, onClose }: NodeDiagnosticsDrawerPr
                   <article key={`${error.base_url ?? error.source ?? "error"}-${index}`} className="diagnostic-error">
                     <strong>{error.base_url ?? error.source ?? "unknown source"}</strong>
                     <p>{error.error}</p>
+                    {canManageLocalEndpoints && error.base_url && onDisableEndpoint ? (
+                      <div className="diagnostic-action-row">
+                        <button
+                          type="button"
+                          className="action-button is-override"
+                          disabled={endpointActionState[error.base_url]?.phase === "submitting"}
+                          onClick={() => onDisableEndpoint(node.node_id, error.base_url as string)}
+                        >
+                          {endpointActionState[error.base_url]?.phase === "submitting"
+                            ? "Submitting..."
+                            : "Disable endpoint"}
+                        </button>
+                        {endpointActionState[error.base_url]?.message ? (
+                          <span
+                            className={
+                              endpointActionState[error.base_url]?.phase === "error"
+                                ? "action-copy is-error"
+                                : "action-copy"
+                            }
+                          >
+                            {endpointActionState[error.base_url]?.message}
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </article>
                 ))}
               </div>

@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from backend.app.config import DEFAULT_BOOTSTRAP_CONFIG_PATH, load_bootstrap_config
 from backend.app.db import SessionLocal
 from backend.app.models import Node, Run
+from backend.app.services.endpoint_overrides import filter_enabled_local_ollama_endpoints
 from backend.app.services.state import get_models_state
 
 router = APIRouter()
@@ -59,7 +60,10 @@ def _run_local_capability_check(model_name: str, node_id: str) -> dict:
     started_at = datetime.now(UTC)
     errors: list[dict] = []
 
-    for base_url in config.local_ollama_base_urls:
+    with SessionLocal() as session:
+        base_urls = filter_enabled_local_ollama_endpoints(session, config.local_ollama_base_urls)
+
+    for base_url in base_urls:
         try:
             response = httpx.post(f"{base_url}/api/generate", json=payload, timeout=45.0)
             response.raise_for_status()

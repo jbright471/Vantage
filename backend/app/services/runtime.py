@@ -12,6 +12,7 @@ from backend.app.collectors.remote import BastetClient
 from backend.app.config import BootstrapConfig
 from backend.app.db import SessionLocal
 from backend.app.models import ModelPlacement, Node, NodeSnapshot, Run, WarningRecord
+from backend.app.services.endpoint_overrides import filter_enabled_local_ollama_endpoints
 from backend.app.services.events import EventBroker
 from backend.app.services.polling import classify_health, extract_model_placements, normalize_snapshot
 from backend.app.services.reconciliation import detect_config_drift, resolve_warning_records, upsert_warning_records
@@ -97,7 +98,9 @@ async def collect_remote_snapshot(node: Node, auth_token: str | None = None) -> 
 async def collect_snapshot_for_node(node: Node, config: BootstrapConfig) -> dict:
     if node.role == "remote":
         return await collect_remote_snapshot(node, auth_token=resolve_agent_auth_token(config))
-    return await asyncio.to_thread(collect_local_snapshot, node.node_id, config.local_ollama_base_urls)
+    with SessionLocal() as session:
+        enabled_urls = filter_enabled_local_ollama_endpoints(session, config.local_ollama_base_urls)
+    return await asyncio.to_thread(collect_local_snapshot, node.node_id, enabled_urls)
 
 
 def persist_node_observation(session, node: Node, raw_snapshot: dict) -> dict:

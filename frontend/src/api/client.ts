@@ -277,6 +277,46 @@ export async function submitRefreshNode(nodeId: string): Promise<ActionRunRecord
   return (await response.json()) as ActionRunRecord;
 }
 
+export async function setNodeEnabled(nodeId: string, enabled: boolean): Promise<ActionRunRecord> {
+  const response = await fetch(`/api/actions/nodes/${encodeURIComponent(nodeId)}/enabled`, {
+    method: "PATCH",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ enabled }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Node ${enabled ? "re-enable" : "quarantine"} failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as ActionRunRecord;
+}
+
+export async function setLocalOllamaEndpointDisabled(
+  nodeId: string,
+  endpointUrl: string,
+  disabled: boolean,
+): Promise<ActionRunRecord> {
+  const response = await fetch(`/api/actions/nodes/${encodeURIComponent(nodeId)}/local-ollama-endpoint`, {
+    method: "PATCH",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      endpoint_url: endpointUrl,
+      disabled,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Local Ollama endpoint update failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as ActionRunRecord;
+}
 
 export async function submitCapabilityCheck(modelName: string, nodeId: string): Promise<RunRecord> {
   const response = await fetch("/api/models/capability-check", {

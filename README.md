@@ -26,6 +26,8 @@ Vantage exists to make that state visible and actionable without taking ownershi
 - Heartbeat freshness meters with visual decay
 - Node diagnostics with observed errors and suggested remediation
 - Verified node refresh remediation with durable action results
+- Node quarantine and re-enable actions with strict confirmation
+- Local Ollama endpoint disable actions for known-bad endpoints
 - Warning acknowledgement with durable audit records
 - GPU telemetry from remote Linux workers
 - Merged model inventory across nodes

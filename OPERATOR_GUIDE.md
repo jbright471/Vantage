@@ -94,6 +94,10 @@ For remote workers such as example node `bastet`, the Remote Focus section shows
 
 Use `Refresh node` when you want Vantage to retry one collector pass for that node. The action creates a durable Run record and closes as `success` when Vantage verifies a fresh observation, or `failed` when the collector cannot complete. `submitted_unverified` remains reserved for actions that have been accepted but not independently confirmed.
 
+Use `Quarantine node` when a node should stop receiving work while you investigate. Quarantine writes a runtime enabled-state override, disables the node in Vantage's configured registry, stops normal polling for that node, removes it from routing preference lists, and creates a durable `Run`. It does not stop Ollama, the remote agent, Docker containers, or any host-level service. Use `Re-enable node` when the host is ready to be observed again; routing preferences are not restored automatically.
+
+Use `Disable endpoint` from Diagnostics when a local Ollama base URL is known bad or intentionally retired. Vantage writes a runtime endpoint override, skips that URL during local polling and capability checks, and creates a durable `Run`. This does not stop the Ollama service or edit `config/vantage.bootstrap.toml`. Remote worker endpoints must still be managed by the remote agent or host configuration.
+
 Use `Diagnose` when a node is degraded, stale, unreachable, or has observed subsystem errors. The diagnostics drawer explains the primary issue from current observed state, lists endpoint-level failures such as Ollama connection errors, and provides suggested remediation steps. Diagnostics do not mutate configuration or restart services; they are the safe bridge between visibility and future allowlisted remediation actions.
 
 ### Runs
@@ -192,6 +196,31 @@ Interpretation guide:
 10. Monitor Runs and Nodes after the change to confirm the new preference does not push work toward a stale or overloaded node.
 
 Safe operating rule: never promote a node that is stale, unreachable, missing the target model, or showing unhealthy GPU/agent telemetry unless you are intentionally testing failure behavior.
+
+### Quarantine a Problem Node
+
+1. Open the Nodes dashboard.
+2. Open `Diagnose` and confirm the issue is node-specific.
+3. Click `Quarantine node`.
+4. Read the confirmation modal. The action changes runtime-managed configured state and removes the node from routing preference lists.
+5. Click `Confirm quarantine` only if the node should stop receiving new work.
+6. Open Runs and verify the quarantine action closed as `success`.
+7. Investigate or repair the host outside Vantage.
+8. When ready, click `Re-enable node`.
+9. Wait for the node to become `LIVE`.
+10. Re-add the node to routing only after telemetry and model inventory look correct.
+
+### Disable a Known-Bad Local Ollama Endpoint
+
+1. Open the Nodes dashboard.
+2. Open `Diagnose` on the local control-plane node.
+3. Review the observed endpoint error and confirm the endpoint is known bad or intentionally retired.
+4. Click `Disable endpoint`.
+5. Read the confirmation modal. This action changes runtime-managed collection behavior but does not stop Ollama.
+6. Click `Confirm disable endpoint`.
+7. Open Runs and verify the endpoint action closed as `success`.
+8. Use `Refresh node` to verify the node can collect without the disabled endpoint.
+9. Edit `config/vantage.bootstrap.toml` later if the endpoint should be permanently removed from bootstrap config.
 
 ### Add a New Remote Worker Node
 
