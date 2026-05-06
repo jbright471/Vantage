@@ -96,7 +96,7 @@ Use `Refresh node` when you want Vantage to retry one collector pass for that no
 
 Use `Quarantine node` when a node should stop receiving work while you investigate. Quarantine writes a runtime enabled-state override, disables the node in Vantage's configured registry, stops normal polling for that node, removes it from routing preference lists, and creates a durable `Run`. It does not stop Ollama, the remote agent, Docker containers, or any host-level service. Use `Re-enable node` when the host is ready to be observed again; routing preferences are not restored automatically.
 
-Use `Disable endpoint` from Diagnostics when a local Ollama base URL is known bad or intentionally retired. Vantage writes a runtime endpoint override, skips that URL during local polling and capability checks, and creates a durable `Run`. This does not stop the Ollama service or edit `config/vantage.bootstrap.toml`. Remote worker endpoints must still be managed by the remote agent or host configuration.
+Use `Disable endpoint` from Diagnostics when a local Ollama base URL is known bad or intentionally retired. Vantage writes a runtime endpoint override, skips that URL during local polling, capability checks, and eval execution, and creates a durable `Run`. This does not stop the Ollama service or edit `config/vantage.bootstrap.toml`. Remote worker endpoints must still be managed by the remote agent or host configuration.
 
 Use `Diagnose` when a node is degraded, stale, unreachable, or has observed subsystem errors. The diagnostics drawer explains the primary issue from current observed state, lists endpoint-level failures such as Ollama connection errors, and provides suggested remediation steps. Diagnostics do not mutate configuration or restart services; they are the safe bridge between visibility and future allowlisted remediation actions.
 
@@ -157,7 +157,9 @@ Treat eval scores as simple JSON-subset checks. A passing score means the respon
 
 Use `Inspect score` on a recent scored run when you need to see the exact case, target placement, score reason, missing or mismatched expected fields, response preview, and parsed response JSON.
 
-Recurring eval schedules create queued eval attempts when due. Queue-only is the safe default. If `Auto-execute when due` is enabled for a schedule, Vantage immediately executes and scores each due eval case through the normal eval runner. Use auto-execute only for trusted suites and placements because it will trigger real model calls on the configured interval.
+Recurring eval schedules create queued eval attempts when due. Queue-only is the safe default. Use `Queue now` on an enabled schedule when you want to run the schedule immediately without waiting for the next due time. Manual queueing creates normal eval `Run` records, records `last_queued_at`, and does not advance `next_run_at`.
+
+If `Auto-execute when due` is enabled for a schedule, Vantage immediately executes and scores each due eval case through the normal eval runner. Use auto-execute only for trusted suites and placements because it will trigger real model calls on the configured interval.
 
 If an auto-executed schedule produces failed eval runs, Vantage creates an active `eval_schedule_failure` warning so the issue appears in the normal operator attention lane. A later clean scheduled execution resolves that warning automatically.
 
@@ -221,6 +223,17 @@ Safe operating rule: never promote a node that is stale, unreachable, missing th
 7. Open Runs and verify the endpoint action closed as `success`.
 8. Use `Refresh node` to verify the node can collect without the disabled endpoint.
 9. Edit `config/vantage.bootstrap.toml` later if the endpoint should be permanently removed from bootstrap config.
+
+### Manually Queue an Eval Schedule
+
+1. Open Eval Lab.
+2. Create or locate an enabled recurring eval schedule.
+3. Confirm the suite, target model, target node, interval, and mode are correct.
+4. Click `Queue now`.
+5. Verify the schedule row shows a `Last queued` timestamp.
+6. Review Recent queued attempts for the new eval `Run` records.
+7. Execute the queued runs manually unless the schedule was intentionally configured for auto-execution.
+8. Check Runs if queueing fails or the eval result needs full metadata review.
 
 ### Add a New Remote Worker Node
 

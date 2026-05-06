@@ -31,7 +31,7 @@ Status: shipped.
 - Shipped first allowlisted action: acknowledge active warnings while preserving durable history.
 - Shipped verified refresh action: retry one node poll and close the action run as `success` or `failed`.
 - Shipped node quarantine action: disable or re-enable a node in Vantage, remove quarantined nodes from routing preference lists, and record the action as `success`.
-- Shipped local endpoint suppression action: disable a known-bad local Ollama endpoint from Diagnostics and skip it during polling and capability checks.
+- Shipped local endpoint suppression action: disable a known-bad local Ollama endpoint from Diagnostics and skip it during polling, capability checks, and eval execution.
 
 ## Phase 2: Evaluations
 
@@ -45,5 +45,6 @@ Status: foundation in progress.
 - Placement comparison views across models and nodes.
 - Case-level failure analysis and score-detail drilldowns.
 - Recurring eval schedules that queue due eval attempts without external task infrastructure.
+- Manual `Queue now` control for enabled eval schedules without advancing the recurring `next_run_at`.
 - Opt-in auto-execution for due eval schedules while keeping queue-only scheduling as the safe default.
 - Eval schedule health warnings that surface failed auto-executions in the operator attention lane.

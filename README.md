@@ -27,7 +27,7 @@ Vantage exists to make that state visible and actionable without taking ownershi
 - Node diagnostics with observed errors and suggested remediation
 - Verified node refresh remediation with durable action results
 - Node quarantine and re-enable actions with strict confirmation
-- Local Ollama endpoint disable actions for known-bad endpoints
+- Local Ollama endpoint disable actions for known-bad endpoints across polling, capability checks, and eval execution
 - Warning acknowledgement with durable audit records
 - GPU telemetry from remote Linux workers
 - Merged model inventory across nodes
@@ -37,7 +37,7 @@ Vantage exists to make that state visible and actionable without taking ownershi
 - Backend-filtered run history with pagination
 - CSV and JSON audit exports for run history
 - Local LLM capability checks from the Models surface
-- Phase 2 Eval Lab foundation for prompt suites, executable eval runs, JSON scoring, placement comparison, case analysis, score drilldowns, recurring eval schedules, and opt-in auto-execution
+- Phase 2 Eval Lab foundation for prompt suites, executable eval runs, JSON scoring, placement comparison, case analysis, score drilldowns, recurring eval schedules, manual schedule queueing, and opt-in auto-execution
 - SSE-based live UI updates
 - SQLite persistence with bounded snapshot pruning
 - Shared-token authentication for node agents

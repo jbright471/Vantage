@@ -114,6 +114,10 @@ export type EvalAttemptRecord = {
   runs: RunRecord[];
 };
 
+export type EvalScheduleQueueRecord = EvalAttemptRecord & {
+  schedule: EvalScheduleRecord | null;
+};
+
 export type EvalScheduleRecord = {
   schedule_id: string;
   suite_id: string;
@@ -471,6 +475,21 @@ export async function updateEvalSchedule(scheduleId: string, payload: { enabled:
   }
 
   return (await response.json()) as EvalScheduleRecord;
+}
+
+export async function queueEvalScheduleNow(scheduleId: string): Promise<EvalScheduleQueueRecord> {
+  const response = await fetch(`/api/evals/schedules/${encodeURIComponent(scheduleId)}/queue-now`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval schedule queue-now failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalScheduleQueueRecord;
 }
 
 export async function createEvalCase(

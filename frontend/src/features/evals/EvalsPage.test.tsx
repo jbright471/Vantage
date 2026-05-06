@@ -329,6 +329,18 @@ describe("EvalsPage", () => {
       last_queued_at: null,
       metadata_json: {},
     };
+    const queuedSchedule = {
+      ...createdSchedule,
+      updated_at: "2026-04-29T12:05:00Z",
+      last_queued_at: "2026-04-29T12:05:00Z",
+      metadata_json: {
+        last_manual_queue: {
+          queued_at: "2026-04-29T12:05:00Z",
+          run_count: 1,
+          run_ids: ["schedule-run-1"],
+        },
+      },
+    };
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
       if (url === "/api/evals/score-history") {
@@ -341,6 +353,38 @@ describe("EvalsPage", () => {
         return {
           ok: true,
           json: async () => createdSchedule,
+        } as Response;
+      }
+      if (url === "/api/evals/schedules/schedule-1/queue-now") {
+        return {
+          ok: true,
+          json: async () => ({
+            attempt_id: "attempt-schedule-1",
+            suite_id: "suite-1",
+            suite_name: "Reasoning Smoke",
+            model_name: "llama3.2:latest",
+            node_id: "jedi",
+            run_count: 1,
+            runs: [
+              {
+                run_id: "schedule-run-1",
+                summary: "Queued eval case 'JSON Answer' for llama3.2:latest on jedi",
+                status: "queued",
+                source_type: "eval",
+                detail_type: "eval_attempt",
+                node_id: "jedi",
+                model_name: "llama3.2:latest",
+                action_type: "eval",
+                started_at: "2026-04-29T12:05:00Z",
+                metadata_json: {
+                  attempt_id: "attempt-schedule-1",
+                  trigger: "schedule_manual",
+                  schedule_id: "schedule-1",
+                },
+              },
+            ],
+            schedule: queuedSchedule,
+          }),
         } as Response;
       }
       if (url === "/api/evals/schedules") {
@@ -390,5 +434,20 @@ describe("EvalsPage", () => {
     expect(screen.getByText("Auto-execute")).toBeTruthy();
     expect(screen.getByText(/Next queue:/)).toBeTruthy();
     expect(screen.getByText(/8:30/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /^queue now$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/1 run queued for llama3.2:latest on jedi/i)).toBeTruthy();
+    });
+    expect(screen.getByText(/Last queued:/)).toBeTruthy();
+    expect(screen.getAllByText(/8:05/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Queued eval case 'JSON Answer'/)).toBeTruthy();
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/evals/schedules/schedule-1/queue-now", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+      },
+    });
   });
 });

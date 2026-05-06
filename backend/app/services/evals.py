@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.config import BootstrapConfig
 from backend.app.models import EvalCase, EvalSuite, Node, Run
+from backend.app.services.endpoint_overrides import filter_enabled_local_ollama_endpoints
 
 
 def queue_eval_case_runs(
@@ -231,7 +232,7 @@ def execute_eval_run(
             score = agent_score if isinstance(agent_score, dict) else score_expected_json(response_text, expected_json)
             agent_run_id = body.get("run_id")
         else:
-            response_text = _run_local_eval(payload, config)
+            response_text = _run_local_eval(session, payload, config)
             score = score_expected_json(response_text, expected_json)
             agent_run_id = None
 
@@ -260,9 +261,13 @@ def execute_eval_run(
         return run
 
 
-def _run_local_eval(payload: dict[str, Any], config: BootstrapConfig) -> str:
+def _run_local_eval(session: Session, payload: dict[str, Any], config: BootstrapConfig) -> str:
     errors: list[dict[str, str]] = []
-    for base_url in config.local_ollama_base_urls:
+    base_urls = filter_enabled_local_ollama_endpoints(session, config.local_ollama_base_urls)
+    if not base_urls:
+        raise RuntimeError("No enabled local Ollama endpoints are available for eval execution")
+
+    for base_url in base_urls:
         try:
             response = httpx.post(f"{base_url}/api/generate", json=payload, timeout=90.0)
             response.raise_for_status()

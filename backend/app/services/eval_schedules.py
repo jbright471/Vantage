@@ -87,6 +87,43 @@ def update_eval_schedule(
     return schedule
 
 
+def queue_eval_schedule_now(session: Session, schedule_id: str, *, now: datetime | None = None) -> dict[str, Any]:
+    current_time = now or datetime.now(UTC)
+    schedule = session.get(EvalSchedule, schedule_id)
+    if schedule is None:
+        raise ValueError(f"Unknown eval schedule '{schedule_id}'")
+    if not schedule.enabled:
+        raise ValueError(f"Eval schedule '{schedule_id}' is disabled")
+
+    suite, cases = _load_schedule_target(
+        session,
+        suite_id=schedule.suite_id,
+        model_name=schedule.model_name,
+        node_id=schedule.node_id,
+    )
+    result = queue_eval_case_runs(
+        session,
+        suite=suite,
+        cases=cases,
+        model_name=schedule.model_name,
+        node_id=schedule.node_id,
+        trigger="schedule_manual",
+        schedule_id=schedule.schedule_id,
+        started_at=current_time,
+    )
+    schedule.last_queued_at = current_time
+    schedule.updated_at = current_time
+    schedule.metadata_json = {
+        **(schedule.metadata_json or {}),
+        "last_manual_queue": {
+            "queued_at": current_time.isoformat(),
+            "run_count": result["run_count"],
+            "run_ids": [run.run_id for run in result["runs"]],
+        },
+    }
+    return result
+
+
 def queue_due_eval_schedules(session: Session, *, now: datetime | None = None) -> dict[str, int]:
     current_time = now or datetime.now(UTC)
     schedules = session.scalars(

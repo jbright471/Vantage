@@ -269,6 +269,97 @@ def test_create_eval_schedule_and_list_it() -> None:
     assert any(schedule["schedule_id"] == created["schedule_id"] for schedule in list_response.json())
 
 
+def test_queue_eval_schedule_now_creates_runs_without_advancing_next_run() -> None:
+    model_name = "schedule-queue-now-test-model:latest"
+    with TestClient(app) as client:
+        suite_response = client.post(
+            "/api/evals/suites",
+            json={"name": "Queue Now Suite", "description": "Manual schedule queueing"},
+        )
+        suite = suite_response.json()
+        client.post(
+            f"/api/evals/suites/{suite['suite_id']}/cases",
+            json={"name": "Queue Now Case", "prompt": "Return JSON.", "expected_json": {"ok": True}},
+        )
+
+        with SessionLocal() as session:
+            session.add(
+                ModelPlacement(
+                    node_id="jedi",
+                    model_name=model_name,
+                    model_digest="sha256:queue-now",
+                    available=True,
+                    last_seen_at=datetime.now(UTC),
+                )
+            )
+            session.commit()
+
+        create_response = client.post(
+            "/api/evals/schedules",
+            json={
+                "suite_id": suite["suite_id"],
+                "model_name": model_name,
+                "node_id": "jedi",
+                "interval_minutes": 30,
+                "enabled": True,
+                "auto_execute": False,
+            },
+        )
+        schedule = create_response.json()
+        response = client.post(f"/api/evals/schedules/{schedule['schedule_id']}/queue-now")
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["run_count"] == 1
+    assert payload["schedule"]["next_run_at"] == schedule["next_run_at"]
+    assert payload["schedule"]["last_queued_at"] is not None
+    assert payload["runs"][0]["metadata_json"]["trigger"] == "schedule_manual"
+    assert payload["runs"][0]["metadata_json"]["schedule_id"] == schedule["schedule_id"]
+
+
+def test_queue_eval_schedule_now_rejects_disabled_schedule() -> None:
+    model_name = "schedule-disabled-queue-now-test-model:latest"
+    with TestClient(app) as client:
+        suite_response = client.post(
+            "/api/evals/suites",
+            json={"name": "Disabled Queue Now Suite", "description": "Disabled schedule queueing"},
+        )
+        suite = suite_response.json()
+        client.post(
+            f"/api/evals/suites/{suite['suite_id']}/cases",
+            json={"name": "Disabled Case", "prompt": "Return JSON.", "expected_json": {"ok": True}},
+        )
+
+        with SessionLocal() as session:
+            session.add(
+                ModelPlacement(
+                    node_id="jedi",
+                    model_name=model_name,
+                    model_digest="sha256:queue-now-disabled",
+                    available=True,
+                    last_seen_at=datetime.now(UTC),
+                )
+            )
+            session.commit()
+
+        create_response = client.post(
+            "/api/evals/schedules",
+            json={
+                "suite_id": suite["suite_id"],
+                "model_name": model_name,
+                "node_id": "jedi",
+                "interval_minutes": 30,
+                "enabled": False,
+                "auto_execute": False,
+            },
+        )
+        schedule = create_response.json()
+        response = client.post(f"/api/evals/schedules/{schedule['schedule_id']}/queue-now")
+
+    assert response.status_code == 409
+    assert "disabled" in response.json()["detail"].lower()
+
+
 def test_due_eval_schedule_queues_runs_and_advances_next_run() -> None:
     model_name = "schedule-service-test-model:latest"
     now = datetime.now(UTC)

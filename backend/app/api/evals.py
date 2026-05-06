@@ -9,10 +9,11 @@ from sqlalchemy import func, select
 from backend.app.api.models import _agent_auth_headers
 from backend.app.config import DEFAULT_BOOTSTRAP_CONFIG_PATH, load_bootstrap_config
 from backend.app.db import SessionLocal
-from backend.app.models import EvalCase, EvalSuite, ModelPlacement, Node, Run
+from backend.app.models import EvalCase, EvalSchedule, EvalSuite, ModelPlacement, Node, Run
 from backend.app.services.eval_schedules import (
     create_eval_schedule,
     list_eval_schedules,
+    queue_eval_schedule_now,
     serialize_eval_schedule,
     update_eval_schedule,
 )
@@ -144,6 +145,30 @@ def update_schedule(schedule_id: str, payload: EvalScheduleUpdate) -> dict:
         session.commit()
         suite = session.get(EvalSuite, schedule.suite_id)
         return serialize_eval_schedule(schedule, suite.name if suite else None)
+
+
+@router.post("/evals/schedules/{schedule_id}/queue-now", status_code=201)
+def queue_schedule_now(schedule_id: str) -> dict:
+    with SessionLocal() as session:
+        try:
+            result = queue_eval_schedule_now(session, schedule_id)
+        except ValueError as exc:
+            message = str(exc)
+            status_code = 404 if message.startswith("Unknown eval schedule") else 409
+            raise HTTPException(status_code=status_code, detail=message) from exc
+        session.commit()
+        schedule = session.get(EvalSchedule, schedule_id)
+        suite = session.get(EvalSuite, result["suite_id"])
+        return {
+            "attempt_id": result["attempt_id"],
+            "suite_id": result["suite_id"],
+            "suite_name": result["suite_name"],
+            "model_name": result["model_name"],
+            "node_id": result["node_id"],
+            "run_count": result["run_count"],
+            "runs": [serialize_run(run) for run in result["runs"]],
+            "schedule": serialize_eval_schedule(schedule, suite.name if suite else None) if schedule else None,
+        }
 
 
 @router.post("/evals/suites", status_code=201)

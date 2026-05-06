@@ -9,6 +9,7 @@ import {
   fetchEvalScoreHistory,
   fetchEvalSuites,
   queueEvalAttempt,
+  queueEvalScheduleNow,
   updateEvalSchedule,
   type EvalAttemptRecord,
   type EvalScheduleRecord,
@@ -73,6 +74,9 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
   const [selectedScoreRun, setSelectedScoreRun] = useState<EvalScoreRunRecord | null>(null);
   const [queuedEvalRuns, setQueuedEvalRuns] = useState<RunRecord[]>([]);
   const [executionStateByRun, setExecutionStateByRun] = useState<Record<string, "idle" | "running" | "error">>({});
+  const [scheduleQueueStateById, setScheduleQueueStateById] = useState<Record<string, "idle" | "queueing" | "error">>(
+    {},
+  );
   const [mutationState, setMutationState] = useState<"idle" | "saving" | "error">("idle");
 
   useEffect(() => {
@@ -285,6 +289,33 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
     } catch (error) {
       setMutationState("error");
       setErrorMessage(error instanceof Error ? error.message : "Eval schedule update failed.");
+    }
+  }
+
+  async function handleQueueScheduleNow(schedule: EvalScheduleRecord) {
+    if (!schedule.enabled) {
+      return;
+    }
+
+    setMutationState("saving");
+    setErrorMessage(null);
+    setScheduleQueueStateById((current) => ({ ...current, [schedule.schedule_id]: "queueing" }));
+
+    try {
+      const result = await queueEvalScheduleNow(schedule.schedule_id);
+      setAttemptResult(result);
+      setQueuedEvalRuns((current) => dedupeRuns([...result.runs, ...current]));
+      if (result.schedule) {
+        setSchedules((current) =>
+          current.map((item) => (item.schedule_id === result.schedule?.schedule_id ? result.schedule : item)),
+        );
+      }
+      setScheduleQueueStateById((current) => ({ ...current, [schedule.schedule_id]: "idle" }));
+      setMutationState("idle");
+    } catch (error) {
+      setScheduleQueueStateById((current) => ({ ...current, [schedule.schedule_id]: "error" }));
+      setMutationState("error");
+      setErrorMessage(error instanceof Error ? error.message : "Eval schedule queue-now failed.");
     }
   }
 
@@ -599,21 +630,45 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
                     </td>
                     <td>Every {schedule.interval_minutes} min</td>
                     <td>{schedule.auto_execute ? "Auto-execute" : "Queue only"}</td>
-                    <td>Next queue: {formatTimestamp(schedule.next_run_at)}</td>
+                    <td>
+                      <div className="placement-stack">
+                        <span>Next queue: {formatTimestamp(schedule.next_run_at)}</span>
+                        {schedule.last_queued_at ? (
+                          <span className="meta-chip">Last queued: {formatTimestamp(schedule.last_queued_at)}</span>
+                        ) : null}
+                      </div>
+                    </td>
                     <td>
                       <span className={`status-chip is-${schedule.enabled ? "success" : "queued"}`}>
                         {schedule.enabled ? "enabled" : "paused"}
                       </span>
                     </td>
                     <td>
-                      <button
-                        type="button"
-                        className="text-action-button"
-                        disabled={mutationState === "saving"}
-                        onClick={() => void handleToggleSchedule(schedule)}
-                      >
-                        {schedule.enabled ? "Pause" : "Resume"}
-                      </button>
+                      <div className="button-row">
+                        <button
+                          type="button"
+                          className="text-action-button"
+                          disabled={mutationState === "saving"}
+                          onClick={() => void handleToggleSchedule(schedule)}
+                        >
+                          {schedule.enabled ? "Pause" : "Resume"}
+                        </button>
+                        <button
+                          type="button"
+                          className="text-action-button"
+                          disabled={
+                            !schedule.enabled ||
+                            mutationState === "saving" ||
+                            scheduleQueueStateById[schedule.schedule_id] === "queueing"
+                          }
+                          onClick={() => void handleQueueScheduleNow(schedule)}
+                        >
+                          {scheduleQueueStateById[schedule.schedule_id] === "queueing" ? "Queueing..." : "Queue now"}
+                        </button>
+                      </div>
+                      {scheduleQueueStateById[schedule.schedule_id] === "error" ? (
+                        <p className="action-copy is-error">Queue now failed. Check the API response.</p>
+                      ) : null}
                     </td>
                   </tr>
                 ))}
