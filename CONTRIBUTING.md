@@ -49,6 +49,13 @@ Use the existing FastAPI and SQLAlchemy structure:
 
 When changing persistence behavior, add focused tests under `tests/backend/`.
 
+Schema changes must include an Alembic migration under `migrations/versions/`. Generate the draft, review it, and run it against a disposable SQLite database before committing:
+
+```powershell
+python -m alembic revision --autogenerate -m "describe schema change"
+python -m alembic upgrade head
+```
+
 When changing polling, state derivation, or pruning, verify:
 
 ```powershell
@@ -101,11 +108,36 @@ npm run test -- --run
 npm run build
 ```
 
+## Deployment And Release Changes
+
+Production packaging files include:
+
+- [docker-compose.prod.yml](./docker-compose.prod.yml)
+- [Dockerfile.backend.prod](./Dockerfile.backend.prod)
+- [frontend/Dockerfile.prod](./frontend/Dockerfile.prod)
+- [frontend/nginx.conf](./frontend/nginx.conf)
+- [scripts/check-setup.ps1](./scripts/check-setup.ps1)
+- [scripts/build-release.ps1](./scripts/build-release.ps1)
+- [deploy/agent/](./deploy/agent)
+- [.github/workflows/release.yml](./.github/workflows/release.yml)
+
+When changing deployment behavior, update [OPERATIONS.md](./OPERATIONS.md), [PORTAINER.md](./PORTAINER.md), [RELEASE.md](./RELEASE.md), and [SECURITY.md](./SECURITY.md) as needed.
+
+Verify production packaging:
+
+```powershell
+$env:VANTAGE_AGENT_SHARED_TOKEN = "setup-check-placeholder-token"
+docker compose -f docker-compose.prod.yml config --quiet
+.\scripts\check-setup.ps1 -ComposeFile docker-compose.prod.yml
+.\scripts\build-release.ps1 -Version dev-check
+```
+
 ## Pull Request Checklist
 
 - Tests pass.
 - Frontend build passes when UI code changes.
 - Docs are updated when contracts, deployment, or security behavior changes.
+- The in-app Operator Guide remains current when operator workflows change.
 - New actions create auditable `Run` records.
 - New node observations preserve freshness and last-known-state semantics.
 - Secrets are not committed.

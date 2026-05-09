@@ -32,16 +32,23 @@ Vantage exists to make that state visible and actionable without taking ownershi
 - GPU telemetry from remote Linux workers
 - Merged model inventory across nodes
 - Model placement details with Ollama digests
-- Operator-editable routing preference order with strict override confirmation
+- Operator-editable routing policy lanes with model-specific rules, dry-run simulation, failover flags, route history, and strict override confirmation
 - Remote run ingestion from node agents
 - Backend-filtered run history with pagination
 - CSV and JSON audit exports for run history
 - Local LLM capability checks from the Models surface
-- Phase 2 Eval Lab foundation for prompt suites, executable eval runs, JSON scoring, placement comparison, case analysis, score drilldowns, recurring eval schedules, manual schedule queueing, and opt-in auto-execution
+- Eval Lab for prompt suites, executable eval runs, richer score types, placement comparison, baseline regression checks, configurable intelligence windows, saved local scope presets, trend summaries, flakiness detection, failure clustering, manual local-LLM assisted summaries, recurring schedules, suite import/export, lifecycle cleanup, and opt-in auto-execution
 - SSE-based live UI updates
 - SQLite persistence with bounded snapshot pruning
 - Shared-token authentication for node agents
+- Deployment health endpoints for liveness and readiness checks
+- Structured JSON backend logs for container and service supervisors
 - Docker Compose development environment
+- Production Compose profile with Alembic migrations and persisted SQLite volume
+- Portainer deployment guide, setup checker, bounded Docker log rotation, and SQLite backup/restore guidance
+- First-class GitHub release bundle workflow with SHA256 checksums
+- Optional local node-agent boundary for future host-level remediation
+- Generic systemd installer for remote Linux agents
 
 ## Quick Start
 
@@ -57,13 +64,23 @@ Open:
 
 - UI: [http://127.0.0.1:5173](http://127.0.0.1:5173)
 - Backend API: [http://127.0.0.1:8000](http://127.0.0.1:8000)
+- Backend readiness: [http://127.0.0.1:8000/api/health/ready](http://127.0.0.1:8000/api/health/ready)
 
 Useful commands:
 
 ```powershell
 docker compose ps
 docker compose logs -f
+Invoke-RestMethod http://127.0.0.1:8000/api/health/ready
 docker compose down
+```
+
+Production-style Compose:
+
+```powershell
+$env:VANTAGE_AGENT_SHARED_TOKEN = python -c "import secrets; print(secrets.token_urlsafe(48))"
+docker compose -f docker-compose.prod.yml up --build -d
+Invoke-RestMethod http://127.0.0.1:8000/api/health/ready
 ```
 
 ## Configuration
@@ -84,6 +101,8 @@ Primary bootstrap config lives at [config/vantage.bootstrap.toml](./config/vanta
 
 Local secrets belong in `.env`, which is ignored by git. See [.env.example](./.env.example).
 
+Production secrets belong in `.env.production`, which is also ignored by git. See [.env.production.example](./.env.production.example). Public-safe bootstrap defaults live at [config/vantage.bootstrap.example.toml](./config/vantage.bootstrap.example.toml).
+
 ## Documentation
 
 - [Architecture](./ARCHITECTURE.md)
@@ -91,12 +110,15 @@ Local secrets belong in `.env`, which is ignored by git. See [.env.example](./.e
 - [Operator Guide](./OPERATOR_GUIDE.md)
 - [Remote Agent Contract](./AGENT_CONTRACT.md)
 - [Operations](./OPERATIONS.md)
+- [Portainer Deployment](./PORTAINER.md)
+- [Release Packaging](./RELEASE.md)
+- [Optional Local Node Agent](./LOCAL_NODE_AGENT.md)
 - [Security](./SECURITY.md)
 - [Contributing](./CONTRIBUTING.md)
 
 ## Project Status
 
-Vantage is an active Phase 2 foundation build. The current version is useful for a single local AI operator and is intentionally conservative about distributed control, authentication, and packaging.
+Vantage has shipped Phase 1 through Phase 4: the control-plane foundation, operator attention, diagnostics, guided remediation, Eval Lab, Eval Intelligence, routing-policy control, and production packaging. It is moving into share/sell readiness next. The current version is useful for a single local AI operator and remains intentionally conservative about distributed control, authentication, and host-level remediation.
 
 ## License
 

@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.app.config import BootstrapConfig
 from backend.app.models import AppSetting, Base, Node, Run
-from backend.app.services.evals import build_score_history, execute_eval_run
+from backend.app.services.evals import build_score_history, execute_eval_run, score_eval_response
 
 
 def test_build_score_history_aggregates_eval_runs_by_placement() -> None:
@@ -177,3 +177,25 @@ def test_execute_eval_run_skips_disabled_local_ollama_endpoints(monkeypatch) -> 
         assert updated.status == "success"
 
     assert called_urls == ["http://127.0.0.1:11435/api/generate"]
+
+
+def test_score_eval_response_supports_multiple_score_types() -> None:
+    assert score_eval_response('{"answer": 42}', "json_subset", {"answer": 42}, {})["passed"] is True
+    assert score_eval_response("hello world", "exact_match", {}, {"expected_text": "hello world"})["passed"] is True
+    assert score_eval_response("hello world", "contains", {}, {"expected_text": "world"})["passed"] is True
+    assert score_eval_response("ticket-123", "regex", {}, {"pattern": r"ticket-\d+"})["passed"] is True
+    assert (
+        score_eval_response('{"latency_ms": 750}', "numeric_threshold", {}, {"json_path": "latency_ms", "max": 1000})[
+            "passed"
+        ]
+        is True
+    )
+    assert (
+        score_eval_response(
+            '{"answer": 42, "reason": "ok"}',
+            "json_schema",
+            {},
+            {"required": ["answer"], "properties": {"answer": {"const": 42}}},
+        )["passed"]
+        is True
+    )

@@ -83,7 +83,64 @@ export type RoutingRuleRecord = {
   rule_id: string;
   priority_class: string;
   model_name: string | null;
+  enabled: boolean;
+  allow_degraded: boolean;
+  allow_stale: boolean;
+  allow_unreachable: boolean;
+  minimum_eval_pass_rate: number | null;
   preferred_nodes: string[];
+};
+
+export type RoutingRulePayload = {
+  rule_id: string;
+  priority_class: string;
+  model_name?: string | null;
+  preferred_nodes: string[];
+  enabled?: boolean;
+  allow_degraded?: boolean;
+  allow_stale?: boolean;
+  allow_unreachable?: boolean;
+  minimum_eval_pass_rate?: number | null;
+};
+
+export type RoutingRulePatch = Partial<Omit<RoutingRulePayload, "rule_id">>;
+
+export type RoutingHistoryRecord = {
+  history_id: number;
+  rule_id: string;
+  action_type: string;
+  changed_at: string;
+  summary: string;
+  before_json: Record<string, unknown> | null;
+  after_json: Record<string, unknown> | null;
+};
+
+export type RoutingSimulationDecision = {
+  node_id: string;
+  display_name: string;
+  decision: "selected" | "skipped" | "rejected";
+  observed_status: string;
+  freshness: string;
+  signal_age_seconds: number | null;
+  model_available: boolean | null;
+  eval_pass_rate: number | null;
+  reasons: string[];
+};
+
+export type RoutingSimulationRecord = {
+  rule_id: string;
+  priority_class: string;
+  model_name: string | null;
+  candidate_order: string[];
+  selected_node: string | null;
+  decisions: RoutingSimulationDecision[];
+  warnings: string[];
+  policy?: {
+    allow_degraded: boolean;
+    allow_stale: boolean;
+    allow_unreachable: boolean;
+    minimum_eval_pass_rate: number | null;
+  };
 };
 
 export type EvalCaseRecord = {
@@ -91,6 +148,8 @@ export type EvalCaseRecord = {
   name: string;
   prompt: string;
   expected_json: Record<string, unknown>;
+  score_type: string;
+  score_config_json: Record<string, unknown>;
   sort_order: number;
 };
 
@@ -111,6 +170,12 @@ export type EvalAttemptRecord = {
   model_name: string;
   node_id: string;
   run_count: number;
+  runs: RunRecord[];
+};
+
+export type EvalBatchExecuteRecord = {
+  attempt_id: string;
+  runs_executed: number;
   runs: RunRecord[];
 };
 
@@ -165,6 +230,60 @@ export type EvalScoreRunRecord = {
   response_json?: unknown;
   started_at: string;
   duration_ms: number | null;
+  score_type?: string;
+  model_digest?: string | null;
+};
+
+export type EvalRegressionRecord = {
+  suite_id: string;
+  suite_name: string;
+  model_name: string;
+  node_id: string;
+  minimum_pass_rate: number;
+  current_pass_rate: number;
+};
+
+export type EvalTrendRecord = {
+  bucket: string;
+  model_name: string;
+  node_id: string;
+  run_count: number;
+  passed_count: number;
+  failed_count: number;
+  pass_rate: number;
+  avg_duration_ms: number | null;
+};
+
+export type EvalFailureClusterRecord = {
+  reason: string;
+  missing_or_mismatched: string[];
+  run_count: number;
+  latest_started_at: string | null;
+  example_case: string;
+  example_suite: string;
+};
+
+export type EvalHistoryQuery = {
+  window_days?: number;
+  model_name?: string | null;
+  node_id?: string | null;
+  flakiness_min_rate?: number;
+  failure_cluster_min_count?: number;
+  recent_limit?: number;
+};
+
+export type EvalScheduleHealthRecord = {
+  schedule_id: string;
+  suite_id: string;
+  model_name: string;
+  node_id: string;
+  enabled: boolean;
+  auto_execute: boolean;
+  next_run_at: string;
+  last_queued_at: string | null;
+  last_runs_executed: number;
+  last_runs_failed: number;
+  status: string;
 };
 
 export type EvalScoreHistoryRecord = {
@@ -173,6 +292,28 @@ export type EvalScoreHistoryRecord = {
   suites: EvalScoreAggregate[];
   cases: EvalScoreAggregate[];
   recent_runs: EvalScoreRunRecord[];
+  regressions?: EvalRegressionRecord[];
+  trends?: EvalTrendRecord[];
+  flaky_cases?: (EvalScoreAggregate & { flakiness_rate: number })[];
+  failure_clusters?: EvalFailureClusterRecord[];
+  model_reports?: EvalScoreAggregate[];
+  schedule_health?: EvalScheduleHealthRecord[];
+  filters?: {
+    window_days: number;
+    model_name: string | null;
+    node_id: string | null;
+    recent_limit: number;
+  };
+  thresholds?: {
+    flakiness_min_rate: number;
+    failure_cluster_min_count: number;
+  };
+  operator_summary?: {
+    headline: string;
+    regression_count: number;
+    flaky_case_count: number;
+    failure_cluster_count: number;
+  };
 };
 
 export type WarningRecord = {
@@ -238,6 +379,35 @@ function buildRunsSearchParams(query: RunsQuery): URLSearchParams {
     params.set("offset", String(query.offset));
   }
   return params;
+}
+
+function buildEvalHistorySearchParams(query: EvalHistoryQuery = {}): URLSearchParams {
+  const params = new URLSearchParams();
+  if (query.window_days && query.window_days !== 30) {
+    params.set("window_days", String(query.window_days));
+  }
+  if (query.model_name) {
+    params.set("model_name", query.model_name);
+  }
+  if (query.node_id) {
+    params.set("node_id", query.node_id);
+  }
+  if (query.flakiness_min_rate !== undefined && query.flakiness_min_rate !== 0.2) {
+    params.set("flakiness_min_rate", String(query.flakiness_min_rate));
+  }
+  if (query.failure_cluster_min_count !== undefined && query.failure_cluster_min_count !== 2) {
+    params.set("failure_cluster_min_count", String(query.failure_cluster_min_count));
+  }
+  if (query.recent_limit && query.recent_limit !== 20) {
+    params.set("recent_limit", String(query.recent_limit));
+  }
+  return params;
+}
+
+export function buildEvalHistoryExportUrl(format: "csv" | "json", query: EvalHistoryQuery = {}): string {
+  const params = buildEvalHistorySearchParams(query);
+  const suffix = params.toString();
+  return `/api/evals/export.${format}${suffix ? `?${suffix}` : ""}`;
 }
 
 export function buildRunExportUrl(format: "csv" | "json", query: RunsQuery): string {
@@ -343,6 +513,45 @@ export async function submitCapabilityCheck(modelName: string, nodeId: string): 
 }
 
 
+export async function simulateRoutingRule(
+  ruleId: string,
+  preferredNodes: string[],
+): Promise<RoutingSimulationRecord> {
+  const response = await fetch(`/api/routing/${encodeURIComponent(ruleId)}/dry-run`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      preferred_nodes: preferredNodes,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Routing dry-run failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as RoutingSimulationRecord;
+}
+
+export async function createRoutingRule(payload: RoutingRulePayload): Promise<RoutingRuleRecord> {
+  const response = await fetch("/api/routing", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Routing rule creation failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as RoutingRuleRecord;
+}
+
 export async function updateRoutingRule(ruleId: string, preferredNodes: string[]): Promise<RoutingRuleRecord> {
   const response = await fetch(`/api/routing/${encodeURIComponent(ruleId)}`, {
     method: "PUT",
@@ -360,6 +569,52 @@ export async function updateRoutingRule(ruleId: string, preferredNodes: string[]
   }
 
   return (await response.json()) as RoutingRuleRecord;
+}
+
+export async function patchRoutingRule(ruleId: string, payload: RoutingRulePatch): Promise<RoutingRuleRecord> {
+  const response = await fetch(`/api/routing/${encodeURIComponent(ruleId)}`, {
+    method: "PATCH",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Routing rule update failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as RoutingRuleRecord;
+}
+
+export async function deleteRoutingRule(ruleId: string): Promise<{ rule_id: string; deleted: boolean }> {
+  const response = await fetch(`/api/routing/${encodeURIComponent(ruleId)}`, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Routing rule deletion failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as { rule_id: string; deleted: boolean };
+}
+
+export async function fetchRoutingHistory(ruleId: string): Promise<RoutingHistoryRecord[]> {
+  const response = await fetch(`/api/routing/${encodeURIComponent(ruleId)}/history`, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Routing history request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as RoutingHistoryRecord[];
 }
 
 export async function acknowledgeWarning(warningId: string): Promise<WarningRecord & { run_id: string }> {
@@ -391,8 +646,10 @@ export async function fetchEvalSuites(): Promise<EvalSuiteRecord[]> {
   return (await response.json()) as EvalSuiteRecord[];
 }
 
-export async function fetchEvalScoreHistory(): Promise<EvalScoreHistoryRecord> {
-  const response = await fetch("/api/evals/score-history", {
+export async function fetchEvalScoreHistory(query: EvalHistoryQuery = {}): Promise<EvalScoreHistoryRecord> {
+  const params = buildEvalHistorySearchParams(query);
+  const suffix = params.toString();
+  const response = await fetch(`/api/evals/score-history${suffix ? `?${suffix}` : ""}`, {
     headers: {
       Accept: "application/json",
     },
@@ -419,6 +676,31 @@ export async function fetchEvalSchedules(): Promise<EvalScheduleRecord[]> {
   return (await response.json()) as EvalScheduleRecord[];
 }
 
+export async function createEvalAssistedSummary(payload: {
+  model_name: string;
+  node_id: string;
+  filter_model_name?: string | null;
+  filter_node_id?: string | null;
+  window_days?: number;
+  flakiness_min_rate?: number;
+  failure_cluster_min_count?: number;
+}): Promise<RunRecord> {
+  const response = await fetch("/api/evals/assisted-summary", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval assisted summary failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as RunRecord;
+}
+
 export async function createEvalSuite(payload: { name: string; description: string }): Promise<EvalSuiteRecord> {
   const response = await fetch("/api/evals/suites", {
     method: "POST",
@@ -431,6 +713,58 @@ export async function createEvalSuite(payload: { name: string; description: stri
 
   if (!response.ok) {
     throw new Error(`Eval suite creation failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalSuiteRecord;
+}
+
+export async function updateEvalSuite(
+  suiteId: string,
+  payload: { name?: string; description?: string },
+): Promise<EvalSuiteRecord> {
+  const response = await fetch(`/api/evals/suites/${encodeURIComponent(suiteId)}`, {
+    method: "PATCH",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval suite update failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalSuiteRecord;
+}
+
+export async function duplicateEvalSuite(suiteId: string): Promise<EvalSuiteRecord> {
+  const response = await fetch(`/api/evals/suites/${encodeURIComponent(suiteId)}/duplicate`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval suite duplication failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalSuiteRecord;
+}
+
+export async function importEvalSuite(payload: Record<string, unknown>): Promise<EvalSuiteRecord> {
+  const response = await fetch("/api/evals/suites/import", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval suite import failed with status ${response.status}`);
   }
 
   return (await response.json()) as EvalSuiteRecord;
@@ -460,7 +794,16 @@ export async function createEvalSchedule(payload: {
   return (await response.json()) as EvalScheduleRecord;
 }
 
-export async function updateEvalSchedule(scheduleId: string, payload: { enabled: boolean }): Promise<EvalScheduleRecord> {
+export async function updateEvalSchedule(
+  scheduleId: string,
+  payload: {
+    enabled?: boolean;
+    auto_execute?: boolean;
+    model_name?: string;
+    node_id?: string;
+    interval_minutes?: number;
+  },
+): Promise<EvalScheduleRecord> {
   const response = await fetch(`/api/evals/schedules/${encodeURIComponent(scheduleId)}`, {
     method: "PATCH",
     headers: {
@@ -475,6 +818,19 @@ export async function updateEvalSchedule(scheduleId: string, payload: { enabled:
   }
 
   return (await response.json()) as EvalScheduleRecord;
+}
+
+export async function deleteEvalSchedule(scheduleId: string): Promise<void> {
+  const response = await fetch(`/api/evals/schedules/${encodeURIComponent(scheduleId)}`, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval schedule deletion failed with status ${response.status}`);
+  }
 }
 
 export async function queueEvalScheduleNow(scheduleId: string): Promise<EvalScheduleQueueRecord> {
@@ -492,9 +848,28 @@ export async function queueEvalScheduleNow(scheduleId: string): Promise<EvalSche
   return (await response.json()) as EvalScheduleQueueRecord;
 }
 
+export async function deleteEvalSuite(suiteId: string): Promise<void> {
+  const response = await fetch(`/api/evals/suites/${encodeURIComponent(suiteId)}`, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval suite deletion failed with status ${response.status}`);
+  }
+}
+
 export async function createEvalCase(
   suiteId: string,
-  payload: { name: string; prompt: string; expected_json: Record<string, unknown> },
+  payload: {
+    name: string;
+    prompt: string;
+    expected_json: Record<string, unknown>;
+    score_type?: string;
+    score_config_json?: Record<string, unknown>;
+  },
 ): Promise<EvalSuiteRecord> {
   const response = await fetch(`/api/evals/suites/${encodeURIComponent(suiteId)}/cases`, {
     method: "POST",
@@ -507,6 +882,73 @@ export async function createEvalCase(
 
   if (!response.ok) {
     throw new Error(`Eval case creation failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalSuiteRecord;
+}
+
+export async function updateEvalCase(
+  suiteId: string,
+  caseId: string,
+  payload: {
+    name?: string;
+    prompt?: string;
+    expected_json?: Record<string, unknown>;
+    score_type?: string;
+    score_config_json?: Record<string, unknown>;
+    sort_order?: number;
+  },
+): Promise<EvalSuiteRecord> {
+  const response = await fetch(
+    `/api/evals/suites/${encodeURIComponent(suiteId)}/cases/${encodeURIComponent(caseId)}`,
+    {
+      method: "PATCH",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Eval case update failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalSuiteRecord;
+}
+
+export async function duplicateEvalCase(suiteId: string, caseId: string): Promise<EvalSuiteRecord> {
+  const response = await fetch(
+    `/api/evals/suites/${encodeURIComponent(suiteId)}/cases/${encodeURIComponent(caseId)}/duplicate`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Eval case duplication failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalSuiteRecord;
+}
+
+export async function deleteEvalCase(suiteId: string, caseId: string): Promise<EvalSuiteRecord> {
+  const response = await fetch(
+    `/api/evals/suites/${encodeURIComponent(suiteId)}/cases/${encodeURIComponent(caseId)}`,
+    {
+      method: "DELETE",
+      headers: {
+        Accept: "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Eval case deletion failed with status ${response.status}`);
   }
 
   return (await response.json()) as EvalSuiteRecord;
@@ -530,6 +972,47 @@ export async function queueEvalAttempt(
   }
 
   return (await response.json()) as EvalAttemptRecord;
+}
+
+export async function executeEvalAttemptBatch(attemptId: string): Promise<EvalBatchExecuteRecord> {
+  const response = await fetch(`/api/evals/attempts/${encodeURIComponent(attemptId)}/execute`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval attempt batch execution failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalBatchExecuteRecord;
+}
+
+export async function createEvalBaseline(payload: {
+  suite_id: string;
+  model_name: string;
+  node_id: string;
+  minimum_pass_rate: number;
+}): Promise<Record<string, unknown>> {
+  const response = await fetch(`/api/evals/suites/${encodeURIComponent(payload.suite_id)}/baseline`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model_name: payload.model_name,
+      node_id: payload.node_id,
+      minimum_pass_rate: payload.minimum_pass_rate,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval baseline creation failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as Record<string, unknown>;
 }
 
 export async function executeEvalRun(runId: string): Promise<RunRecord> {

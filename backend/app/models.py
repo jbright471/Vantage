@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Float, Integer, JSON, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -72,6 +72,10 @@ class RoutingRule(Base):
     priority_class: Mapped[str] = mapped_column(String, nullable=False)
     model_name: Mapped[str | None] = mapped_column(String, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    allow_degraded: Mapped[bool] = mapped_column(Boolean, default=False)
+    allow_stale: Mapped[bool] = mapped_column(Boolean, default=False)
+    allow_unreachable: Mapped[bool] = mapped_column(Boolean, default=False)
+    minimum_eval_pass_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class RoutingRuleNode(Base):
@@ -81,6 +85,18 @@ class RoutingRuleNode(Base):
     rule_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     node_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class RoutingRuleHistory(Base):
+    __tablename__ = "routing_rule_history"
+
+    history_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rule_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    action_type: Mapped[str] = mapped_column(String, nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    before_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    after_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class AppSetting(Base):
@@ -123,6 +139,8 @@ class EvalCase(Base):
     name: Mapped[str] = mapped_column(String, nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     expected_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    score_type: Mapped[str] = mapped_column(String, nullable=False, default="json_subset")
+    score_config_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 

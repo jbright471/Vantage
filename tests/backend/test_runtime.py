@@ -97,7 +97,7 @@ def test_get_nodes_state_marks_old_observation_as_unreachable() -> None:
             Node(
                 node_id="bastet",
                 display_name="Bastet",
-                base_url="http://192.168.50.209:9100",
+                base_url="http://10.0.0.20:9100",
                 role="remote",
                 enabled=True,
                 created_from="bootstrap",
@@ -136,7 +136,7 @@ def test_get_nodes_state_exposes_latest_gpu_and_model_details() -> None:
             Node(
                 node_id="bastet",
                 display_name="Bastet",
-                base_url="http://192.168.50.209:9110",
+                base_url="http://10.0.0.20:9110",
                 role="remote",
                 enabled=True,
                 created_from="bootstrap",
@@ -162,7 +162,7 @@ def test_get_nodes_state_exposes_latest_gpu_and_model_details() -> None:
 
         state = get_nodes_state(session, config=BootstrapConfig())
 
-    assert state[0]["base_url"] == "http://192.168.50.209:9110"
+    assert state[0]["base_url"] == "http://10.0.0.20:9110"
     assert state[0]["gpu_stats"][0]["name"] == "RTX 3090"
     assert state[0]["cpu_usage_percent"] == 11
     assert state[0]["memory_used_mb"] == 32768
@@ -177,7 +177,7 @@ def test_run_poll_cycle_resolves_config_drift_warning_once_node_is_observed(monk
             BootstrapNode(
                 node_id="bastet",
                 display_name="Bastet",
-                base_url="http://192.168.50.209:9100",
+                base_url="http://10.0.0.20:9100",
                 role="remote",
                 enabled=True,
             )
@@ -189,7 +189,7 @@ def test_run_poll_cycle_resolves_config_drift_warning_once_node_is_observed(monk
             Node(
                 node_id="bastet",
                 display_name="Bastet",
-                base_url="http://192.168.50.209:9100",
+                base_url="http://10.0.0.20:9100",
                 role="remote",
                 enabled=True,
                 created_from="bootstrap",
@@ -239,7 +239,7 @@ def test_run_poll_cycle_persists_remote_runs(monkeypatch) -> None:
             BootstrapNode(
                 node_id="bastet",
                 display_name="Bastet",
-                base_url="http://192.168.50.209:9110",
+                base_url="http://10.0.0.20:9110",
                 role="remote",
                 enabled=True,
             )
@@ -251,7 +251,7 @@ def test_run_poll_cycle_persists_remote_runs(monkeypatch) -> None:
             Node(
                 node_id="bastet",
                 display_name="Bastet",
-                base_url="http://192.168.50.209:9110",
+                base_url="http://10.0.0.20:9110",
                 role="remote",
                 enabled=True,
                 created_from="bootstrap",

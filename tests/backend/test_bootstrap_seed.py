@@ -50,7 +50,7 @@ def test_seed_nodes_from_config_updates_existing_bootstrap_node_fields() -> None
             Node(
                 node_id="bastet",
                 display_name="Bastet",
-                base_url="http://192.168.50.209:9100",
+                base_url="http://10.0.0.20:9100",
                 role="remote",
                 enabled=True,
                 created_from="bootstrap",
@@ -63,7 +63,7 @@ def test_seed_nodes_from_config_updates_existing_bootstrap_node_fields() -> None
                 BootstrapNode(
                     node_id="bastet",
                     display_name="Bastet",
-                    base_url="http://192.168.50.209:9110",
+                    base_url="http://10.0.0.20:9110",
                     role="remote",
                     enabled=True,
                 )
@@ -74,7 +74,7 @@ def test_seed_nodes_from_config_updates_existing_bootstrap_node_fields() -> None
         updated = session.get(Node, "bastet")
 
     assert updated is not None
-    assert updated.base_url == "http://192.168.50.209:9110"
+    assert updated.base_url == "http://10.0.0.20:9110"
 
 
 def test_seed_nodes_from_config_respects_runtime_enabled_override() -> None:
@@ -86,7 +86,7 @@ def test_seed_nodes_from_config_respects_runtime_enabled_override() -> None:
             BootstrapNode(
                 node_id="bastet",
                 display_name="Bastet",
-                base_url="http://192.168.50.209:9110",
+                base_url="http://10.0.0.20:9110",
                 role="remote",
                 enabled=True,
             )
@@ -119,7 +119,7 @@ def test_seed_routing_from_config_inserts_default_rule_order() -> None:
             BootstrapNode(
                 node_id="bastet",
                 display_name="Bastet",
-                base_url="http://192.168.50.209:9110",
+                base_url="http://10.0.0.20:9110",
                 role="remote",
                 enabled=True,
             ),

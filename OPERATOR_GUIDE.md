@@ -60,6 +60,36 @@ Operational note: pruning runs inside the FastAPI process using the lifespan-man
 
 If a remote node starts returning unauthorized responses, confirm that both the control-plane backend and remote agent process are using the same token value.
 
+### Health Checks
+
+Use the backend health endpoints when starting, updating, or troubleshooting Vantage:
+
+| Endpoint | Use |
+| --- | --- |
+| `/api/health` | Basic backward-compatible status check. |
+| `/api/health/live` | Confirms the backend process is alive. |
+| `/api/health/ready` | Confirms the backend can reach SQLite, see required tables, and load bootstrap config. |
+
+Treat `/api/health/ready` as the deployment gate. If readiness returns HTTP `503`, inspect the failed check before trusting UI state or making routing changes.
+
+### Production Packaging Settings
+
+Production deployments use `docker-compose.prod.yml`, `.env.production`, and the `vantage_data` Docker volume by default. Development deployments use `docker-compose.yml`, `.env`, bind-mounted source code, Vite HMR, and FastAPI reload.
+
+| Asset | Operator Use |
+| --- | --- |
+| `docker-compose.yml` | Local development with hot reload. |
+| `docker-compose.prod.yml` | Production-style stack for Portainer or a Docker host. |
+| `.env.example` | Development environment template with no real secrets. |
+| `.env.production.example` | Production environment template with no real secrets. |
+| `config/vantage.bootstrap.example.toml` | Public-safe node registry sample for releases and other operators. |
+| `scripts/check-setup.ps1` | Preflight check for Docker, Compose config, token presence, optional SQLite path, backend readiness, and remote-agent reachability. |
+| `scripts/build-release.ps1` | Creates a shareable release zip and `SHA256SUMS.txt`. |
+
+Production Compose requires `VANTAGE_AGENT_SHARED_TOKEN` to be supplied externally. Keep that value in `.env.production`, Portainer secrets, or Portainer environment variables. Do not paste real tokens into Compose YAML, screenshots, tickets, or documentation.
+
+Production Compose runs Alembic migrations before Uvicorn starts. Back up SQLite before updates, especially before pulling a release that changes database models.
+
 ## Navigating the UI
 
 ### Command Header and Warnings
@@ -145,15 +175,27 @@ Priority classes:
 
 Route order is evaluated from left to right. For example, `bastet -> jedi` means Vantage should prefer the example `bastet` worker first, then the example `jedi` node as the next option.
 
+Operators can create model-specific routing lanes from the policy editor. A model-specific lane combines priority class, target model, preferred nodes, optional eval pass-rate threshold, and explicit failover allowances. Leave failover allowances off unless you intentionally want the rule to consider degraded, stale, or unreachable nodes.
+
 Changing route preference is a configuration-impacting action. Vantage requires a confirmation modal before saving the new preferred order. Treat routing edits as operational changes, not casual UI clicks.
 
-The confirmation modal repeats target node state using text, color, and state icons. If the target node is stale, degraded, or otherwise not live and healthy, Vantage changes the final action to `Confirm override`. That lower-emphasis button is deliberate friction: read the warning and proceed only when the risk is intentional.
+The confirmation modal repeats target node state using text, color, and state icons. It also runs a dry-run simulation against current observed node state before saving. The simulation explains which node would be selected, which nodes would be skipped or rejected, and why. If the target node is stale, degraded, or otherwise not live and healthy, Vantage changes the final action to `Confirm override`. That lower-emphasis button is deliberate friction: read the warning and proceed only when the risk is intentional.
+
+Use `History` on a routing row to inspect create, update, and delete events for that rule. Route history is the operator-facing audit trail for policy preference changes.
 
 ### Evals
 
-The Eval Lab is the Phase 2 foundation for prompt-suite testing. The current surface lets operators create prompt suites, add prompt cases, queue eval attempt `Run` records for a selected model placement, execute queued runs, compare recent pass rates by model placement, identify low-performing cases, inspect recent scored responses, and create recurring schedules.
+The Eval Lab is the Phase 2 surface for prompt-suite testing. Operators can create, edit, duplicate, import, export, and clean up prompt suites; add or duplicate prompt cases; queue eval attempt `Run` records for a selected model placement; execute queued runs; compare recent pass rates; inspect scored responses; create recurring schedules; and review deterministic Eval Intelligence summaries.
 
-Treat eval scores as simple JSON-subset checks. A passing score means the response parsed as JSON and contained the expected key/value pairs for that case; it does not prove broader model quality.
+Eval scores are deterministic checks, not subjective quality judgments. Supported score types include `json_subset`, `exact_match`, `contains`, `regex`, `numeric_threshold`, and `json_schema`. A passing score means the response satisfied the selected check and scoring config; it does not prove broader model quality.
+
+Use `Score config JSON` for score-type-specific settings:
+
+- `exact_match` and `contains`: set `expected_text`.
+- `regex`: set `pattern`.
+- `numeric_threshold`: set `json_path`, `operator`, and `value`.
+- `json_schema`: set `required` and optional `properties` with `const` values.
+- `json_subset`: usually uses `Expected JSON` and can leave score config empty.
 
 Use `Inspect score` on a recent scored run when you need to see the exact case, target placement, score reason, missing or mismatched expected fields, response preview, and parsed response JSON.
 
@@ -162,6 +204,32 @@ Recurring eval schedules create queued eval attempts when due. Queue-only is the
 If `Auto-execute when due` is enabled for a schedule, Vantage immediately executes and scores each due eval case through the normal eval runner. Use auto-execute only for trusted suites and placements because it will trigger real model calls on the configured interval.
 
 If an auto-executed schedule produces failed eval runs, Vantage creates an active `eval_schedule_failure` warning so the issue appears in the normal operator attention lane. A later clean scheduled execution resolves that warning automatically.
+
+Use `Set baseline` from a scored run to pin a minimum acceptable pass rate for that suite, model, and node. Baselines are stored with the suite metadata and compared against recent scored runs. If current pass rate drops below the baseline, the Eval Lab surfaces a regression alert.
+
+Eval Intelligence panels summarize the same durable run data from several angles:
+
+- Placement comparison shows pass rates by model and node.
+- Model report rolls scored runs up by model name.
+- Trends visualize and list recent scored runs by day, model, and node.
+- Lowest passing cases highlight weak prompt cases.
+- Mixed-result cases identify flaky cases with both passes and failures.
+- Failure clustering groups repeated failures by reason and missing or mismatched fields.
+- Schedule health shows the latest scheduler execution counts and failures.
+
+Use `Eval intelligence window` controls when you need to scope the analysis. The time-window selector changes the pass-rate window used by score history. The placement filter narrows charts, regressions, schedules, exports, and assisted summaries to a specific model/node pair. Flakiness sensitivity controls how mixed-result cases are surfaced, and failure-cluster minimum controls how many matching failures are required before a cluster is treated as repeated. Use `Save preset` for browser-local shortcuts to common scopes, such as a seven-day flaky-case review or a single-placement regression check.
+
+Use `Generate summary` when you want an optional local model to explain the current eval signals in operator language. This is a manual action only. Vantage sends a compact eval snapshot using the active Eval Intelligence scope to the selected model placement, stores the result as an `eval_assisted_summary` Run, and displays the returned Markdown in the Eval Lab. Treat it as advisory: the deterministic score tables, baselines, and run metadata remain the source of truth.
+
+Lifecycle cleanup is deliberately guarded. You can delete schedules and individual prompt cases directly from Eval Lab. Prompt suite deletion is available only when the suite has no remaining cases and no active schedules. Cleanup does not delete historical eval `Run` records, so scored runs and audit evidence remain available after a suite or case is removed from the active definition list.
+
+Use `Export eval CSV` for spreadsheet review and `Export eval JSON` when you need nested score details, baselines, trend rows, failure clusters, and regression data. Eval history exports inherit the active Eval Intelligence scope. Suite-level export/import is available through the eval API for sharing prompt packs across Vantage installs.
+
+### Docs Drawer
+
+The `Docs` button in the application header opens this Operator Guide as live Markdown from `/api/docs/operator-guide.md`. The drawer is designed for quick reference while the dashboard remains visible behind it.
+
+If the guide fails to load, verify the backend is running and `/api/health/ready` returns `ok`. The drawer reads the repository-root `OPERATOR_GUIDE.md`, so documentation updates are available in the app after the backend can read the updated file.
 
 ## Daily Operations
 
@@ -192,12 +260,32 @@ Interpretation guide:
 4. Click `Prefer <node>` for the node that should become first choice.
 5. Read the confirmation modal carefully.
 6. Check the target node state tokens and warning copy.
-7. Use `Confirm override` only when you intentionally want to route toward a stale or degraded node.
-8. Confirm only if the new order matches the intended operational change.
-9. Watch for the saved message and verify the route order updates.
-10. Monitor Runs and Nodes after the change to confirm the new preference does not push work toward a stale or overloaded node.
+7. Review the route simulation. Confirm that selected, skipped, and rejected nodes match the intended operational change.
+8. Use `Confirm override` only when you intentionally want to route toward a stale or degraded node.
+9. Confirm only if the new order matches the intended operational change.
+10. Watch for the saved message and verify the route order updates.
+11. Monitor Runs and Nodes after the change to confirm the new preference does not push work toward a stale or overloaded node.
 
 Safe operating rule: never promote a node that is stale, unreachable, missing the target model, or showing unhealthy GPU/agent telemetry unless you are intentionally testing failure behavior.
+
+### Create a Model-Specific Routing Lane
+
+1. Open the Routing dashboard.
+2. In `Policy editor`, enter a unique `Rule ID`.
+3. Select `batch`, `interactive`, or `scheduled`.
+4. Enter the model tag, such as `qwen3.5:27b`.
+5. Enter preferred nodes as a comma-separated list, such as `bastet, jedi`.
+6. Optionally set `Min eval pass rate` as a decimal between `0` and `1`.
+7. Leave degraded, stale, and unreachable allowances disabled unless you are intentionally testing failover behavior.
+8. Click `Create rule`.
+9. Use `Prefer <node>` on the new row and read the dry-run result before saving future preference changes.
+
+### Review Route History
+
+1. Open the Routing dashboard.
+2. Click `History` on the rule you want to audit.
+3. Review the latest create, update, and delete events.
+4. Cross-check the Runs dashboard if the route change was part of a broader incident or remediation workflow.
 
 ### Quarantine a Problem Node
 
@@ -235,9 +323,30 @@ Safe operating rule: never promote a node that is stale, unreachable, missing th
 7. Execute the queued runs manually unless the schedule was intentionally configured for auto-execution.
 8. Check Runs if queueing fails or the eval result needs full metadata review.
 
+### Clean Up Eval Definitions
+
+1. Open Eval Lab.
+2. Delete stale recurring schedules first.
+3. Delete prompt cases that should no longer be part of future eval attempts.
+4. Confirm the suite row shows `No cases`.
+5. Delete the prompt suite only after all cases and schedules are gone.
+6. Use Runs if you need to review historical eval outcomes; cleanup does not remove those records.
+
+### Review an Eval Regression
+
+1. Open Eval Lab.
+2. Check the intelligence summary for baseline or failure-cluster warnings.
+3. Review `Baseline misses` to identify the suite, model, node, current pass rate, and minimum pass rate.
+4. Open `Recent scored runs` and inspect failed runs for that suite and placement.
+5. Check `Failure clustering` for repeated score reasons or missing fields.
+6. Check `Mixed-result cases` to determine whether the issue is flaky or consistently failing.
+7. Compare the same suite on another placement in `Placement comparison`.
+8. Optionally generate a local model summary if you want a concise hypothesis list before deeper inspection.
+9. Export eval JSON before making larger prompt or model changes if you need a durable incident artifact.
+
 ### Add a New Remote Worker Node
 
-1. Deploy the lightweight Vantage agent on the remote Linux worker.
+1. Deploy the lightweight Vantage agent on the remote Linux worker with `deploy/agent/install.sh`.
 2. Configure the agent to use the same shared token referenced by `agent_auth_token_env`.
 3. Confirm the agent exposes the expected endpoints, including health, GPU, models, and runs.
 4. Add a new `[[nodes]]` entry to `config/vantage.bootstrap.toml`.
@@ -262,6 +371,64 @@ enabled = true
 
 If the node appears but remains stale or unreachable, check network reachability, firewall rules, the agent service, the shared token, and the configured `base_url`.
 
+### Verify Backend Readiness After Restart
+
+1. Restart the backend container, service, or development stack.
+2. Call `/api/health/live` to confirm the process is running.
+3. Call `/api/health/ready` to confirm SQLite, schema tables, and bootstrap config are usable.
+4. Open the UI only after readiness reports `ok`.
+5. If readiness fails, check Docker, Portainer, or systemd logs for JSON records from the backend.
+
+### Run a Production Setup Check
+
+1. Set `VANTAGE_AGENT_SHARED_TOKEN` in the current shell or `.env.production`.
+2. Run `scripts/check-setup.ps1`.
+3. Pass `-RemoteAgentUrl http://<remote-agent-ip>:9110` when you want the checker to verify a worker agent.
+4. Pass `-SqlitePath <path-to-vantage.sqlite3>` when you use a host-mounted SQLite path instead of the default Docker volume.
+5. Treat failures as deployment blockers. Warnings are usually optional checks, such as a remote agent URL not being supplied.
+
+Example:
+
+```powershell
+$env:VANTAGE_AGENT_SHARED_TOKEN = "<same-token-as-control-plane>"
+.\scripts\check-setup.ps1 `
+  -ComposeFile docker-compose.prod.yml `
+  -RemoteAgentUrl http://<remote-agent-ip>:9110 `
+  -ControlPlaneUrl http://<control-plane-host>:8000
+```
+
+### Back Up SQLite Before Updating
+
+1. Stop write-heavy activity such as eval batches or manual remediation.
+2. Use the SQLite backup API command from `OPERATIONS.md`, not a raw file copy while Vantage is writing.
+3. Store the backup outside the active Docker volume.
+4. Deploy the update or release bundle.
+5. Verify `/api/health/ready`.
+6. Keep the backup until the new deployment has been stable through normal polling and UI use.
+
+### Deploy Through Portainer
+
+1. Review `PORTAINER.md`.
+2. Make sure `VANTAGE_AGENT_SHARED_TOKEN` is configured as a Portainer environment variable or secret.
+3. Deploy `docker-compose.prod.yml` as the stack definition.
+4. Confirm backend and frontend containers become `healthy`.
+5. Open the UI and verify Nodes, Runs, Models, Routing, Evals, and Docs load.
+6. Watch backend logs while Alembic runs during startup.
+
+### Build a Release Bundle
+
+1. Confirm backend tests, frontend tests, and frontend build pass.
+2. Run `scripts/build-release.ps1 -Version <version>`.
+3. Inspect `dist/releases/vantage-<version>.zip`.
+4. Confirm the generated bundle contains public-safe config and does not include `.env`, `.env.production`, SQLite databases, node modules, or local logs.
+5. Share the zip with `SHA256SUMS.txt` so operators can verify the artifact.
+
+### Respect the Local Node Agent Boundary
+
+Do not make the Docker backend privileged to restart host services or scrape privileged host state. If Vantage needs host-level remediation on the control-plane machine, use a systemd-managed local node agent with authenticated, allowlisted actions.
+
+The current local node-agent document is a boundary and extension plan, not a broad host-control feature. Host-level actions should not be added until their contracts, confirmations, audit `Run` records, and tests are explicit.
+
 ## Operator Checklist
 
 Use this quick sequence during daily checks:
@@ -278,3 +445,6 @@ Use this quick sequence during daily checks:
 10. Check Eval Lab for prompt-suite readiness when comparing model behavior.
 11. Review Routing before changing where work is preferred.
 12. Export Runs as CSV or JSON before deeper incident review.
+13. Check `/api/health/ready` before and after deployments.
+14. Back up SQLite before production updates.
+15. Use the Docs drawer when you need the current guide without leaving the dashboard.

@@ -1,17 +1,30 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 import {
+  buildEvalHistoryExportUrl,
+  createEvalAssistedSummary,
   createEvalCase,
   createEvalSchedule,
   createEvalSuite,
+  createEvalBaseline,
+  deleteEvalCase,
+  deleteEvalSchedule,
+  deleteEvalSuite,
+  duplicateEvalCase,
+  duplicateEvalSuite,
+  executeEvalAttemptBatch,
   executeEvalRun,
   fetchEvalSchedules,
   fetchEvalScoreHistory,
   fetchEvalSuites,
+  importEvalSuite,
   queueEvalAttempt,
   queueEvalScheduleNow,
+  updateEvalCase,
   updateEvalSchedule,
+  updateEvalSuite,
   type EvalAttemptRecord,
+  type EvalHistoryQuery,
   type EvalScheduleRecord,
   type EvalScoreHistoryRecord,
   type EvalScoreRunRecord,
@@ -30,6 +43,28 @@ type PlacementOption = {
   model_name: string;
   node_id: string;
 };
+
+type EvalIntelligenceControls = {
+  window_days: string;
+  placement_key: string;
+  flakiness_min_rate: string;
+  failure_cluster_min_count: string;
+};
+
+type EvalIntelligencePreset = {
+  id: string;
+  name: string;
+  controls: EvalIntelligenceControls;
+};
+
+const DEFAULT_EVAL_CONTROLS: EvalIntelligenceControls = {
+  window_days: "30",
+  placement_key: "",
+  flakiness_min_rate: "0.2",
+  failure_cluster_min_count: "2",
+};
+
+const EVAL_PRESETS_STORAGE_KEY = "vantage.evalIntelligencePresets.v1";
 
 function formatTimestamp(value: string | null | undefined): string {
   if (!value) {
@@ -55,12 +90,79 @@ function dedupeRuns(runs: RunRecord[]): RunRecord[] {
   });
 }
 
+function buildEvalHistoryQuery(controls: EvalIntelligenceControls): EvalHistoryQuery {
+  const [modelName, nodeId] = controls.placement_key ? controls.placement_key.split("::") : [null, null];
+  return {
+    window_days: Number.parseInt(controls.window_days, 10),
+    model_name: modelName || null,
+    node_id: nodeId || null,
+    flakiness_min_rate: Number.parseFloat(controls.flakiness_min_rate),
+    failure_cluster_min_count: Number.parseInt(controls.failure_cluster_min_count, 10),
+    recent_limit: 20,
+  };
+}
+
+function isValidEvalHistoryQuery(query: EvalHistoryQuery): boolean {
+  return (
+    Number.isFinite(query.window_days) &&
+    Number(query.window_days) >= 1 &&
+    Number.isFinite(query.flakiness_min_rate) &&
+    Number(query.flakiness_min_rate) >= 0 &&
+    Number(query.flakiness_min_rate) <= 1 &&
+    Number.isFinite(query.failure_cluster_min_count) &&
+    Number(query.failure_cluster_min_count) >= 1
+  );
+}
+
+function readEvalPresets(): EvalIntelligencePreset[] {
+  try {
+    const rawPresets = window.localStorage.getItem(EVAL_PRESETS_STORAGE_KEY);
+    const parsed = rawPresets ? JSON.parse(rawPresets) : [];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter((preset): preset is EvalIntelligencePreset => {
+      return (
+        typeof preset?.id === "string" &&
+        typeof preset?.name === "string" &&
+        typeof preset?.controls?.window_days === "string" &&
+        typeof preset?.controls?.placement_key === "string" &&
+        typeof preset?.controls?.flakiness_min_rate === "string" &&
+        typeof preset?.controls?.failure_cluster_min_count === "string"
+      );
+    });
+  } catch {
+    return [];
+  }
+}
+
+function writeEvalPresets(presets: EvalIntelligencePreset[]) {
+  window.localStorage.setItem(EVAL_PRESETS_STORAGE_KEY, JSON.stringify(presets));
+}
+
+function trendToneClass(passRate: number): string {
+  if (passRate < 0.5) {
+    return "is-critical";
+  }
+  if (passRate < 0.8) {
+    return "is-warning";
+  }
+  return "is-healthy";
+}
+
 export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
   const [suites, setSuites] = useState<EvalSuiteRecord[]>([]);
   const [requestState, setRequestState] = useState<"loading" | "idle" | "error">("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [suiteForm, setSuiteForm] = useState({ name: "", description: "" });
-  const [caseForm, setCaseForm] = useState({ suite_id: "", name: "", prompt: "", expected_json: "{}" });
+  const [caseForm, setCaseForm] = useState({
+    suite_id: "",
+    name: "",
+    prompt: "",
+    expected_json: "{}",
+    score_type: "json_subset",
+    score_config_json: "{}",
+  });
   const [attemptForm, setAttemptForm] = useState({ suite_id: "", placement_key: "" });
   const [scheduleForm, setScheduleForm] = useState({
     suite_id: "",
@@ -68,7 +170,15 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
     interval_minutes: "60",
     auto_execute: false,
   });
+  const [summaryForm, setSummaryForm] = useState({ placement_key: "" });
+  const [evalControls, setEvalControls] = useState<EvalIntelligenceControls>(DEFAULT_EVAL_CONTROLS);
+  const [activeEvalQuery, setActiveEvalQuery] = useState<EvalHistoryQuery>(
+    buildEvalHistoryQuery(DEFAULT_EVAL_CONTROLS),
+  );
+  const [evalPresets, setEvalPresets] = useState<EvalIntelligencePreset[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState("");
   const [attemptResult, setAttemptResult] = useState<EvalAttemptRecord | null>(null);
+  const [assistedSummaryRun, setAssistedSummaryRun] = useState<RunRecord | null>(null);
   const [schedules, setSchedules] = useState<EvalScheduleRecord[]>([]);
   const [scoreHistory, setScoreHistory] = useState<EvalScoreHistoryRecord | null>(null);
   const [selectedScoreRun, setSelectedScoreRun] = useState<EvalScoreRunRecord | null>(null);
@@ -78,6 +188,10 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
     {},
   );
   const [mutationState, setMutationState] = useState<"idle" | "saving" | "error">("idle");
+
+  useEffect(() => {
+    setEvalPresets(readEvalPresets());
+  }, []);
 
   useEffect(() => {
     let isCurrent = true;
@@ -128,7 +242,7 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
   useEffect(() => {
     let isCurrent = true;
 
-    fetchEvalScoreHistory()
+    fetchEvalScoreHistory(activeEvalQuery)
       .then((payload) => {
         if (isCurrent) {
           setScoreHistory(payload);
@@ -143,7 +257,7 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
     return () => {
       isCurrent = false;
     };
-  }, []);
+  }, [activeEvalQuery]);
 
   const totalCases = suites.reduce((total, suite) => total + suite.case_count, 0);
   const placementOptions: PlacementOption[] = models
@@ -168,6 +282,10 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
     })
     .slice(0, 5);
 
+  function suiteHasSchedule(suiteId: string): boolean {
+    return schedules.some((schedule) => schedule.suite_id === suiteId);
+  }
+
   function upsertSuite(updatedSuite: EvalSuiteRecord) {
     setSuites((current) => {
       const withoutSuite = current.filter((suite) => suite.suite_id !== updatedSuite.suite_id);
@@ -177,6 +295,18 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
 
   function upsertEvalRun(updatedRun: RunRecord) {
     setQueuedEvalRuns((current) => dedupeRuns([updatedRun, ...current.filter((run) => run.run_id !== updatedRun.run_id)]));
+  }
+
+  function assistedSummaryText(): string | null {
+    const responseText = assistedSummaryRun?.metadata_json?.response_text;
+    const responsePreview = assistedSummaryRun?.metadata_json?.response_preview;
+    if (typeof responseText === "string" && responseText.trim()) {
+      return responseText;
+    }
+    if (typeof responsePreview === "string" && responsePreview.trim()) {
+      return responsePreview;
+    }
+    return null;
   }
 
   async function handleCreateSuite(event: FormEvent<HTMLFormElement>) {
@@ -231,7 +361,7 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
     try {
       const run = await executeEvalRun(runId);
       upsertEvalRun(run);
-      const history = await fetchEvalScoreHistory();
+      const history = await fetchEvalScoreHistory(activeEvalQuery);
       setScoreHistory(history);
       setExecutionStateByRun((current) => ({ ...current, [runId]: "idle" }));
     } catch (error) {
@@ -276,6 +406,106 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
     }
   }
 
+  async function handleCreateAssistedSummary(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const placement = placementOptions.find((option) => option.key === summaryForm.placement_key);
+    if (!placement) {
+      setMutationState("error");
+      setErrorMessage("Select an available model placement before generating an assisted summary.");
+      return;
+    }
+    setMutationState("saving");
+    setErrorMessage(null);
+
+    try {
+      const run = await createEvalAssistedSummary({
+        model_name: placement.model_name,
+        node_id: placement.node_id,
+        filter_model_name: activeEvalQuery.model_name,
+        filter_node_id: activeEvalQuery.node_id,
+        window_days: activeEvalQuery.window_days,
+        flakiness_min_rate: activeEvalQuery.flakiness_min_rate,
+        failure_cluster_min_count: activeEvalQuery.failure_cluster_min_count,
+      });
+      setAssistedSummaryRun(run);
+      setMutationState("idle");
+    } catch (error) {
+      setMutationState("error");
+      setErrorMessage(error instanceof Error ? error.message : "Eval assisted summary failed.");
+    }
+  }
+
+  function handleApplyEvalControls(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const query = buildEvalHistoryQuery(evalControls);
+    if (!isValidEvalHistoryQuery(query)) {
+      setMutationState("error");
+      setErrorMessage("Eval intelligence controls must use a valid window, flakiness rate, and cluster minimum.");
+      return;
+    }
+    setMutationState("idle");
+    setErrorMessage(null);
+    setActiveEvalQuery(query);
+  }
+
+  function handleSaveEvalPreset() {
+    const query = buildEvalHistoryQuery(evalControls);
+    if (!isValidEvalHistoryQuery(query)) {
+      setMutationState("error");
+      setErrorMessage("Fix the Eval Intelligence controls before saving a preset.");
+      return;
+    }
+    const name = window.prompt("Preset name", "Focused eval review");
+    if (name === null) {
+      return;
+    }
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setMutationState("error");
+      setErrorMessage("Preset name cannot be empty.");
+      return;
+    }
+    const preset: EvalIntelligencePreset = {
+      id: `eval-preset-${Date.now()}`,
+      name: trimmedName,
+      controls: { ...evalControls },
+    };
+    const nextPresets = [...evalPresets.filter((item) => item.name !== trimmedName), preset].sort((left, right) =>
+      left.name.localeCompare(right.name),
+    );
+    setEvalPresets(nextPresets);
+    setSelectedPresetId(preset.id);
+    writeEvalPresets(nextPresets);
+    setMutationState("idle");
+    setErrorMessage(null);
+  }
+
+  function handleApplyEvalPreset() {
+    const preset = evalPresets.find((item) => item.id === selectedPresetId);
+    if (!preset) {
+      setMutationState("error");
+      setErrorMessage("Select a saved Eval Intelligence preset first.");
+      return;
+    }
+    const query = buildEvalHistoryQuery(preset.controls);
+    if (!isValidEvalHistoryQuery(query)) {
+      setMutationState("error");
+      setErrorMessage("Saved preset is no longer valid. Delete it and create a new one.");
+      return;
+    }
+    setEvalControls(preset.controls);
+    setActiveEvalQuery(query);
+    setMutationState("idle");
+    setErrorMessage(null);
+  }
+
+  function handleDeleteEvalPreset() {
+    const nextPresets = evalPresets.filter((item) => item.id !== selectedPresetId);
+    setEvalPresets(nextPresets);
+    setSelectedPresetId("");
+    writeEvalPresets(nextPresets);
+  }
+
   async function handleToggleSchedule(schedule: EvalScheduleRecord) {
     setMutationState("saving");
     setErrorMessage(null);
@@ -289,6 +519,25 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
     } catch (error) {
       setMutationState("error");
       setErrorMessage(error instanceof Error ? error.message : "Eval schedule update failed.");
+    }
+  }
+
+  async function handleDeleteSchedule(schedule: EvalScheduleRecord) {
+    setMutationState("saving");
+    setErrorMessage(null);
+
+    try {
+      await deleteEvalSchedule(schedule.schedule_id);
+      setSchedules((current) => current.filter((item) => item.schedule_id !== schedule.schedule_id));
+      setScheduleQueueStateById((current) => {
+        const next = { ...current };
+        delete next[schedule.schedule_id];
+        return next;
+      });
+      setMutationState("idle");
+    } catch (error) {
+      setMutationState("error");
+      setErrorMessage(error instanceof Error ? error.message : "Eval schedule deletion failed.");
     }
   }
 
@@ -319,17 +568,272 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
     }
   }
 
+  async function handleDeleteCase(suiteId: string, caseId: string) {
+    setMutationState("saving");
+    setErrorMessage(null);
+
+    try {
+      const suite = await deleteEvalCase(suiteId, caseId);
+      upsertSuite(suite);
+      setMutationState("idle");
+    } catch (error) {
+      setMutationState("error");
+      setErrorMessage(error instanceof Error ? error.message : "Eval case deletion failed.");
+    }
+  }
+
+  async function handleDeleteSuite(suite: EvalSuiteRecord) {
+    if (suite.case_count > 0 || suiteHasSchedule(suite.suite_id)) {
+      return;
+    }
+
+    setMutationState("saving");
+    setErrorMessage(null);
+
+    try {
+      await deleteEvalSuite(suite.suite_id);
+      setSuites((current) => current.filter((item) => item.suite_id !== suite.suite_id));
+      setCaseForm((current) => (current.suite_id === suite.suite_id ? { ...current, suite_id: "" } : current));
+      setAttemptForm((current) => (current.suite_id === suite.suite_id ? { ...current, suite_id: "" } : current));
+      setScheduleForm((current) => (current.suite_id === suite.suite_id ? { ...current, suite_id: "" } : current));
+      setMutationState("idle");
+    } catch (error) {
+      setMutationState("error");
+      setErrorMessage(error instanceof Error ? error.message : "Eval suite deletion failed.");
+    }
+  }
+
+  async function handleEditSuite(suite: EvalSuiteRecord) {
+    const name = window.prompt("Suite name", suite.name);
+    if (name === null) {
+      return;
+    }
+    const description = window.prompt("Suite description", suite.description) ?? suite.description;
+    setMutationState("saving");
+    setErrorMessage(null);
+
+    try {
+      upsertSuite(await updateEvalSuite(suite.suite_id, { name, description }));
+      setMutationState("idle");
+    } catch (error) {
+      setMutationState("error");
+      setErrorMessage(error instanceof Error ? error.message : "Eval suite update failed.");
+    }
+  }
+
+  async function handleDuplicateSuite(suite: EvalSuiteRecord) {
+    setMutationState("saving");
+    setErrorMessage(null);
+
+    try {
+      const duplicate = await duplicateEvalSuite(suite.suite_id);
+      upsertSuite(duplicate);
+      setMutationState("idle");
+    } catch (error) {
+      setMutationState("error");
+      setErrorMessage(error instanceof Error ? error.message : "Eval suite duplication failed.");
+    }
+  }
+
+  async function handleImportSuite() {
+    const rawPayload = window.prompt("Paste exported suite JSON");
+    if (rawPayload === null) {
+      return;
+    }
+    setMutationState("saving");
+    setErrorMessage(null);
+
+    try {
+      const payload = JSON.parse(rawPayload) as Record<string, unknown>;
+      const suite = await importEvalSuite(payload);
+      upsertSuite(suite);
+      setMutationState("idle");
+    } catch (error) {
+      setMutationState("error");
+      setErrorMessage(error instanceof Error ? error.message : "Eval suite import failed.");
+    }
+  }
+
+  async function handleDuplicateCase(suiteId: string, evalCase: EvalSuiteRecord["cases"][number]) {
+    setMutationState("saving");
+    setErrorMessage(null);
+
+    try {
+      const suite = await duplicateEvalCase(suiteId, evalCase.case_id);
+      upsertSuite(suite);
+      setMutationState("idle");
+    } catch (error) {
+      setMutationState("error");
+      setErrorMessage(error instanceof Error ? error.message : "Eval case duplication failed.");
+    }
+  }
+
+  async function handleEditCase(suiteId: string, evalCase: EvalSuiteRecord["cases"][number]) {
+    const name = window.prompt("Case name", evalCase.name);
+    if (name === null) {
+      return;
+    }
+    const prompt = window.prompt("Case prompt", evalCase.prompt);
+    if (prompt === null) {
+      return;
+    }
+    const expectedJsonRaw = window.prompt("Expected JSON", JSON.stringify(evalCase.expected_json, null, 2));
+    if (expectedJsonRaw === null) {
+      return;
+    }
+    const scoreConfigRaw = window.prompt("Score config JSON", JSON.stringify(evalCase.score_config_json ?? {}, null, 2));
+    if (scoreConfigRaw === null) {
+      return;
+    }
+    const scoreType = window.prompt("Score type", evalCase.score_type) ?? evalCase.score_type;
+    const rawSortOrder = window.prompt("Sort order", String(evalCase.sort_order));
+    if (rawSortOrder === null) {
+      return;
+    }
+    const sortOrder = Number.parseInt(rawSortOrder, 10);
+    if (!Number.isFinite(sortOrder) || sortOrder < 0) {
+      setMutationState("error");
+      setErrorMessage("Case sort order must be zero or greater.");
+      return;
+    }
+
+    try {
+      const expected_json = JSON.parse(expectedJsonRaw) as Record<string, unknown>;
+      const score_config_json = JSON.parse(scoreConfigRaw) as Record<string, unknown>;
+      setMutationState("saving");
+      setErrorMessage(null);
+      upsertSuite(
+        await updateEvalCase(suiteId, evalCase.case_id, {
+          name,
+          prompt,
+          expected_json,
+          score_type: scoreType,
+          score_config_json,
+          sort_order: sortOrder,
+        }),
+      );
+      setMutationState("idle");
+    } catch (error) {
+      setMutationState("error");
+      setErrorMessage(error instanceof Error ? error.message : "Eval case update failed.");
+    }
+  }
+
+  async function handleEditSchedule(schedule: EvalScheduleRecord) {
+    const rawInterval = window.prompt("Interval minutes", String(schedule.interval_minutes));
+    if (rawInterval === null) {
+      return;
+    }
+    const interval = Number.parseInt(rawInterval, 10);
+    if (!Number.isFinite(interval) || interval < 1) {
+      setMutationState("error");
+      setErrorMessage("Schedule interval must be at least 1 minute.");
+      return;
+    }
+    const currentPlacementKey = `${schedule.model_name}::${schedule.node_id}`;
+    const rawPlacementKey = window.prompt("Placement key as model::node", currentPlacementKey);
+    if (rawPlacementKey === null) {
+      return;
+    }
+    const placement = placementOptions.find((option) => option.key === rawPlacementKey);
+    if (!placement) {
+      setMutationState("error");
+      setErrorMessage("Schedule target must match an available model placement.");
+      return;
+    }
+    setMutationState("saving");
+    setErrorMessage(null);
+
+    try {
+      const updated = await updateEvalSchedule(schedule.schedule_id, {
+        interval_minutes: interval,
+        model_name: placement.model_name,
+        node_id: placement.node_id,
+        auto_execute: !schedule.auto_execute,
+      });
+      setSchedules((current) => current.map((item) => (item.schedule_id === updated.schedule_id ? updated : item)));
+      setMutationState("idle");
+    } catch (error) {
+      setMutationState("error");
+      setErrorMessage(error instanceof Error ? error.message : "Eval schedule update failed.");
+    }
+  }
+
+  async function handleExecuteQueuedAttempt() {
+    if (!attemptResult) {
+      return;
+    }
+    setMutationState("saving");
+    setErrorMessage(null);
+
+    try {
+      const result = await executeEvalAttemptBatch(attemptResult.attempt_id);
+      setQueuedEvalRuns((current) => dedupeRuns([...result.runs, ...current]));
+      setScoreHistory(await fetchEvalScoreHistory(activeEvalQuery));
+      setMutationState("idle");
+    } catch (error) {
+      setMutationState("error");
+      setErrorMessage(error instanceof Error ? error.message : "Eval attempt batch execution failed.");
+    }
+  }
+
+  async function handleCreateBaseline(run: EvalScoreRunRecord) {
+    const matchingRows = scoreHistory?.recent_runs.filter(
+      (item) =>
+        item.suite_id === run.suite_id && item.model_name === run.model_name && item.node_id === run.node_id,
+    ) ?? [run];
+    const passRate =
+      matchingRows.length > 0
+        ? matchingRows.filter((item) => item.passed).length / matchingRows.length
+        : run.passed
+          ? 1
+          : 0;
+    const rawMinimum = window.prompt("Minimum pass rate for this baseline", String(passRate));
+    if (rawMinimum === null) {
+      return;
+    }
+    const minimumPassRate = Number.parseFloat(rawMinimum);
+    if (!Number.isFinite(minimumPassRate) || minimumPassRate < 0 || minimumPassRate > 1) {
+      setMutationState("error");
+      setErrorMessage("Baseline pass rate must be between 0 and 1.");
+      return;
+    }
+    setMutationState("saving");
+    setErrorMessage(null);
+    try {
+      await createEvalBaseline({
+        suite_id: run.suite_id,
+        model_name: run.model_name,
+        node_id: run.node_id,
+        minimum_pass_rate: minimumPassRate,
+      });
+      setScoreHistory(await fetchEvalScoreHistory(activeEvalQuery));
+      setMutationState("idle");
+    } catch (error) {
+      setMutationState("error");
+      setErrorMessage(error instanceof Error ? error.message : "Eval baseline creation failed.");
+    }
+  }
+
   async function handleCreateCase(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMutationState("saving");
     setErrorMessage(null);
 
     let expectedJson: Record<string, unknown>;
+    let scoreConfigJson: Record<string, unknown>;
     try {
       expectedJson = JSON.parse(caseForm.expected_json) as Record<string, unknown>;
     } catch {
       setMutationState("error");
       setErrorMessage("Expected JSON must be valid JSON.");
+      return;
+    }
+    try {
+      scoreConfigJson = JSON.parse(caseForm.score_config_json) as Record<string, unknown>;
+    } catch {
+      setMutationState("error");
+      setErrorMessage("Score config must be valid JSON.");
       return;
     }
 
@@ -338,9 +842,11 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
         name: caseForm.name,
         prompt: caseForm.prompt,
         expected_json: expectedJson,
+        score_type: caseForm.score_type,
+        score_config_json: scoreConfigJson,
       });
       upsertSuite(suite);
-      setCaseForm((current) => ({ ...current, name: "", prompt: "", expected_json: "{}" }));
+      setCaseForm((current) => ({ ...current, name: "", prompt: "", expected_json: "{}", score_config_json: "{}" }));
       setMutationState("idle");
     } catch (error) {
       setMutationState("error");
@@ -359,6 +865,22 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           Phase 2 starts with prompt-suite inventory and run-ready structure. Execution and score history come after the
           run system is mature enough to stay truthful.
         </p>
+        <div className="button-row">
+          <a className="text-action-button" href={buildEvalHistoryExportUrl("csv", activeEvalQuery)}>
+            Export eval CSV
+          </a>
+          <a className="text-action-button" href={buildEvalHistoryExportUrl("json", activeEvalQuery)}>
+            Export eval JSON
+          </a>
+          <button
+            type="button"
+            className="text-action-button"
+            disabled={mutationState === "saving"}
+            onClick={() => void handleImportSuite()}
+          >
+            Import suite JSON
+          </button>
+        </div>
       </header>
 
       <div className="metric-strip">
@@ -381,9 +903,153 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
       </div>
 
       {errorMessage ? <p className="inline-warning">{errorMessage}</p> : null}
+      {scoreHistory?.operator_summary ? (
+        <div className="intelligence-brief">
+          <span
+            className={`status-chip is-${
+              scoreHistory.operator_summary.regression_count > 0 ||
+              scoreHistory.operator_summary.failure_cluster_count > 0
+                ? "queued"
+                : "success"
+            }`}
+          >
+            intelligence
+          </span>
+          <div>
+            <strong>{scoreHistory.operator_summary.headline}</strong>
+            <p>
+              Deterministic signals first. Optional assisted summaries can explain patterns, but raw score data remains
+              the source of truth.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      <form className="eval-control-panel" onSubmit={handleApplyEvalControls}>
+        <div>
+          <p className="section-kicker">Chart controls</p>
+          <h3>Eval intelligence window</h3>
+          <p>
+            Tune the pass-rate window, placement scope, flakiness sensitivity, and failure-cluster size used by charts,
+            exports, and assisted summaries.
+          </p>
+        </div>
+        <div className="eval-control-grid">
+          <label>
+            Time window
+            <select
+              value={evalControls.window_days}
+              onChange={(event) => setEvalControls((current) => ({ ...current, window_days: event.target.value }))}
+            >
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+              <option value="365">Last 365 days</option>
+            </select>
+          </label>
+          <label>
+            Placement filter
+            <select
+              value={evalControls.placement_key}
+              onChange={(event) => setEvalControls((current) => ({ ...current, placement_key: event.target.value }))}
+            >
+              <option value="">All model placements</option>
+              {placementOptions.map((placement) => (
+                <option key={placement.key} value={placement.key}>
+                  {placement.model_name} / {placement.node_id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Flakiness sensitivity
+            <select
+              value={evalControls.flakiness_min_rate}
+              onChange={(event) =>
+                setEvalControls((current) => ({ ...current, flakiness_min_rate: event.target.value }))
+              }
+            >
+              <option value="0.1">Sensitive: 10%</option>
+              <option value="0.2">Balanced: 20%</option>
+              <option value="0.35">Conservative: 35%</option>
+            </select>
+          </label>
+          <label>
+            Failure cluster minimum
+            <input
+              type="number"
+              min="1"
+              max="100"
+              value={evalControls.failure_cluster_min_count}
+              onChange={(event) =>
+                setEvalControls((current) => ({ ...current, failure_cluster_min_count: event.target.value }))
+              }
+            />
+          </label>
+        </div>
+        <div className="eval-preset-row">
+          <label>
+            Saved preset
+            <select
+              value={selectedPresetId}
+              onChange={(event) => setSelectedPresetId(event.target.value)}
+              aria-label="Saved preset"
+            >
+              <option value="">No preset selected</option>
+              {evalPresets.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="button-row">
+            <button type="button" className="text-action-button" onClick={handleSaveEvalPreset}>
+              Save preset
+            </button>
+            <button
+              type="button"
+              className="text-action-button"
+              disabled={!selectedPresetId}
+              onClick={handleApplyEvalPreset}
+            >
+              Apply preset
+            </button>
+            <button
+              type="button"
+              className="text-action-button is-danger"
+              disabled={!selectedPresetId}
+              onClick={handleDeleteEvalPreset}
+            >
+              Delete preset
+            </button>
+          </div>
+        </div>
+        <div className="eval-control-footer">
+          <div className="state-token-row">
+            <span className="state-token">
+              {scoreHistory?.filters?.window_days ?? activeEvalQuery.window_days}d window
+            </span>
+            <span className="state-token">
+              {scoreHistory?.filters?.model_name && scoreHistory.filters.node_id
+                ? `${scoreHistory.filters.model_name} / ${scoreHistory.filters.node_id}`
+                : "all placements"}
+            </span>
+            <span className="state-token">
+              flaky {" >= "} {Math.round((scoreHistory?.thresholds?.flakiness_min_rate ?? 0.2) * 100)}%
+            </span>
+            <span className="state-token">
+              clusters {" >= "} {scoreHistory?.thresholds?.failure_cluster_min_count ?? 2}
+            </span>
+          </div>
+          <button type="submit" className="action-button" disabled={mutationState === "saving"}>
+            Apply controls
+          </button>
+        </div>
+      </form>
 
       <div className="eval-form-grid">
-        <form className="eval-form" onSubmit={handleCreateSuite}>
+        <form className="eval-form is-setup" onSubmit={handleCreateSuite}>
           <div>
             <p className="info-kicker">Prompt suite</p>
             <h3>Create suite</h3>
@@ -410,7 +1076,7 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           </button>
         </form>
 
-        <form className="eval-form" onSubmit={handleCreateCase}>
+        <form className="eval-form is-setup" onSubmit={handleCreateCase}>
           <div>
             <p className="info-kicker">Prompt case</p>
             <h3>Add case</h3>
@@ -454,8 +1120,35 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <label>
             <span>Expected JSON</span>
             <textarea
+              className="code-textarea"
               value={caseForm.expected_json}
               onChange={(event) => setCaseForm((current) => ({ ...current, expected_json: event.target.value }))}
+              disabled={suites.length === 0}
+            />
+          </label>
+          <label>
+            <span>Score type</span>
+            <select
+              value={caseForm.score_type}
+              onChange={(event) => setCaseForm((current) => ({ ...current, score_type: event.target.value }))}
+              disabled={suites.length === 0}
+            >
+              <option value="json_subset">JSON subset</option>
+              <option value="exact_match">Exact match</option>
+              <option value="contains">Contains</option>
+              <option value="regex">Regex</option>
+              <option value="numeric_threshold">Numeric threshold</option>
+              <option value="json_schema">JSON schema</option>
+            </select>
+          </label>
+          <label>
+            <span>Score config JSON</span>
+            <textarea
+              className="code-textarea"
+              value={caseForm.score_config_json}
+              onChange={(event) =>
+                setCaseForm((current) => ({ ...current, score_config_json: event.target.value }))
+              }
               disabled={suites.length === 0}
             />
           </label>
@@ -464,7 +1157,7 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           </button>
         </form>
 
-        <form className="eval-form" onSubmit={handleQueueEvalAttempt}>
+        <form className="eval-form is-execution" onSubmit={handleQueueEvalAttempt}>
           <div>
             <p className="info-kicker">Eval attempt</p>
             <h3>Queue attempt</h3>
@@ -519,11 +1212,19 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
                 {attemptResult.run_count} run{attemptResult.run_count === 1 ? "" : "s"} queued for{" "}
                 {attemptResult.model_name} on {attemptResult.node_id}.
               </span>
+              <button
+                type="button"
+                className="text-action-button"
+                disabled={mutationState === "saving"}
+                onClick={() => void handleExecuteQueuedAttempt()}
+              >
+                Execute queued attempt
+              </button>
             </div>
           ) : null}
         </form>
 
-        <form className="eval-form" onSubmit={handleCreateSchedule}>
+        <form className="eval-form is-execution" onSubmit={handleCreateSchedule}>
           <div>
             <p className="info-kicker">Recurring eval</p>
             <h3>Create schedule</h3>
@@ -595,7 +1296,59 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
             {mutationState === "saving" ? "Creating..." : "Create schedule"}
           </button>
         </form>
+
+        <form className="eval-form is-accented" onSubmit={handleCreateAssistedSummary}>
+          <div>
+            <p className="info-kicker">Assisted summary</p>
+            <h3>Ask local model</h3>
+          </div>
+          <label>
+            <span>Summary model placement</span>
+            <select
+              required
+              value={summaryForm.placement_key}
+              onChange={(event) => setSummaryForm({ placement_key: event.target.value })}
+              disabled={placementOptions.length === 0}
+            >
+              <option value="">Select model on node</option>
+              {placementOptions.map((placement) => (
+                <option key={placement.key} value={placement.key}>
+                  {placement.model_name} on {placement.node_id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="action-copy">
+            Manual only. Vantage sends a compact eval snapshot to the selected local model and stores the result as an
+            auditable Run.
+          </p>
+          <button
+            type="submit"
+            className="action-button"
+            disabled={mutationState === "saving" || placementOptions.length === 0 || !scoreHistory?.total_runs}
+          >
+            {mutationState === "saving" ? "Generating..." : "Generate summary"}
+          </button>
+        </form>
       </div>
+
+      {assistedSummaryRun ? (
+        <div className="assisted-summary-panel">
+          <div className="section-header is-compact">
+            <div>
+              <p className="section-kicker">Operator assistance</p>
+              <h3>Local model summary</h3>
+            </div>
+            <span className={`status-chip is-${assistedSummaryRun.status}`}>
+              {assistedSummaryRun.status}
+            </span>
+          </div>
+          <pre>{assistedSummaryText() ?? "No assisted summary text was returned. Check the Run metadata."}</pre>
+          <p className="action-copy">
+            Run ID: <span className="mono-value">{assistedSummaryRun.run_id}</span>
+          </p>
+        </div>
+      ) : null}
 
       {schedules.length > 0 ? (
         <div className="eval-attempt-panel">
@@ -656,6 +1409,14 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
                         <button
                           type="button"
                           className="text-action-button"
+                          disabled={mutationState === "saving"}
+                          onClick={() => void handleEditSchedule(schedule)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="text-action-button"
                           disabled={
                             !schedule.enabled ||
                             mutationState === "saving" ||
@@ -665,10 +1426,63 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
                         >
                           {scheduleQueueStateById[schedule.schedule_id] === "queueing" ? "Queueing..." : "Queue now"}
                         </button>
+                        <button
+                          type="button"
+                          className="text-action-button is-danger"
+                          disabled={mutationState === "saving"}
+                          aria-label={`Delete schedule ${schedule.suite_name ?? schedule.suite_id}`}
+                          onClick={() => void handleDeleteSchedule(schedule)}
+                        >
+                          Delete
+                        </button>
                       </div>
                       {scheduleQueueStateById[schedule.schedule_id] === "error" ? (
                         <p className="action-copy is-error">Queue now failed. Check the API response.</p>
                       ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {scoreHistory?.schedule_health && scoreHistory.schedule_health.length > 0 ? (
+        <div className="eval-attempt-panel">
+          <div className="section-header is-compact">
+            <div>
+              <p className="section-kicker">Schedule health</p>
+              <h3>Recent schedule outcomes</h3>
+            </div>
+            <p className="section-copy">
+              Schedule health is derived from the latest scheduler metadata and warning-producing failures.
+            </p>
+          </div>
+          <div className="table-shell">
+            <table className="inventory-table">
+              <thead>
+                <tr>
+                  <th scope="col">Target</th>
+                  <th scope="col">Mode</th>
+                  <th scope="col">Last Runs</th>
+                  <th scope="col">Health</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scoreHistory.schedule_health.map((schedule) => (
+                  <tr key={schedule.schedule_id}>
+                    <td>
+                      {schedule.model_name} / {schedule.node_id}
+                    </td>
+                    <td>{schedule.auto_execute ? "Auto-execute" : "Queue only"}</td>
+                    <td>
+                      {schedule.last_runs_executed} executed / {schedule.last_runs_failed} failed
+                    </td>
+                    <td>
+                      <span className={`status-chip is-${schedule.status === "warning" ? "queued" : "success"}`}>
+                        {schedule.status}
+                      </span>
                     </td>
                   </tr>
                 ))}
@@ -769,6 +1583,133 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
         </div>
       ) : null}
 
+      {scoreHistory?.regressions && scoreHistory.regressions.length > 0 ? (
+        <div className="eval-attempt-panel">
+          <div className="section-header is-compact">
+            <div>
+              <p className="section-kicker">Regression alerts</p>
+              <h3>Baseline misses</h3>
+            </div>
+            <p className="section-copy">
+              Baselines compare recent scored runs against an operator-approved minimum pass rate.
+            </p>
+          </div>
+          <div className="table-shell">
+            <table className="inventory-table">
+              <thead>
+                <tr>
+                  <th scope="col">Suite</th>
+                  <th scope="col">Target</th>
+                  <th scope="col">Current</th>
+                  <th scope="col">Minimum</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scoreHistory.regressions.map((regression) => (
+                  <tr key={`${regression.suite_id}-${regression.model_name}-${regression.node_id}`}>
+                    <td>{regression.suite_name}</td>
+                    <td>
+                      {regression.model_name} / {regression.node_id}
+                    </td>
+                    <td>
+                      <span className="status-chip is-failed">
+                        {Math.round(regression.current_pass_rate * 100)}%
+                      </span>
+                    </td>
+                    <td>{Math.round(regression.minimum_pass_rate * 100)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {scoreHistory?.model_reports && scoreHistory.model_reports.length > 0 ? (
+        <div className="eval-attempt-panel">
+          <div className="section-header is-compact">
+            <div>
+              <p className="section-kicker">Model comparison</p>
+              <h3>Model report</h3>
+            </div>
+            <p className="section-copy">This summary rolls up scored eval runs by model name across all nodes.</p>
+          </div>
+          <div className="score-grid">
+            {scoreHistory.model_reports.slice(0, 6).map((model) => (
+              <article key={model.model_name} className="score-card">
+                <p className="info-kicker">Model</p>
+                <h4>{model.model_name}</h4>
+                <strong>{Math.round(model.pass_rate * 100)}%</strong>
+                <p>
+                  {model.passed_count} passed / {model.failed_count} failed across {model.run_count} scored run
+                  {model.run_count === 1 ? "" : "s"}
+                </p>
+              </article>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {scoreHistory?.trends && scoreHistory.trends.length > 0 ? (
+        <div className="eval-attempt-panel">
+          <div className="section-header is-compact">
+            <div>
+              <p className="section-kicker">Trends</p>
+              <h3>Recent placement trend</h3>
+            </div>
+            <p className="section-copy">
+              Trend rows are grouped by day, model, and node from the durable eval Run history.
+            </p>
+          </div>
+          <div className="trend-strip" aria-label="Eval pass-rate trend chart">
+            {scoreHistory.trends.slice(-10).map((trend) => (
+              <article
+                key={`chart-${trend.bucket}-${trend.model_name}-${trend.node_id}`}
+                className={`trend-card ${trendToneClass(trend.pass_rate)}`}
+              >
+                <div className="trend-bar-shell" aria-hidden="true">
+                  <span style={{ height: `${Math.max(6, Math.round(trend.pass_rate * 100))}%` }} />
+                </div>
+                <div>
+                  <p className="info-kicker">{trend.bucket}</p>
+                  <strong>{Math.round(trend.pass_rate * 100)}%</strong>
+                  <span>
+                    {trend.model_name} / {trend.node_id}
+                  </span>
+                  <span>
+                    {trend.passed_count} passed / {trend.failed_count} failed
+                  </span>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="table-shell">
+            <table className="inventory-table">
+              <thead>
+                <tr>
+                  <th scope="col">Day</th>
+                  <th scope="col">Target</th>
+                  <th scope="col">Pass Rate</th>
+                  <th scope="col">Avg Duration</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scoreHistory.trends.slice(-8).map((trend) => (
+                  <tr key={`${trend.bucket}-${trend.model_name}-${trend.node_id}`}>
+                    <td>{trend.bucket}</td>
+                    <td>
+                      {trend.model_name} / {trend.node_id}
+                    </td>
+                    <td>{Math.round(trend.pass_rate * 100)}%</td>
+                    <td>{trend.avg_duration_ms === null ? "Unknown" : `${trend.avg_duration_ms}ms`}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
       {scoreHistory && scoreHistory.cases.length > 0 ? (
         <div className="eval-attempt-panel">
           <div className="section-header is-compact">
@@ -802,6 +1743,84 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
                       </td>
                     </tr>
                   ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {scoreHistory?.flaky_cases && scoreHistory.flaky_cases.length > 0 ? (
+        <div className="eval-attempt-panel">
+          <div className="section-header is-compact">
+            <div>
+              <p className="section-kicker">Flakiness</p>
+              <h3>Mixed-result cases</h3>
+            </div>
+            <p className="section-copy">These cases have both passing and failing results in the scored run history.</p>
+          </div>
+          <div className="table-shell">
+            <table className="inventory-table">
+              <thead>
+                <tr>
+                  <th scope="col">Case</th>
+                  <th scope="col">Suite</th>
+                  <th scope="col">Flakiness</th>
+                  <th scope="col">Runs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scoreHistory.flaky_cases.map((evalCase) => (
+                  <tr key={`${evalCase.suite_id}-${evalCase.case_id}`}>
+                    <td>{evalCase.case_name}</td>
+                    <td>{evalCase.suite_name}</td>
+                    <td>{Math.round(evalCase.flakiness_rate * 100)}%</td>
+                    <td>
+                      {evalCase.passed_count} passed / {evalCase.failed_count} failed
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {scoreHistory?.failure_clusters && scoreHistory.failure_clusters.length > 0 ? (
+        <div className="eval-attempt-panel">
+          <div className="section-header is-compact">
+            <div>
+              <p className="section-kicker">Failure clustering</p>
+              <h3>Repeated failure reasons</h3>
+            </div>
+            <p className="section-copy">
+              Clusters group failed runs by score reason and missing or mismatched fields.
+            </p>
+          </div>
+          <div className="table-shell">
+            <table className="inventory-table">
+              <thead>
+                <tr>
+                  <th scope="col">Reason</th>
+                  <th scope="col">Fields</th>
+                  <th scope="col">Count</th>
+                  <th scope="col">Example</th>
+                </tr>
+              </thead>
+              <tbody>
+                {scoreHistory.failure_clusters.map((cluster) => (
+                  <tr key={`${cluster.reason}-${cluster.missing_or_mismatched.join(",")}`}>
+                    <td>{cluster.reason}</td>
+                    <td>
+                      {cluster.missing_or_mismatched.length > 0
+                        ? cluster.missing_or_mismatched.join(", ")
+                        : "No field list"}
+                    </td>
+                    <td>{cluster.run_count}</td>
+                    <td>
+                      {cluster.example_suite} / {cluster.example_case}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -842,9 +1861,19 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
                     </td>
                     <td>{formatTimestamp(run.started_at)}</td>
                     <td>
-                      <button type="button" className="text-action-button" onClick={() => setSelectedScoreRun(run)}>
-                        Inspect score
-                      </button>
+                      <div className="button-row">
+                        <button type="button" className="text-action-button" onClick={() => setSelectedScoreRun(run)}>
+                          Inspect score
+                        </button>
+                        <button
+                          type="button"
+                          className="text-action-button"
+                          disabled={mutationState === "saving"}
+                          onClick={() => void handleCreateBaseline(run)}
+                        >
+                          Set baseline
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -870,6 +1899,7 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
                 <th scope="col">Cases</th>
                 <th scope="col">Case Preview</th>
                 <th scope="col">Created</th>
+                <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -883,7 +1913,34 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
                       <div className="placement-stack">
                         {suite.cases.slice(0, 3).map((evalCase) => (
                           <span key={evalCase.case_id} className="meta-chip placement-chip">
-                            {evalCase.name}
+                            <span>{evalCase.name}</span>
+                            <button
+                              type="button"
+                              className="chip-action-button"
+                              aria-label={`Edit case ${evalCase.name}`}
+                              disabled={mutationState === "saving"}
+                              onClick={() => void handleEditCase(suite.suite_id, evalCase)}
+                            >
+                              e
+                            </button>
+                            <button
+                              type="button"
+                              className="chip-action-button"
+                              aria-label={`Duplicate case ${evalCase.name}`}
+                              disabled={mutationState === "saving"}
+                              onClick={() => void handleDuplicateCase(suite.suite_id, evalCase)}
+                            >
+                              +
+                            </button>
+                            <button
+                              type="button"
+                              className="chip-action-button"
+                              aria-label={`Delete case ${evalCase.name}`}
+                              disabled={mutationState === "saving"}
+                              onClick={() => void handleDeleteCase(suite.suite_id, evalCase.case_id)}
+                            >
+                              x
+                            </button>
                           </span>
                         ))}
                       </div>
@@ -892,6 +1949,36 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
                     )}
                   </td>
                   <td>{suite.created_at}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="text-action-button"
+                      disabled={mutationState === "saving"}
+                      onClick={() => void handleEditSuite(suite)}
+                    >
+                      Edit suite
+                    </button>
+                    <button
+                      type="button"
+                      className="text-action-button"
+                      disabled={mutationState === "saving"}
+                      onClick={() => void handleDuplicateSuite(suite)}
+                    >
+                      Duplicate
+                    </button>
+                    <a className="text-action-button" href={`/api/evals/suites/${suite.suite_id}/export`}>
+                      Export suite
+                    </a>
+                    <button
+                      type="button"
+                      className="text-action-button is-danger"
+                      disabled={mutationState === "saving" || suite.case_count > 0 || suiteHasSchedule(suite.suite_id)}
+                      aria-label={`Delete suite ${suite.name}`}
+                      onClick={() => void handleDeleteSuite(suite)}
+                    >
+                      Delete suite
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

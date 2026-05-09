@@ -11,6 +11,7 @@ The examples below use `jedi` as an example control-plane node name and `bastet`
 - The backend stores operational state in local SQLite.
 - The remote agent supports bearer-token authentication for node-to-node communication.
 - Secrets are supplied through environment files and are ignored by git.
+- Production Compose requires `VANTAGE_AGENT_SHARED_TOKEN` to be supplied externally before startup.
 
 ## Agent Authentication
 
@@ -33,10 +34,13 @@ Local files:
 - `.env`: local backend/container secret file, ignored by git
 - `/opt/vantage/vantage-agent.env`: remote agent secret file on the worker node
 - `.env.example`: committed example with no secret value
+- `.env.production.example`: committed production example with no secret value
+
+Production Compose refuses to start without `VANTAGE_AGENT_SHARED_TOKEN`. Use `--env-file .env.production`, Portainer secrets, or Portainer environment variables to supply the token outside the Compose YAML.
 
 ## Local-First Data Handling
 
-Vantage does not require cloud services for Phase 1 operation.
+Vantage does not require cloud services for current local-first operation.
 
 The app currently observes:
 
@@ -47,6 +51,19 @@ The app currently observes:
 - run history and capability-check metadata
 
 Operators should avoid putting sensitive prompts or private data into capability-check prompts unless the selected local model and machine are trusted.
+
+## Release Artifact Hygiene
+
+Release bundles are designed to be shareable. They should include public-safe examples and exclude:
+
+- `.env`
+- `.env.production`
+- `vantage.sqlite3`
+- local logs
+- node modules
+- machine-specific bootstrap config values
+
+Before publishing a release, inspect the generated zip for populated tokens, private IPs, local filesystem paths, and accidental database files.
 
 ## Network Exposure
 
@@ -63,7 +80,9 @@ Recommended deployment posture:
 - Vantage does not currently provide human user accounts or browser login.
 - Agent authentication is shared-secret based, not mutual TLS.
 - The development Compose file is not hardened for internet exposure.
+- The production Compose file improves packaging posture but still assumes trusted LAN or VPN access.
 - SQLite is local and not encrypted by Vantage.
+- Optional host-level remediation must go through a future local node agent with explicit allowlists, not a privileged backend container.
 
 ## Reporting Vulnerabilities
 
@@ -82,6 +101,7 @@ Do not include live tokens, private prompts, or model output containing sensitiv
 ## Secret Handling Rules
 
 - Never commit `.env` or `vantage-agent.env`.
+- Never commit `.env.production`.
 - Do not paste live tokens into issues, PRs, or docs.
 - Rotate tokens after disclosure.
 - Prefer generated high-entropy tokens, for example:

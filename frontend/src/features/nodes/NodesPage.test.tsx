@@ -13,7 +13,7 @@ describe("NodesPage", () => {
         nodes={[
           {
             node_id: "bastet",
-            base_url: "http://192.168.50.209:9110",
+            base_url: "http://10.0.0.20:9110",
             display_name: "Bastet",
             observed_status: "degraded",
             freshness: "stale",
@@ -95,7 +95,7 @@ describe("NodesPage", () => {
         nodes={[
           {
             node_id: "bastet",
-            base_url: "http://192.168.50.209:9110",
+            base_url: "http://10.0.0.20:9110",
             display_name: "Bastet",
             observed_status: "healthy",
             freshness: "live",
@@ -152,7 +152,7 @@ describe("NodesPage", () => {
         nodes={[
           {
             node_id: "bastet",
-            base_url: "http://192.168.50.209:9110",
+            base_url: "http://10.0.0.20:9110",
             display_name: "Bastet",
             observed_status: "healthy",
             freshness: "live",
@@ -272,7 +272,7 @@ describe("NodesPage", () => {
           {
             node_id: "bastet",
             display_name: "Bastet",
-            base_url: "http://192.168.50.209:9110",
+            base_url: "http://10.0.0.20:9110",
             observed_status: "healthy",
             freshness: "live",
             last_seen_at: "2026-04-22T12:00:00Z",
@@ -299,7 +299,7 @@ describe("NodesPage", () => {
 
     expect(screen.getByText(/remote node telemetry and recent operations/i)).toBeTruthy();
     expect(screen.getByText("RTX 3090")).toBeTruthy();
-    expect(screen.getByText("http://192.168.50.209:9110")).toBeTruthy();
+    expect(screen.getByText("http://10.0.0.20:9110")).toBeTruthy();
     expect(screen.getByText(/latest bastet-side activity/i)).toBeTruthy();
   });
 });

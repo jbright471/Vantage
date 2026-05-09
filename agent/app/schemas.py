@@ -57,3 +57,5 @@ class EvalAttemptRequest(BaseModel):
     model_name: str
     prompt: str
     expected_json: dict | None = None
+    score_type: str | None = None
+    score_config_json: dict | None = None

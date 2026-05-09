@@ -4,6 +4,8 @@ The Vantage remote agent is a lightweight FastAPI service intended to run on Lin
 
 The examples below use `jedi` as an example control-plane node name and `bastet` as an example remote worker node name. Replace them with names from your own homelab.
 
+Operators can install the generic Linux agent service with `deploy/agent/install.sh`. The installer creates a systemd-managed `vantage-agent` service and writes runtime configuration to `/opt/vantage/vantage-agent.env`.
+
 Example remote agent endpoint:
 
 ```text
@@ -180,7 +182,9 @@ Runs one prompt-suite eval case against a model available to the agent.
   "prompt": "Return a compact JSON object with an answer field.",
   "expected_json": {
     "answer": 42
-  }
+  },
+  "score_type": "json_subset",
+  "score_config_json": {}
 }
 ```
 
@@ -188,11 +192,15 @@ Runs one prompt-suite eval case against a model available to the agent.
 | --- | --- | --- | --- |
 | `model_name` | string | Yes | Ollama model tag to evaluate. |
 | `prompt` | string | Yes | Prompt text from the eval case. |
-| `expected_json` | object or null | No | Expected key/value subset used for simple JSON scoring. |
+| `expected_json` | object or null | No | Expected key/value subset used by the default JSON-subset scorer. |
+| `score_type` | string or null | No | Optional scorer hint. Current control-plane scoring supports `json_subset`, `exact_match`, `contains`, `regex`, `numeric_threshold`, and `json_schema`. |
+| `score_config_json` | object or null | No | Optional score-type-specific config such as `expected_text`, `pattern`, or numeric threshold settings. |
 
 ### Response
 
-Returns a `RunInfo` object with `detail_type` set to `eval_attempt`. The agent stores the raw response preview, parsed JSON when available, and a simple `score` object in `metadata_json`.
+Returns a `RunInfo` object with `detail_type` set to `eval_attempt`. The agent stores the raw response text, response preview, parsed JSON when available, and may include an agent-side score object in `metadata_json`.
+
+The control-plane backend treats the remote agent as the inference executor and applies final scoring itself from the returned response text. This keeps local and remote eval attempts consistent even when a newer control plane supports score types that an older remote agent does not yet understand.
 
 ## Failure States
 
