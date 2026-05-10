@@ -15,8 +15,8 @@ Requirements:
 Create a local token file:
 
 ```powershell
-Copy-Item .env.example .env
-python -c "import secrets; print('VANTAGE_AGENT_SHARED_TOKEN=' + secrets.token_urlsafe(48))" | Set-Content .env
+$token = python -c "import secrets; print(secrets.token_urlsafe(48))"
+(Get-Content .env.example) -replace '^VANTAGE_AGENT_SHARED_TOKEN=.*', "VANTAGE_AGENT_SHARED_TOKEN=$token" | Set-Content .env
 ```
 
 Start the stack:
@@ -62,6 +62,13 @@ $env:VANTAGE_AGENT_SHARED_TOKEN = python -c "import secrets; print(secrets.token
 docker compose -f docker-compose.prod.yml up --build -d
 ```
 
+If you need signed audit bundles, also set:
+
+```powershell
+$env:VANTAGE_AUDIT_SIGNING_KEY = python -c "import secrets; print(secrets.token_urlsafe(48))"
+$env:VANTAGE_AUDIT_KEY_ID = "production-audit-key"
+```
+
 If you keep production values in a file, copy [.env.production.example](./.env.production.example) to `.env.production`, fill in real values, and run:
 
 ```powershell
@@ -75,6 +82,10 @@ Production posture:
 - do not mount source code into containers
 - persist `vantage.sqlite3` to the `vantage_data` volume or a controlled host path
 - provide `VANTAGE_AGENT_SHARED_TOKEN` as a secret or environment variable, not in the Compose file
+- use `VANTAGE_AGENT_AUTH_MODE=hmac` when request signing and replay protection are required
+- provide `VANTAGE_AUDIT_SIGNING_KEY` when signed run-history bundles are part of your audit process
+- set `VANTAGE_EXTERNAL_API_TOKEN` before exposing integration endpoints to n8n, scripts, or other automation
+- keep `VANTAGE_DEMO_MODE=0` unless intentionally running a public demo or screenshot instance
 - expose the frontend only to trusted LAN users
 - keep the backend reachable only from the frontend and trusted operator machines
 - use `/api/health/ready` as the backend deployment gate
@@ -114,7 +125,69 @@ $env:VANTAGE_AGENT_SHARED_TOKEN = "<same-token-as-control-plane>"
   -ControlPlaneUrl http://<control-plane-host>:8000
 ```
 
-The check covers Docker availability, Compose configuration, token presence, bootstrap config presence, optional SQLite path parent directory, backend readiness, and remote-agent reachability.
+The check covers Docker availability, Compose configuration, token presence, auth mode, optional audit signing key, bootstrap config presence, optional SQLite path parent directory, backend readiness, and remote-agent reachability.
+
+## Integrations And Automation
+
+Vantage exposes local-first integration endpoints under `/api/integrations/*`. They are intended for n8n, cron scripts, local webhook receivers, and incident-note exports.
+
+Recommended production environment:
+
+```text
+VANTAGE_EXTERNAL_API_TOKEN=<generated-token>
+VANTAGE_WEBHOOK_URL=http://<automation-host>:<port>/<path>
+VANTAGE_WEBHOOK_ALLOWED_HOSTS=<automation-host>
+VANTAGE_EMAIL_SMTP_HOST=<smtp-host>
+VANTAGE_EMAIL_SMTP_PORT=587
+VANTAGE_EMAIL_SMTP_USERNAME=<smtp-user>
+VANTAGE_EMAIL_SMTP_PASSWORD=<smtp-password>
+VANTAGE_EMAIL_FROM=vantage@<your-domain>
+VANTAGE_EMAIL_TO=operator@<your-domain>
+VANTAGE_EMAIL_USE_TLS=1
+```
+
+Common checks:
+
+```powershell
+Invoke-RestMethod http://<control-plane-host>:8000/api/integrations/events `
+  -Headers @{ "X-Vantage-Api-Key" = "<external-api-token>" }
+
+Invoke-RestMethod http://<control-plane-host>:8000/api/integrations/reports/operator.md `
+  -Headers @{ "X-Vantage-Api-Key" = "<external-api-token>" }
+```
+
+Use [docs/integrations/N8N_EXAMPLES.md](./docs/integrations/N8N_EXAMPLES.md) for scheduled pulls, webhook dispatch, router-log import, and Markdown report export examples.
+
+If you do not use n8n or cron, enable the built-in report worker:
+
+```text
+VANTAGE_REPORT_SCHEDULE_ENABLED=1
+VANTAGE_REPORT_OUTPUT_DIR=/data/reports
+```
+
+The worker writes Markdown reports on the cadence set by `report_schedule_interval_seconds`.
+
+Check integration health from the UI panel or API:
+
+```powershell
+Invoke-RestMethod http://<control-plane-host>:8000/api/integrations/health
+```
+
+## Token Rotation
+
+Generate a replacement agent token without changing files:
+
+```powershell
+.\scripts\rotate-agent-token.ps1
+```
+
+Apply a new token to `.env.production`:
+
+```powershell
+.\scripts\rotate-agent-token.ps1 -EnvFile .env.production -Apply
+```
+
+Then copy the same value into each remote agent env file, restart the backend, restart every `vantage-agent` service, and verify node health. If you use `VANTAGE_AGENT_AUTH_MODE=bearer_or_hmac` during migration, return to `bearer` or `hmac` once all nodes are aligned.
 
 ## Remote Linux Agent
 
@@ -189,6 +262,8 @@ The control-plane backend exposes three health endpoints:
 | `/api/health/ready` | Readiness check before trusting the UI or routing traffic. | Database, required tables, bootstrap config |
 
 Use `/api/health/live` for restart decisions. Use `/api/health/ready` for deployment verification and load-gate checks. A readiness failure returns HTTP `503` and identifies the failed check without exposing secrets, local filesystem paths, or private network configuration.
+
+For public demos, set `VANTAGE_DEMO_MODE=1` and prefer `VANTAGE_ENABLE_BACKGROUND_POLLING=0` so screenshots stay on synthetic state. The setup checker warns if demo mode is enabled during production verification.
 
 Backend logs are emitted as JSON to stdout so Docker, Portainer, systemd, or a future log collector can ingest them consistently. Each record includes a timestamp, log level, logger name, message, and exception details when present.
 
@@ -282,3 +357,10 @@ Build a local release bundle:
 ```
 
 The bundle is written to `dist/releases/` with a matching `SHA256SUMS.txt`. GitHub Actions also builds and uploads the same artifacts when a `v*` tag is pushed.
+
+Verify a signed audit bundle:
+
+```powershell
+$env:VANTAGE_AUDIT_SIGNING_KEY = "<same-secret-used-to-sign>"
+python scripts/verify-audit-bundle.py <path-to-bundle.json>
+```

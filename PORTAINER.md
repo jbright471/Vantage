@@ -36,11 +36,20 @@ Create Portainer stack environment variables or secrets:
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `VANTAGE_AGENT_SHARED_TOKEN` | Yes | Shared bearer token used between backend and agents. |
+| `VANTAGE_AGENT_SHARED_TOKEN` | Yes | Shared token used between backend and agents. |
+| `VANTAGE_AGENT_AUTH_MODE` | No | `bearer` by default; use `hmac` for signed requests and replay protection. |
+| `VANTAGE_AGENT_ALLOWED_ACTIONS` | No | Agent allowlist. Default: `read,capability_check,eval_attempt`. |
+| `VANTAGE_AUDIT_SIGNING_KEY` | No | Required only for signed audit bundle exports. |
+| `VANTAGE_AUDIT_KEY_ID` | No | Operator-readable key ID written into signed audit bundle metadata. |
+| `VANTAGE_EXTERNAL_API_TOKEN` | No | Protects `/api/integrations/*` for n8n, scripts, and external tools. |
+| `VANTAGE_WEBHOOK_URL` | No | Generic webhook target for integration dispatch. |
+| `VANTAGE_SLACK_WEBHOOK_URL` | No | Slack-compatible webhook target. |
+| `VANTAGE_DISCORD_WEBHOOK_URL` | No | Discord-compatible webhook target. |
+| `VANTAGE_WEBHOOK_ALLOWED_HOSTS` | No | Optional comma-separated hostname allowlist for webhook dispatch. |
 | `VANTAGE_LOCAL_OLLAMA_BASE_URLS` | No | Comma-separated local Ollama endpoints reachable from the backend container. |
 | `VANTAGE_DATABASE_URL` | No | Overrides the default SQLite location. Production Compose defaults to `sqlite+pysqlite:////data/vantage.sqlite3`. |
 
-Do not paste real tokens into the Compose file, docs, screenshots, or GitHub issues.
+Do not paste real tokens or audit signing keys into the Compose file, docs, screenshots, or GitHub issues.
 
 If you use Portainer secrets, confirm the resolved environment is visible to the backend container before starting the stack. Vantage treats missing `VANTAGE_AGENT_SHARED_TOKEN` as a production startup error in `docker-compose.prod.yml`.
 

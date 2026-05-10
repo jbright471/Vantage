@@ -8,23 +8,27 @@ import {
   createEvalSuite,
   createEvalBaseline,
   deleteEvalCase,
+  deleteEvalIntelligencePreset,
   deleteEvalSchedule,
   deleteEvalSuite,
   duplicateEvalCase,
   duplicateEvalSuite,
   executeEvalAttemptBatch,
   executeEvalRun,
+  fetchEvalIntelligencePresets,
   fetchEvalSchedules,
   fetchEvalScoreHistory,
   fetchEvalSuites,
   importEvalSuite,
   queueEvalAttempt,
   queueEvalScheduleNow,
+  saveEvalIntelligencePreset,
   updateEvalCase,
   updateEvalSchedule,
   updateEvalSuite,
   type EvalAttemptRecord,
   type EvalHistoryQuery,
+  type EvalIntelligencePresetRecord,
   type EvalScheduleRecord,
   type EvalScoreHistoryRecord,
   type EvalScoreRunRecord,
@@ -51,11 +55,7 @@ type EvalIntelligenceControls = {
   failure_cluster_min_count: string;
 };
 
-type EvalIntelligencePreset = {
-  id: string;
-  name: string;
-  controls: EvalIntelligenceControls;
-};
+type EvalIntelligencePreset = EvalIntelligencePresetRecord;
 
 const DEFAULT_EVAL_CONTROLS: EvalIntelligenceControls = {
   window_days: "30",
@@ -190,7 +190,23 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
   const [mutationState, setMutationState] = useState<"idle" | "saving" | "error">("idle");
 
   useEffect(() => {
-    setEvalPresets(readEvalPresets());
+    let isCurrent = true;
+    fetchEvalIntelligencePresets()
+      .then((presets) => {
+        if (isCurrent) {
+          setEvalPresets(presets);
+          writeEvalPresets(presets);
+        }
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setEvalPresets(readEvalPresets());
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -260,7 +276,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
   }, [activeEvalQuery]);
 
   const totalCases = suites.reduce((total, suite) => total + suite.case_count, 0);
-  const placementOptions: PlacementOption[] = models
+  const placementOptionMap = new Map<string, PlacementOption>();
+  models
     .flatMap((model) =>
       model.placement_details
         .filter((placement) => placement.available)
@@ -270,7 +287,10 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           node_id: placement.node_id,
         })),
     )
-    .sort((left, right) => `${left.model_name}:${left.node_id}`.localeCompare(`${right.model_name}:${right.node_id}`));
+    .forEach((placement) => placementOptionMap.set(placement.key, placement));
+  const placementOptions: PlacementOption[] = Array.from(placementOptionMap.values()).sort((left, right) =>
+    `${left.model_name}:${left.node_id}`.localeCompare(`${right.model_name}:${right.node_id}`),
+  );
   const recentEvalRuns = dedupeRuns([
     ...queuedEvalRuns,
     ...runs.filter((run) => run.detail_type === "eval_attempt"),
@@ -448,7 +468,7 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
     setActiveEvalQuery(query);
   }
 
-  function handleSaveEvalPreset() {
+  async function handleSaveEvalPreset() {
     const query = buildEvalHistoryQuery(evalControls);
     if (!isValidEvalHistoryQuery(query)) {
       setMutationState("error");
@@ -465,19 +485,38 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
       setErrorMessage("Preset name cannot be empty.");
       return;
     }
-    const preset: EvalIntelligencePreset = {
-      id: `eval-preset-${Date.now()}`,
+    const draftPreset = {
+      id: selectedPresetId || undefined,
       name: trimmedName,
       controls: { ...evalControls },
     };
-    const nextPresets = [...evalPresets.filter((item) => item.name !== trimmedName), preset].sort((left, right) =>
-      left.name.localeCompare(right.name),
-    );
-    setEvalPresets(nextPresets);
-    setSelectedPresetId(preset.id);
-    writeEvalPresets(nextPresets);
-    setMutationState("idle");
-    setErrorMessage(null);
+    try {
+      const preset = await saveEvalIntelligencePreset(draftPreset);
+      const nextPresets = [...evalPresets.filter((item) => item.id !== preset.id && item.name !== preset.name), preset].sort(
+        (left, right) => left.name.localeCompare(right.name),
+      );
+      setEvalPresets(nextPresets);
+      setSelectedPresetId(preset.id);
+      writeEvalPresets(nextPresets);
+      setMutationState("idle");
+      setErrorMessage(null);
+    } catch (error) {
+      const fallbackPreset: EvalIntelligencePreset = {
+        id: selectedPresetId || `eval-preset-${Date.now()}`,
+        name: trimmedName,
+        controls: { ...evalControls },
+        storage: "browser-local-fallback",
+      };
+      const nextPresets = [
+        ...evalPresets.filter((item) => item.id !== fallbackPreset.id && item.name !== fallbackPreset.name),
+        fallbackPreset,
+      ].sort((left, right) => left.name.localeCompare(right.name));
+      setEvalPresets(nextPresets);
+      setSelectedPresetId(fallbackPreset.id);
+      writeEvalPresets(nextPresets);
+      setMutationState("error");
+      setErrorMessage(error instanceof Error ? `${error.message}; saved in browser fallback.` : "Preset saved in browser fallback.");
+    }
   }
 
   function handleApplyEvalPreset() {
@@ -499,8 +538,17 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
     setErrorMessage(null);
   }
 
-  function handleDeleteEvalPreset() {
-    const nextPresets = evalPresets.filter((item) => item.id !== selectedPresetId);
+  async function handleDeleteEvalPreset() {
+    const presetId = selectedPresetId;
+    if (!presetId) {
+      return;
+    }
+    const nextPresets = evalPresets.filter((item) => item.id !== presetId);
+    try {
+      await deleteEvalIntelligencePreset(presetId);
+    } catch {
+      // Browser fallback presets may not exist in managed settings yet.
+    }
     setEvalPresets(nextPresets);
     setSelectedPresetId("");
     writeEvalPresets(nextPresets);
@@ -1669,6 +1717,12 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
               >
                 <div className="trend-bar-shell" aria-hidden="true">
                   <span style={{ height: `${Math.max(6, Math.round(trend.pass_rate * 100))}%` }} />
+                </div>
+                <div className="trend-signal-rail" aria-hidden="true">
+                  {Array.from({ length: Math.min(12, Math.max(1, trend.run_count)) }).map((_, index) => {
+                    const passedBoundary = Math.round(trend.pass_rate * Math.min(12, Math.max(1, trend.run_count)));
+                    return <span key={index} className={index < passedBoundary ? "is-pass" : "is-fail"} />;
+                  })}
                 </div>
                 <div>
                   <p className="info-kicker">{trend.bucket}</p>

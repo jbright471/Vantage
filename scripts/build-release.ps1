@@ -25,15 +25,22 @@ $files = @(
     ".env.example",
     ".env.production.example",
     "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
     "ARCHITECTURE.md",
     "AGENT_CONTRACT.md",
+    "GETTING_STARTED.md",
     "OPERATIONS.md",
     "OPERATOR_GUIDE.md",
     "PORTAINER.md",
     "RELEASE.md",
+    "RELEASE_ANNOUNCEMENT_TEMPLATE.md",
     "LOCAL_NODE_AGENT.md",
     "SECURITY.md",
     "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
+    "SUPPORT.md",
+    "SCREENSHOTS.md",
     "ROADMAP.md",
     "pyproject.toml",
     "alembic.ini",
@@ -43,9 +50,11 @@ $files = @(
 
 $directories = @(
     "agent",
+    ".github",
     "backend",
     "config",
     "deploy/agent",
+    "docs",
     "frontend/src",
     "frontend/public",
     "frontend/package.json",
@@ -58,7 +67,10 @@ $directories = @(
     "frontend/tsconfig.node.json",
     "frontend/vite.config.ts",
     "migrations",
-    "scripts/check-setup.ps1"
+    "scripts/build-release.ps1",
+    "scripts/check-setup.ps1",
+    "scripts/rotate-agent-token.ps1",
+    "scripts/verify-audit-bundle.py"
 )
 
 foreach ($file in $files) {
@@ -93,9 +105,11 @@ Before deployment:
 
 1. Copy `.env.production.example` to `.env.production`.
 2. Generate and set `VANTAGE_AGENT_SHARED_TOKEN`.
-3. Edit `config/vantage.bootstrap.toml` for your node names and agent URLs.
-4. Run `scripts/check-setup.ps1`.
-5. Start with `docker compose -f docker-compose.prod.yml --env-file .env.production up --build -d`.
+3. Optionally generate and set `VANTAGE_AUDIT_SIGNING_KEY` for signed audit bundles.
+4. Optionally generate and set `VANTAGE_EXTERNAL_API_TOKEN` before connecting n8n or scripts.
+5. Edit `config/vantage.bootstrap.toml` for your node names and agent URLs.
+6. Run `scripts/check-setup.ps1`.
+7. Start with `docker compose -f docker-compose.prod.yml --env-file .env.production up --build -d`.
 "@ | Set-Content -Path (Join-Path $staging "RELEASE_NOTES.md") -Encoding utf8
 
 if (Test-Path $zipPath) {

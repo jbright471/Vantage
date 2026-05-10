@@ -9,7 +9,7 @@ describe("EvalsPage", () => {
   });
 
   it("renders the eval lab foundation empty state", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
       if (url === "/api/evals/score-history") {
         return {
@@ -140,7 +140,7 @@ describe("EvalsPage", () => {
         },
       ],
     };
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
       if (url === "/api/evals/score-history") {
         return {
@@ -642,7 +642,7 @@ describe("EvalsPage", () => {
 
   it("applies eval intelligence chart controls through backend query params", async () => {
     const requestedUrls: string[] = [];
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
       requestedUrls.push(url);
       if (url.startsWith("/api/evals/score-history")) {
@@ -717,10 +717,10 @@ describe("EvalsPage", () => {
     expect(screen.getAllByText("llama3.2:latest / jedi").length).toBeGreaterThan(0);
   });
 
-  it("saves and reapplies local eval intelligence presets", async () => {
+  it("saves and reapplies managed eval intelligence presets", async () => {
     const requestedUrls: string[] = [];
     vi.spyOn(window, "prompt").mockReturnValue("Fast flaky review");
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
       requestedUrls.push(url);
       if (url.startsWith("/api/evals/score-history")) {
@@ -748,6 +748,28 @@ describe("EvalsPage", () => {
       if (url === "/api/evals/schedules") {
         return { ok: true, json: async () => [] } as Response;
       }
+      if (url === "/api/evals/intelligence-presets" && init?.method !== "PUT") {
+        return {
+          ok: true,
+          json: async () => ({ presets: [] }),
+        } as Response;
+      }
+      if (url === "/api/evals/intelligence-presets" && init?.method === "PUT") {
+        return {
+          ok: true,
+          json: async () => ({
+            id: "managed-preset-1",
+            name: "Fast flaky review",
+            controls: {
+              window_days: "7",
+              placement_key: "",
+              flakiness_min_rate: "0.1",
+              failure_cluster_min_count: "2",
+            },
+            storage: "managed",
+          }),
+        } as Response;
+      }
       return { ok: true, json: async () => [] } as Response;
     });
 
@@ -761,7 +783,7 @@ describe("EvalsPage", () => {
     fireEvent.change(screen.getByLabelText("Flakiness sensitivity"), { target: { value: "0.1" } });
     fireEvent.click(screen.getByRole("button", { name: /save preset/i }));
 
-    const presetOption = screen.getByRole<HTMLOptionElement>("option", { name: "Fast flaky review" });
+    const presetOption = await screen.findByRole<HTMLOptionElement>("option", { name: "Fast flaky review" });
     expect(presetOption).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("Time window"), { target: { value: "30" } });

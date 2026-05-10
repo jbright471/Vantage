@@ -16,8 +16,8 @@ Run the Docker development stack:
 
 ```powershell
 cd ./vantage
-Copy-Item .env.example .env
-python -c "import secrets; print('VANTAGE_AGENT_SHARED_TOKEN=' + secrets.token_urlsafe(48))" | Set-Content .env
+$token = python -c "import secrets; print(secrets.token_urlsafe(48))"
+(Get-Content .env.example) -replace '^VANTAGE_AGENT_SHARED_TOKEN=.*', "VANTAGE_AGENT_SHARED_TOKEN=$token" | Set-Content .env
 docker compose up --build -d
 ```
 
@@ -29,6 +29,13 @@ cd frontend
 npm run build
 ```
 
+Try the public-safe demo flow:
+
+```powershell
+(Get-Content .env) -replace '^VANTAGE_DEMO_MODE=.*', "VANTAGE_DEMO_MODE=1" | Set-Content .env
+docker compose up --build -d
+```
+
 ## Core Engineering Rules
 
 - Preserve the separation between configured state, observed state, and derived display state.
@@ -37,6 +44,7 @@ npm run build
 - Do not make the frontend invent operational truth that is not present in backend state.
 - Keep remote agent responses strict and Pydantic-validated.
 - Keep secrets out of git.
+- Keep public examples generic. Use `demo-control`, `demo-worker`, `<remote-agent-ip>`, and `./vantage` style placeholders instead of real homelab details.
 
 ## Backend Changes
 
@@ -141,6 +149,9 @@ docker compose -f docker-compose.prod.yml config --quiet
 - New actions create auditable `Run` records.
 - New node observations preserve freshness and last-known-state semantics.
 - Secrets are not committed.
+- Demo mode still works when public-facing UI or docs change.
+
+Use the repository pull request template and issue templates when working through GitHub. They are intentionally strict about operator safety and private-network redaction.
 
 ## Commit Style
 

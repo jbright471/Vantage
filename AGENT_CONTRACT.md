@@ -14,11 +14,31 @@ http://<remote-agent-ip>:9110
 
 ## Authentication
 
-When `VANTAGE_AGENT_SHARED_TOKEN` is set on the agent, every endpoint requires:
+When `VANTAGE_AGENT_SHARED_TOKEN` is set on the agent, every endpoint requires authentication. Bearer mode is the default:
 
 ```http
 Authorization: Bearer <token>
 ```
+
+Optional HMAC mode is enabled with:
+
+```text
+VANTAGE_AGENT_AUTH_MODE=hmac
+VANTAGE_AGENT_KEY_ID=<optional-key-id>
+```
+
+HMAC requests send:
+
+```http
+X-Vantage-Timestamp: <unix-seconds>
+X-Vantage-Nonce: <unique-random-value>
+X-Vantage-Signature: <hmac-sha256-hex>
+X-Vantage-Key-Id: <optional-key-id>
+```
+
+The signature signs `METHOD`, `PATH`, timestamp, nonce, and SHA-256 body hash. The agent rejects invalid signatures, stale timestamps, reused nonces, and key ID mismatches.
+
+For short migrations, `VANTAGE_AGENT_AUTH_MODE=bearer_or_hmac` accepts either bearer or signed requests. Avoid leaving migration mode enabled permanently.
 
 Missing or invalid tokens return:
 
@@ -29,6 +49,18 @@ Missing or invalid tokens return:
 ```
 
 with HTTP status `401`.
+
+Disallowed action classes return HTTP `403`. Configure the allowlist with:
+
+```text
+VANTAGE_AGENT_ALLOWED_ACTIONS=read,capability_check,eval_attempt
+```
+
+| Action | Endpoints |
+| --- | --- |
+| `read` | `GET /health`, `GET /gpu`, `GET /models`, `GET /runs` |
+| `capability_check` | `POST /capability-check` |
+| `eval_attempt` | `POST /eval-attempt` |
 
 If the token is not configured, the agent allows unauthenticated access. Production and shared homelab deployments should configure the token.
 
@@ -208,6 +240,8 @@ The control plane treats remote agent errors as operational state:
 
 - connection failure: node eventually becomes `stale` then `unreachable`
 - one endpoint failure while others respond: node becomes `degraded`
-- auth failure: remote collection fails until token configuration matches
+- auth failure: remote collection fails, the control plane surfaces an `agent_auth_failed` security warning, and collection resumes once token/auth-mode configuration matches
+- replayed HMAC request: agent returns HTTP `401`
+- disallowed agent action: agent returns HTTP `403`
 - failed capability check: durable `Run` record with `status: failed`
 - failed eval attempt: durable `Run` record with `status: failed` and score/error metadata

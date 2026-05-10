@@ -4,6 +4,9 @@ import { NodesPage } from "./features/nodes/NodesPage";
 import { RoutingPage } from "./features/routing/RoutingPage";
 import { RunsPage } from "./features/runs/RunsPage";
 import { EvalsPage } from "./features/evals/EvalsPage";
+import { IntegrationHealthPanel } from "./features/integrations/IntegrationHealthPanel";
+import { OnboardingPanel } from "./features/onboarding/OnboardingPanel";
+import { SetupWizardDrawer } from "./features/onboarding/SetupWizardDrawer";
 import { useEventSource } from "./hooks/useEventSource";
 import { acknowledgeWarning } from "./api/client";
 
@@ -70,6 +73,7 @@ function summarizeAttention(
 export default function App() {
   const { state, streamStatus, lastSyncAt, errorMessage } = useEventSource("/api/stream");
   const [isDocsOpen, setIsDocsOpen] = useState(false);
+  const [isSetupWizardOpen, setIsSetupWizardOpen] = useState(false);
   const [showAllWarnings, setShowAllWarnings] = useState(false);
   const [acknowledgedWarningIds, setAcknowledgedWarningIds] = useState<Set<string>>(() => new Set());
   const [warningActionState, setWarningActionState] = useState<Record<string, "idle" | "saving" | "error">>({});
@@ -217,6 +221,18 @@ export default function App() {
 
         {errorMessage ? <p className="inline-warning">{errorMessage}</p> : null}
 
+        <OnboardingPanel
+          streamStatus={streamStatus}
+          nodeCount={state.nodes.length}
+          modelCount={state.models.length}
+          runCount={state.runs.length}
+          routingRuleCount={state.routing.length}
+          onOpenDocs={() => setIsDocsOpen(true)}
+          onOpenSetupWizard={() => setIsSetupWizardOpen(true)}
+        />
+
+        <IntegrationHealthPanel />
+
         {activeWarnings.length > 0 ? (
           <section className="warning-strip" aria-label="Active warnings">
             <div>
@@ -279,6 +295,15 @@ export default function App() {
           <OperatorGuideDrawer isOpen={isDocsOpen} onClose={() => setIsDocsOpen(false)} />
         </Suspense>
       ) : null}
+
+      <SetupWizardDrawer
+        isOpen={isSetupWizardOpen}
+        onClose={() => setIsSetupWizardOpen(false)}
+        nodes={state.nodes}
+        models={state.models}
+        routingRules={state.routing}
+        streamStatus={streamStatus}
+      />
     </main>
   );
 }

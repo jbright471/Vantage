@@ -35,6 +35,9 @@ if [[ ! -f "${INSTALL_DIR}/vantage-agent.env" ]]; then
   {
     echo "VANTAGE_AGENT_PORT=${AGENT_PORT}"
     echo "VANTAGE_AGENT_SHARED_TOKEN=${VANTAGE_AGENT_SHARED_TOKEN:-}"
+    echo "VANTAGE_AGENT_AUTH_MODE=${VANTAGE_AGENT_AUTH_MODE:-bearer}"
+    echo "VANTAGE_AGENT_KEY_ID=${VANTAGE_AGENT_KEY_ID:-}"
+    echo "VANTAGE_AGENT_ALLOWED_ACTIONS=${VANTAGE_AGENT_ALLOWED_ACTIONS:-read,capability_check,eval_attempt}"
     echo "VANTAGE_AGENT_OLLAMA_BASE_URLS=${VANTAGE_AGENT_OLLAMA_BASE_URLS:-http://127.0.0.1:11434}"
   } >"${INSTALL_DIR}/vantage-agent.env"
   chmod 600 "${INSTALL_DIR}/vantage-agent.env"

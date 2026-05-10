@@ -49,6 +49,7 @@ Vantage stores `NodeSnapshot` rows for node health, model visibility, Ollama sta
 | `snapshot_min_per_node` | `1` | Safety floor. Vantage keeps at least this many snapshots per node even if they are older than the retention window. |
 | `snapshot_prune_interval_seconds` | `900` | How often the background pruning worker runs. `900` seconds is 15 minutes. Lower only if snapshots accumulate unusually fast. |
 | `eval_schedule_interval_seconds` | `60` | How often the background eval scheduler checks for due schedules. Keep this modest; schedules can queue work and may auto-execute trusted eval suites when explicitly enabled. |
+| `report_schedule_interval_seconds` | `3600` | How often the optional scheduled report worker writes Markdown operator reports when `VANTAGE_REPORT_SCHEDULE_ENABLED=1`. |
 
 Operational note: pruning runs inside the FastAPI process using the lifespan-managed background worker. It does not require Redis, Celery, or a separate container.
 
@@ -59,6 +60,10 @@ Operational note: pruning runs inside the FastAPI process using the lifespan-man
 | `agent_auth_token_env` | `VANTAGE_AGENT_SHARED_TOKEN` | Name of the environment variable that stores the shared token used for remote agent requests. Keep the token in `.env`, not in git. |
 
 If a remote node starts returning unauthorized responses, confirm that both the control-plane backend and remote agent process are using the same token value.
+
+For stronger node-to-node trust, set `VANTAGE_AGENT_AUTH_MODE=hmac` in the backend and agent environments. HMAC mode signs each request, checks timestamp freshness, and rejects replayed nonces. Use `VANTAGE_AGENT_ALLOWED_ACTIONS` to keep the agent least-privilege; the default allows read telemetry, capability checks, and eval attempts only.
+
+Use `scripts/rotate-agent-token.ps1` when rotating `VANTAGE_AGENT_SHARED_TOKEN`. Rotation is a coordinated workflow: update the control-plane env, update every agent env, restart both sides, and verify `/health`.
 
 ### Health Checks
 
@@ -83,14 +88,39 @@ Production deployments use `docker-compose.prod.yml`, `.env.production`, and the
 | `.env.example` | Development environment template with no real secrets. |
 | `.env.production.example` | Production environment template with no real secrets. |
 | `config/vantage.bootstrap.example.toml` | Public-safe node registry sample for releases and other operators. |
-| `scripts/check-setup.ps1` | Preflight check for Docker, Compose config, token presence, optional SQLite path, backend readiness, and remote-agent reachability. |
+| `scripts/check-setup.ps1` | Preflight check for Docker, Compose config, token presence, auth mode, optional audit signing key, optional SQLite path, backend readiness, and remote-agent reachability. |
 | `scripts/build-release.ps1` | Creates a shareable release zip and `SHA256SUMS.txt`. |
+| `scripts/rotate-agent-token.ps1` | Generates a new high-entropy agent token and optionally updates an env file. |
+| `scripts/verify-audit-bundle.py` | Verifies signed audit bundle payload digests and HMAC signatures. |
 
 Production Compose requires `VANTAGE_AGENT_SHARED_TOKEN` to be supplied externally. Keep that value in `.env.production`, Portainer secrets, or Portainer environment variables. Do not paste real tokens into Compose YAML, screenshots, tickets, or documentation.
 
 Production Compose runs Alembic migrations before Uvicorn starts. Back up SQLite before updates, especially before pulling a release that changes database models.
 
+### Demo Mode
+
+Set `VANTAGE_DEMO_MODE=1` when you want to evaluate Vantage, capture screenshots, or prepare a public walkthrough without exposing real node names, private IP addresses, local prompts, or filesystem paths.
+
+Demo mode seeds:
+
+- `demo-control` and `demo-worker` nodes.
+- Synthetic GPU, CPU, memory, Ollama, and model placement data.
+- Example success, failed, and `SUBMITTED_UNVERIFIED` run records.
+- Demo eval suite and schedule records.
+- Demo routing policies for interactive and batch lanes.
+- A warning record showing degraded-node handling.
+
+Keep demo mode disabled for production unless you are intentionally running a public demo instance. For a frozen screenshot environment, combine demo mode with `VANTAGE_ENABLE_BACKGROUND_POLLING=0`.
+
 ## Navigating the UI
+
+### First-Run Onboarding
+
+The onboarding panel appears in the command shell until dismissed in browser-local storage. It checks whether the API stream is live, nodes are registered, models are observed, runs are auditable, and routing policy is visible. Use it as the first five-minute checklist for new installs or public demo instances.
+
+The `Read operator guide` button opens this guide in the slide-out drawer so you can keep the live dashboard visible while reading setup guidance.
+
+Use `Launch setup wizard` for first-run configuration. The wizard generates a shared-token `.env` line, a `config/vantage.bootstrap.toml` node block, local Ollama endpoint settings, and restart/verification commands. It does not write files or store secrets; the operator still reviews and applies each generated snippet deliberately.
 
 ### Command Header and Warnings
 
@@ -148,6 +178,7 @@ Use exports when you need external review:
 
 - `Export CSV`: Best for spreadsheet inspection and operator handoff.
 - `Export JSON`: Best for preserving nested metadata, traces, model details, and future SIEM-style ingestion.
+- `Export signed bundle`: Best for tamper-evident evidence when `VANTAGE_AUDIT_SIGNING_KEY` is configured. The bundle includes JSON payload data, a SHA-256 payload digest, and HMAC signature metadata.
 
 ### Models
 
@@ -217,13 +248,32 @@ Eval Intelligence panels summarize the same durable run data from several angles
 - Failure clustering groups repeated failures by reason and missing or mismatched fields.
 - Schedule health shows the latest scheduler execution counts and failures.
 
-Use `Eval intelligence window` controls when you need to scope the analysis. The time-window selector changes the pass-rate window used by score history. The placement filter narrows charts, regressions, schedules, exports, and assisted summaries to a specific model/node pair. Flakiness sensitivity controls how mixed-result cases are surfaced, and failure-cluster minimum controls how many matching failures are required before a cluster is treated as repeated. Use `Save preset` for browser-local shortcuts to common scopes, such as a seven-day flaky-case review or a single-placement regression check.
+Use `Eval intelligence window` controls when you need to scope the analysis. The time-window selector changes the pass-rate window used by score history. The placement filter narrows charts, regressions, schedules, exports, and assisted summaries to a specific model/node pair. Flakiness sensitivity controls how mixed-result cases are surfaced, and failure-cluster minimum controls how many matching failures are required before a cluster is treated as repeated. Use `Save preset` for managed shortcuts to common scopes, such as a seven-day flaky-case review or a single-placement regression check. Presets are stored in Vantage settings with a browser-local fallback if the settings API is unavailable.
 
 Use `Generate summary` when you want an optional local model to explain the current eval signals in operator language. This is a manual action only. Vantage sends a compact eval snapshot using the active Eval Intelligence scope to the selected model placement, stores the result as an `eval_assisted_summary` Run, and displays the returned Markdown in the Eval Lab. Treat it as advisory: the deterministic score tables, baselines, and run metadata remain the source of truth.
 
 Lifecycle cleanup is deliberately guarded. You can delete schedules and individual prompt cases directly from Eval Lab. Prompt suite deletion is available only when the suite has no remaining cases and no active schedules. Cleanup does not delete historical eval `Run` records, so scored runs and audit evidence remain available after a suite or case is removed from the active definition list.
 
 Use `Export eval CSV` for spreadsheet review and `Export eval JSON` when you need nested score details, baselines, trend rows, failure clusters, and regression data. Eval history exports inherit the active Eval Intelligence scope. Suite-level export/import is available through the eval API for sharing prompt packs across Vantage installs.
+
+### Integrations
+
+The Integrations API is for n8n, scripts, local notification receivers, and incident-note workflows. It is intentionally API-first rather than UI-first so Vantage remains useful even when the web UI is closed.
+
+Set `VANTAGE_EXTERNAL_API_TOKEN` before exposing `/api/integrations/*` to automation tools. Use `Authorization: Bearer <token>` or `X-Vantage-Api-Key: <token>`.
+
+Key endpoints:
+
+- `/api/integrations/events`: normalized warnings, failed runs, and eval-regression candidates.
+- `/api/integrations/webhooks/dispatch`: opt-in dispatch for generic, Slack, Discord, and SMTP email payloads.
+- `/api/integrations/import/router-runs`: imports external router activity as durable `router_request` Runs.
+- `/api/integrations/reports/operator.md`: Markdown report for Obsidian, incident notes, or handoff.
+- `/api/integrations/health`: integration configuration health, configured targets, last dispatch status, and security-event counters.
+- `/api/integrations/collectors`: registered collector descriptors, starting with the built-in Ollama collector.
+
+Use n8n or cron when you want external orchestration. If you do not use either, enable `VANTAGE_REPORT_SCHEDULE_ENABLED=1` and set `VANTAGE_REPORT_OUTPUT_DIR` so Vantage writes scheduled Markdown reports from its own background worker.
+
+The Integration Health panel in the app shows whether an external API token is configured, which dispatch targets are present, the latest dispatch result, and repeated security-event counters such as agent auth failures. Treat missing integration health as a signal that the backend is unavailable or the health endpoint cannot be reached.
 
 ### Docs Drawer
 
@@ -405,6 +455,31 @@ $env:VANTAGE_AGENT_SHARED_TOKEN = "<same-token-as-control-plane>"
 4. Deploy the update or release bundle.
 5. Verify `/api/health/ready`.
 6. Keep the backup until the new deployment has been stable through normal polling and UI use.
+
+### Verify a Signed Audit Bundle
+
+1. Open Runs.
+2. Click `Export signed bundle`.
+3. Store the downloaded bundle with the related incident notes or release evidence.
+4. Set `VANTAGE_AUDIT_SIGNING_KEY` in a local shell that has access to the verification key.
+5. Run:
+
+```powershell
+python scripts/verify-audit-bundle.py <path-to-bundle.json>
+```
+
+6. Confirm `verified` is `true`, the `payload_sha256` matches the bundle, and the `key_id` is the expected signing key label.
+7. Treat a failed verification as evidence that the file was edited, truncated, signed with a different key, or exported without matching metadata.
+
+### Configure Email Dispatch and Scheduled Reports
+
+1. Set `VANTAGE_EXTERNAL_API_TOKEN` before connecting scripts or automation.
+2. Configure SMTP values in `.env` or `.env.production`: `VANTAGE_EMAIL_SMTP_HOST`, `VANTAGE_EMAIL_SMTP_PORT`, `VANTAGE_EMAIL_SMTP_USERNAME`, `VANTAGE_EMAIL_SMTP_PASSWORD`, `VANTAGE_EMAIL_FROM`, `VANTAGE_EMAIL_TO`, and `VANTAGE_EMAIL_USE_TLS`.
+3. Restart the backend so environment variables are loaded.
+4. Open the Integration Health panel and confirm the email target appears as configured.
+5. Send a test dispatch through `/api/integrations/webhooks/dispatch` with adapter `email`.
+6. If you want Vantage to write reports without n8n or cron, set `VANTAGE_REPORT_SCHEDULE_ENABLED=1` and `VANTAGE_REPORT_OUTPUT_DIR=<report-directory>`.
+7. Confirm new Markdown reports appear in the output directory at the cadence set by `report_schedule_interval_seconds`.
 
 ### Deploy Through Portainer
 

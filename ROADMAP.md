@@ -91,7 +91,7 @@ Completed foundation:
 
 ## Phase 2.5: Eval Intelligence
 
-Status: shipped with future tuning planned.
+Status: shipped.
 
 Completed foundation:
 
@@ -107,13 +107,12 @@ Completed foundation:
 - Richer visual chart controls for selecting score-history time windows and placement filters.
 - Configurable Eval Intelligence thresholds for flakiness sensitivity and failure-cluster size.
 - Eval CSV/JSON exports and assisted summaries inherit the same active score-history scope as the UI.
-- Browser-local saved presets for common Eval Intelligence scopes.
-- Visual pass-rate tone bands for trend cards so weak placements stand out without reading every row.
+- Managed saved presets for common Eval Intelligence scopes, stored in Vantage settings with browser-local fallback.
+- Visual pass-rate tone bands and compact trend signal rails so weak placements stand out without reading every row.
 
 Future tuning:
 
-- Add more expressive chart visualizations once more real eval history accumulates.
-- Promote presets into managed operator settings if browser-local storage becomes too limiting.
+- Add fuller chart visualizations once more real eval history accumulates.
 
 ## Phase 3: Routing And Policy Control
 
@@ -156,23 +155,27 @@ Completed foundation:
 
 ## Phase 5: Share/Sell Readiness
 
-Status: planned.
+Status: shipped.
 
-- Demo mode with seeded sample data.
-- First-run setup wizard for node registry, token setup, and local Ollama discovery.
-- Product screenshots and walkthrough media.
+- Demo mode with seeded public-safe sample nodes, runs, models, warnings, eval data, and routing policies.
+- First-run onboarding checklist in the UI with stream, node, model, run, and routing checks.
+- First-run setup wizard for token generation, node registry snippets, local Ollama endpoint config, and verification.
+- Product screenshot guidance, public screenshot captures, and redaction rules for public media.
 - Polished README positioning Vantage as a local AI command center.
-- License and distribution decision.
-- Versioned changelog.
-- Onboarding checklist for other homelab operators.
+- MIT license and open-source repository posture.
+- Versioned changelog and release announcement template.
+- Getting started guide for demo mode and real-node connection.
+- GitHub issue templates and pull request template.
+- Support guide and code of conduct.
 - Security posture summary for local-first deployments.
-- Optional landing page or product microsite.
-- Release announcement template and product-ready install walkthrough.
-- Demo-friendly sample eval suites and routing policies.
+- Static product microsite under `docs/product/`.
+- Product-ready install walkthrough script and shot list under `docs/walkthrough/`.
+- GitHub Pages workflow for publishing product docs and public walkthrough assets.
+- Remotion-ready walkthrough video scaffold with manifest and screenshot references.
 
 ## Phase 6: Trust, Audit, And Security Hardening
 
-Status: planned.
+Status: shipped.
 
 - Signed audit export for run history.
 - Optional immutable audit bundle with JSON plus signature metadata.
@@ -185,9 +188,24 @@ Status: planned.
 - Vulnerability reporting workflow and release security checklist.
 - Optional mTLS research for multi-operator or less-trusted networks.
 
+Completed foundation:
+
+- `/api/runs/export.bundle.json` signed audit bundle endpoint with canonical payload digest and HMAC-SHA256 signature metadata.
+- Optional HMAC remote-agent auth using signed method/path/timestamp/nonce/body-hash messages.
+- Agent replay protection through nonce cache and timestamp skew checks.
+- Backend remote client support for bearer, HMAC, and `bearer_or_hmac` migration mode.
+- Agent action allowlist covering read endpoints, capability checks, and eval attempts.
+- Critical `agent_auth_failed` warnings when remote agent auth rejects collection.
+- Token rotation helper script and documented rotation workflow.
+- Explicit idempotency-key strategy documentation for current and future actions.
+- Vulnerability reporting workflow, release security checklist, and mTLS research note.
+- UI controls for downloading signed audit bundles next to CSV and JSON exports.
+- Bundle verification helper script for checking payload digests and HMAC signatures.
+- Persisted security-event rate counters for repeated auth failures and other security event aggregation.
+
 ## Phase 7: Integrations And Automation
 
-Status: planned.
+Status: shipped.
 
 - Webhook export for warnings, failed runs, and eval regressions.
 - n8n integration examples.
@@ -197,6 +215,19 @@ Status: planned.
 - Import hooks for existing router logs.
 - Optional Obsidian-friendly Markdown export for incident notes and eval reports.
 - Plugin-style collector interface for adding new model runtimes beyond Ollama.
+
+Completed foundation:
+
+- Optional `VANTAGE_EXTERNAL_API_TOKEN` guard for `/api/integrations/*`.
+- Normalized integration event export for warnings, failed runs, and failed eval attempts surfaced as regression candidates.
+- Generic, Slack, Discord, and SMTP email dispatch adapters.
+- Router-log import endpoint that stores external routing activity as durable `router_request` Run records.
+- Obsidian-friendly Markdown operator report export.
+- Built-in scheduled Markdown report worker for operators who do not use n8n or cron.
+- Integration health endpoint and UI panel with configured target status, last dispatch, and security-event counters.
+- Collector registry descriptor endpoint with the built-in Ollama collector registered.
+- Richer collector descriptor contracts covering capabilities, endpoints, auth, config keys, and status.
+- n8n examples for scheduled event pulls, webhook dispatch, router-log import, and Markdown report export.
 
 ## Later Research
 

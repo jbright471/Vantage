@@ -1,3 +1,6 @@
+import asyncio
+import os
+
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
@@ -20,6 +23,14 @@ async def stream(request: Request) -> StreamingResponse:
     async def event_generator():
         if not background_polling_enabled():
             yield serialize_sse({"event": "full_state", "data": initial_state})
+            if "PYTEST_CURRENT_TEST" in os.environ:
+                return
+            while True:
+                try:
+                    if await asyncio.wait_for(request.is_disconnected(), timeout=15):
+                        break
+                except asyncio.TimeoutError:
+                    yield serialize_sse({"event": "heartbeat", "data": {}})
             return
 
         async for payload in broker.subscribe(initial_state):

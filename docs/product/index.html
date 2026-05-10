@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vantage - Local AI Command Center</title>
+    <meta
+      name="description"
+      content="Vantage is a local-first command center for operators running private AI models across homelab machines."
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #080a0f;
+        --panel: #121720;
+        --panel-strong: #18202c;
+        --ink: #eef2ff;
+        --muted: #9ba4b7;
+        --line: #30394b;
+        --blue: #6f91ff;
+        --green: #58e6a8;
+        --amber: #ffc489;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at 20% 0%, rgba(111, 145, 255, 0.28), transparent 36rem),
+          linear-gradient(145deg, #080a0f 0%, #111827 56%, #090d14 100%);
+        color: var(--ink);
+      }
+
+      main {
+        width: min(1160px, calc(100% - 32px));
+        margin: 0 auto;
+      }
+
+      .hero {
+        min-height: 78vh;
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
+        gap: 48px;
+        align-items: center;
+        padding: 64px 0;
+      }
+
+      .eyebrow {
+        margin: 0 0 14px;
+        color: var(--green);
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        max-width: 10ch;
+        font-size: clamp(3.8rem, 9vw, 8rem);
+        line-height: 0.88;
+        letter-spacing: -0.08em;
+      }
+
+      .hero-copy {
+        max-width: 58ch;
+        color: var(--muted);
+        font-size: 1.12rem;
+        line-height: 1.65;
+      }
+
+      .cta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 28px;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .button {
+        display: inline-flex;
+        min-height: 44px;
+        align-items: center;
+        justify-content: center;
+        padding: 0 18px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.04);
+        font-weight: 700;
+      }
+
+      .button.primary {
+        border-color: rgba(88, 230, 168, 0.68);
+        background: linear-gradient(135deg, rgba(88, 230, 168, 0.22), rgba(111, 145, 255, 0.18));
+      }
+
+      .console-card {
+        border: 1px solid rgba(111, 145, 255, 0.28);
+        border-radius: 24px;
+        background: rgba(18, 23, 32, 0.84);
+        box-shadow: 0 32px 120px rgba(0, 0, 0, 0.42);
+        overflow: hidden;
+      }
+
+      .console-top {
+        display: flex;
+        justify-content: space-between;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.035);
+      }
+
+      .console-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        padding: 18px;
+      }
+
+      .tile {
+        min-height: 132px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--panel);
+      }
+
+      .tile strong {
+        display: block;
+        margin: 12px 0 8px;
+        font-size: 2rem;
+        letter-spacing: -0.05em;
+      }
+
+      .tile p,
+      .console-top span,
+      .feature p {
+        color: var(--muted);
+      }
+
+      .chip {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        padding: 5px 9px;
+        border: 1px solid currentColor;
+        border-radius: 999px;
+        color: var(--green);
+        font-size: 0.76rem;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      .chip.warning {
+        color: var(--amber);
+      }
+
+      .section {
+        padding: 54px 0;
+      }
+
+      .section h2 {
+        margin: 0 0 16px;
+        font-size: clamp(2rem, 5vw, 4.4rem);
+        line-height: 0.96;
+        letter-spacing: -0.07em;
+      }
+
+      .features {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .feature {
+        min-height: 220px;
+        padding: 22px;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
+      }
+
+      .terminal {
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: #05070b;
+        color: var(--green);
+        font-family: "JetBrains Mono", Consolas, monospace;
+        line-height: 1.7;
+        overflow-x: auto;
+      }
+
+      footer {
+        padding: 38px 0 54px;
+        color: var(--muted);
+      }
+
+      @media (max-width: 860px) {
+        .hero,
+        .features {
+          grid-template-columns: 1fr;
+        }
+
+        h1 {
+          max-width: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Local-first AI ops</p>
+          <h1>Vantage</h1>
+          <p class="hero-copy">
+            A command center for serious local AI setups. Watch nodes, models, routes, runs, and evals without handing
+            control of your homelab to a cloud service.
+          </p>
+          <div class="cta-row">
+            <a class="button primary" href="../../README.md">Read the README</a>
+            <a class="button" href="../../GETTING_STARTED.md">Start with demo mode</a>
+          </div>
+        </div>
+
+        <div class="console-card" aria-label="Vantage dashboard preview">
+          <div class="console-top">
+            <strong>Local AI Command Center</strong>
+            <span>CONTROL_PLANE / LIVE</span>
+          </div>
+          <div class="console-grid">
+            <article class="tile">
+              <span class="chip">Live</span>
+              <strong>3</strong>
+              <p>Tracked nodes with freshness separated from health.</p>
+            </article>
+            <article class="tile">
+              <span class="chip warning">Attention</span>
+              <strong>1</strong>
+              <p>Warnings, degraded nodes, failed runs, and pending actions.</p>
+            </article>
+            <article class="tile">
+              <span class="chip">Models</span>
+              <strong>12</strong>
+              <p>Merged inventory with digest-aware placement tracking.</p>
+            </article>
+            <article class="tile">
+              <span class="chip">Evals</span>
+              <strong>92%</strong>
+              <p>Score history, routing confidence, and failure clustering.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <p class="eyebrow">Why operators use it</p>
+        <h2>Truth over appearance.</h2>
+        <div class="features">
+          <article class="feature">
+            <h3>Observe first</h3>
+            <p>Vantage watches your existing Ollama, agents, schedulers, and routing stack instead of replacing them.</p>
+          </article>
+          <article class="feature">
+            <h3>Act deliberately</h3>
+            <p>Routing edits, node refreshes, quarantine, and eval runs are explicit and recorded as durable runs.</p>
+          </article>
+          <article class="feature">
+            <h3>Ship locally</h3>
+            <p>Docker Compose, SQLite, signed audit bundles, shared-token or HMAC agents, integration endpoints, and release bundles keep deployment understandable.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <p class="eyebrow">Try it</p>
+        <h2>Run the public-safe demo.</h2>
+        <pre class="terminal"><code>Copy-Item .env.example .env
+(Get-Content .env) -replace '^VANTAGE_DEMO_MODE=.*', 'VANTAGE_DEMO_MODE=1' | Set-Content .env
+docker compose up --build -d</code></pre>
+      </section>
+
+      <footer>
+        Vantage is open source under the MIT License. Keep real tokens, prompts, private IPs, and local paths out of
+        public screenshots and issues.
+      </footer>
+    </main>
+  </body>
+</html>

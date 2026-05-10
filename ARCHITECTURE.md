@@ -7,6 +7,7 @@ The examples below use `jedi` as an example control-plane node name and `bastet`
 - `Control-plane backend`: FastAPI, SQLite, SQLAlchemy, Pydantic, collectors, polling, pruning, routing, run history, and SSE streaming. In examples, this node is named `jedi`.
 - `Frontend`: Vite, React, and TypeScript operator UI for nodes, runs, models, routing, warning review, and in-app documentation.
 - `Remote agent`: lightweight FastAPI process on Linux worker nodes. In examples, one worker is named `bastet`.
+- `Integration surface`: optional API-token-protected endpoints for external automation, webhook dispatch, router-log import, Markdown reports, and collector discovery.
 
 The system is intentionally an observer and coordinator. It does not replace Ollama, routers, schedulers, or host services.
 
@@ -18,6 +19,7 @@ flowchart LR
     Backend["Control-Plane FastAPI Backend<br/><control-plane-host>:8000<br/>example: jedi"]
     DB["SQLite<br/>vantage.sqlite3"]
     LocalCollectors["Local Collectors<br/>example: jedi"]
+    Integrations["Integration Tools<br/>n8n / scripts / webhooks"]
     OllamaJ["Local Ollama Endpoints<br/>11434 / 11435"]
     Agent["Remote Agent<br/><remote-agent-ip>:9110<br/>example: bastet"]
     OllamaB["Remote Ollama<br/>11435"]
@@ -25,6 +27,7 @@ flowchart LR
 
     Browser -- "SSE /api/stream" --> Backend
     Browser -- "REST actions" --> Backend
+    Integrations -- "API token /api/integrations" --> Backend
     Backend --> DB
     Backend --> LocalCollectors
     LocalCollectors --> OllamaJ
@@ -67,6 +70,8 @@ Vantage keeps three kinds of state separate:
 A node can be configured as enabled, last observed as healthy, and currently stale. Those are different facts and should not collapse into one field.
 
 The frontend keeps derived state lightweight and reversible. The attention ribbon summarizes operator signals, the warning strip caps visible warning records by default, node heartbeat meters visualize freshness decay without changing persisted truth, and node diagnostics explain degraded state from observed errors.
+
+Integrations follow the same rule. `/api/integrations/events` exports normalized facts from warnings and runs; it does not create a second alert database. Router-log imports become normal durable `Run` records. Markdown reports are generated from current SQLite state. Webhook dispatch is opt-in and external-tool-facing, not required for the control plane to function.
 
 ## Persistence
 

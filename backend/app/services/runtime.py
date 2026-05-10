@@ -8,7 +8,7 @@ import os
 from sqlalchemy import delete, select
 
 from backend.app.collectors.local import collect_local_snapshot
-from backend.app.collectors.remote import BastetClient
+from backend.app.collectors.remote import AgentAuthenticationError, BastetClient
 from backend.app.config import BootstrapConfig
 from backend.app.db import SessionLocal
 from backend.app.models import ModelPlacement, Node, NodeSnapshot, Run, WarningRecord
@@ -16,10 +16,13 @@ from backend.app.services.endpoint_overrides import filter_enabled_local_ollama_
 from backend.app.services.events import EventBroker
 from backend.app.services.polling import classify_health, extract_model_placements, normalize_snapshot
 from backend.app.services.reconciliation import detect_config_drift, resolve_warning_records, upsert_warning_records
+from backend.app.services.security_events import increment_security_event_counter
 from backend.app.services.state import build_full_state
 
 logger = logging.getLogger("vantage.runtime")
 BACKGROUND_POLLING_ENV = "VANTAGE_ENABLE_BACKGROUND_POLLING"
+AGENT_AUTH_MODE_ENV = "VANTAGE_AGENT_AUTH_MODE"
+AGENT_KEY_ID_ENV = "VANTAGE_AGENT_KEY_ID"
 
 
 def background_polling_enabled() -> bool:
@@ -49,8 +52,46 @@ def resolve_agent_auth_token(config: BootstrapConfig) -> str | None:
     return token if token else None
 
 
+def resolve_agent_auth_mode(node: Node) -> str:
+    if node.auth_mode:
+        return node.auth_mode
+    configured = os.getenv(AGENT_AUTH_MODE_ENV)
+    return configured if configured else "bearer"
+
+
+def resolve_agent_key_id(node: Node) -> str | None:
+    if node.auth_config_json and node.auth_config_json.get("key_id"):
+        return str(node.auth_config_json["key_id"])
+    configured = os.getenv(AGENT_KEY_ID_ENV)
+    return configured if configured else None
+
+
+def build_agent_auth_warning(node_id: str, error: Exception) -> dict:
+    now = datetime.now(UTC)
+    return {
+        "warning_id": f"agent-auth-failed:{node_id}",
+        "warning_type": "agent_auth_failed",
+        "node_id": node_id,
+        "severity": "critical",
+        "first_seen_at": now,
+        "last_seen_at": now,
+        "status": "active",
+        "summary": f"Remote agent authentication failed for {node_id}",
+        "metadata_json": {
+            "error": str(error),
+            "category": "security",
+            "recommended_action": "Verify the configured agent token, auth mode, key id, and token rotation state.",
+        },
+    }
+
+
 async def collect_remote_snapshot(node: Node, auth_token: str | None = None) -> dict:
-    client = BastetClient(node.base_url, auth_token=auth_token)
+    client = BastetClient(
+        node.base_url,
+        auth_token=auth_token,
+        auth_mode=resolve_agent_auth_mode(node),
+        key_id=resolve_agent_key_id(node),
+    )
     captured_at = datetime.now(UTC)
     health_payload, gpu_payload, models_payload, runs_payload = await asyncio.gather(
         client.fetch_health(),
@@ -63,6 +104,9 @@ async def collect_remote_snapshot(node: Node, auth_token: str | None = None) -> 
     errors: list[dict] = []
     results = (health_payload, gpu_payload, models_payload)
     if all(isinstance(result, Exception) for result in results):
+        auth_error = next((result for result in results if isinstance(result, AgentAuthenticationError)), None)
+        if auth_error is not None:
+            raise auth_error
         raise RuntimeError(f"Remote node '{node.node_id}' is unreachable")
 
     if isinstance(health_payload, Exception):
@@ -227,6 +271,10 @@ async def run_poll_cycle(
             raw_snapshot = await collect_snapshot_for_node(node, config)
         except Exception as exc:
             logger.warning("collector_failed node=%s error=%s", node.node_id, exc)
+            if isinstance(exc, AgentAuthenticationError):
+                with session_factory() as session:
+                    increment_security_event_counter(session, event_type="agent_auth_failed", node_id=node.node_id)
+                    upsert_warning_records(session, [build_agent_auth_warning(node.node_id, exc)])
             continue
 
         with session_factory() as session:
@@ -253,6 +301,11 @@ async def run_poll_cycle(
             session,
             warning_type="config_drift",
             active_node_ids={warning["node_id"] for warning in warnings},
+        )
+        resolve_warning_records(
+            session,
+            warning_type="agent_auth_failed",
+            active_node_ids={node_id for node_id in {node.node_id for node in nodes} if node_id not in observed_nodes},
         )
         state = build_full_state(session, config=config)
 
@@ -291,7 +344,7 @@ async def run_single_node_poll(
 
         active_drift = session.scalars(
             select(WarningRecord).where(
-                WarningRecord.warning_type == "config_drift",
+                WarningRecord.warning_type.in_(("config_drift", "agent_auth_failed")),
                 WarningRecord.node_id == node_id,
                 WarningRecord.status.in_(("active", "acknowledged")),
             )

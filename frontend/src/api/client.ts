@@ -272,6 +272,20 @@ export type EvalHistoryQuery = {
   recent_limit?: number;
 };
 
+export type EvalIntelligencePresetRecord = {
+  id: string;
+  name: string;
+  controls: {
+    window_days: string;
+    placement_key: string;
+    flakiness_min_rate: string;
+    failure_cluster_min_count: string;
+  };
+  storage?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type EvalScheduleHealthRecord = {
   schedule_id: string;
   suite_id: string;
@@ -314,6 +328,25 @@ export type EvalScoreHistoryRecord = {
     flaky_case_count: number;
     failure_cluster_count: number;
   };
+};
+
+export type IntegrationHealthRecord = {
+  format: string;
+  external_api_token_configured: boolean;
+  webhook_allowed_hosts_configured: boolean;
+  configured_targets: Record<string, boolean>;
+  last_dispatch: null | {
+    adapter?: string;
+    event_count?: number;
+    status_code?: number;
+    dispatched_at?: string;
+  };
+  security_event_counters: Array<{
+    event_type: string;
+    node_id: string | null;
+    count: number;
+    last_seen_at: string;
+  }>;
 };
 
 export type WarningRecord = {
@@ -410,7 +443,7 @@ export function buildEvalHistoryExportUrl(format: "csv" | "json", query: EvalHis
   return `/api/evals/export.${format}${suffix ? `?${suffix}` : ""}`;
 }
 
-export function buildRunExportUrl(format: "csv" | "json", query: RunsQuery): string {
+export function buildRunExportUrl(format: "csv" | "json" | "bundle.json", query: RunsQuery): string {
   const params = buildRunsSearchParams({
     status: query.status,
     node_id: query.node_id,
@@ -660,6 +693,75 @@ export async function fetchEvalScoreHistory(query: EvalHistoryQuery = {}): Promi
   }
 
   return (await response.json()) as EvalScoreHistoryRecord;
+}
+
+export async function fetchEvalIntelligencePresets(): Promise<EvalIntelligencePresetRecord[]> {
+  const response = await fetch("/api/evals/intelligence-presets", {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval intelligence presets request failed with status ${response.status}`);
+  }
+
+  const payload = (await response.json()) as { presets?: EvalIntelligencePresetRecord[] } | EvalIntelligencePresetRecord[];
+  const presets = Array.isArray(payload) ? payload : (payload.presets ?? []);
+  return presets.filter(
+    (preset): preset is EvalIntelligencePresetRecord =>
+      typeof preset?.id === "string" && typeof preset.name === "string" && Boolean(preset.controls),
+  );
+}
+
+export async function saveEvalIntelligencePreset(
+  payload: {
+    id?: string;
+    name: string;
+    controls: EvalIntelligencePresetRecord["controls"];
+  },
+): Promise<EvalIntelligencePresetRecord> {
+  const response = await fetch("/api/evals/intelligence-presets", {
+    method: "PUT",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval intelligence preset save failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalIntelligencePresetRecord;
+}
+
+export async function deleteEvalIntelligencePreset(presetId: string): Promise<void> {
+  const response = await fetch(`/api/evals/intelligence-presets/${encodeURIComponent(presetId)}`, {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Eval intelligence preset delete failed with status ${response.status}`);
+  }
+}
+
+export async function fetchIntegrationHealth(): Promise<IntegrationHealthRecord> {
+  const response = await fetch("/api/integrations/health", {
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Integration health request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as IntegrationHealthRecord;
 }
 
 export async function fetchEvalSchedules(): Promise<EvalScheduleRecord[]> {

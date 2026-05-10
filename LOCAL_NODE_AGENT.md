@@ -20,7 +20,7 @@ Vantage avoids those patterns. The backend remains an observer and coordinator. 
 The local node agent should follow the same contract shape as the remote agent:
 
 - FastAPI service on a local-only or trusted-LAN port
-- bearer-token authentication
+- bearer-token authentication by default, with optional HMAC request signing for replay protection
 - strict Pydantic request and response models
 - durable `Run` records for actions requested by the control plane
 - no broad shell execution endpoint
@@ -62,7 +62,7 @@ The local node agent must not expose:
 Recommended systemd shape:
 
 ```text
-Backend container -> HTTP bearer auth -> local node agent -> allowlisted host action
+Backend container -> authenticated HTTP -> local node agent -> allowlisted host action
 ```
 
 The backend continues to run in Docker. The local agent runs as a dedicated system user through systemd. Any future host remediation should happen through this boundary, not by expanding backend container privileges.

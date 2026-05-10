@@ -5,6 +5,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from backend.app.collectors.remote import AgentAuthenticationError
 from backend.app.config import BootstrapConfig, BootstrapNode
 from backend.app.models import Base, ModelPlacement, Node, NodeSnapshot, WarningRecord
 from backend.app.services.runtime import run_poll_cycle
@@ -293,3 +294,46 @@ def test_run_poll_cycle_persists_remote_runs(monkeypatch) -> None:
 
     assert state["runs"][0]["run_id"] == "remote-run-1"
     assert state["runs"][0]["detail_type"] == "capability_check"
+
+
+def test_run_poll_cycle_surfaces_agent_auth_failure_as_warning(monkeypatch) -> None:
+    session_factory = build_session_factory()
+    config = BootstrapConfig(
+        nodes=[
+            BootstrapNode(
+                node_id="bastet",
+                display_name="Bastet",
+                base_url="http://10.0.0.20:9110",
+                role="remote",
+                enabled=True,
+            )
+        ],
+    )
+
+    with session_factory() as session:
+        session.add(
+            Node(
+                node_id="bastet",
+                display_name="Bastet",
+                base_url="http://10.0.0.20:9110",
+                role="remote",
+                enabled=True,
+                created_from="bootstrap",
+            )
+        )
+        session.commit()
+
+    async def fake_collect(node, runtime_config):
+        raise AgentAuthenticationError("Remote agent rejected authentication")
+
+    monkeypatch.setattr("backend.app.services.runtime.collect_snapshot_for_node", fake_collect)
+
+    state = asyncio.run(run_poll_cycle(config, session_factory=session_factory))
+
+    auth_warning = next(warning for warning in state["warnings"] if warning["warning_type"] == "agent_auth_failed")
+    assert auth_warning["severity"] == "critical"
+    with session_factory() as session:
+        warning = session.get(WarningRecord, "agent-auth-failed:bastet")
+
+    assert warning is not None
+    assert warning.status == "active"

@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 
 from backend.app.db import SessionLocal
+from backend.app.services.audit import AUDIT_SIGNING_KEY_ENV, build_signed_audit_bundle, resolve_audit_signing_key
 from backend.app.services.runs import build_runs_csv_export, build_runs_json_export, query_runs, query_runs_for_export
 
 router = APIRouter()
@@ -51,3 +52,22 @@ def export_runs_csv(
         media_type="text/csv",
         headers={"Content-Disposition": 'attachment; filename="vantage-runs.csv"'},
     )
+
+
+@router.get("/runs/export.bundle.json")
+def export_runs_audit_bundle(
+    status: str | None = None,
+    node_id: str | None = None,
+    detail_type: str | None = None,
+) -> dict:
+    signing_key = resolve_audit_signing_key()
+    if signing_key is None:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Signed audit export requires {AUDIT_SIGNING_KEY_ENV} to be configured",
+        )
+
+    filters = {"status": status, "node_id": node_id, "detail_type": detail_type}
+    with SessionLocal() as session:
+        runs = query_runs_for_export(session, **filters)
+    return build_signed_audit_bundle(runs, filters, signing_key=signing_key)

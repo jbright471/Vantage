@@ -24,6 +24,7 @@ class BootstrapConfig(BaseModel):
     snapshot_min_per_node: int = 1
     snapshot_prune_interval_seconds: int = Field(default=900, ge=1)
     eval_schedule_interval_seconds: int = Field(default=60, ge=1)
+    report_schedule_interval_seconds: int = Field(default=3600, ge=60)
     run_timeout_seconds: int = 300
     abandoned_after_seconds: int = 900
     idempotency_dedupe_seconds: int = 30

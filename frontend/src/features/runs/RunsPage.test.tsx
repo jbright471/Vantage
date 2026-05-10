@@ -95,6 +95,9 @@ describe("RunsPage", () => {
     expect(screen.getByRole("link", { name: "Export JSON" }).getAttribute("href")).toBe(
       "/api/runs/export.json?status=failed",
     );
+    expect(screen.getByRole("link", { name: "Export Signed Bundle" }).getAttribute("href")).toBe(
+      "/api/runs/export.bundle.json?status=failed",
+    );
   });
 
   it("expands all runs in place instead of navigating to an unimplemented route", async () => {

@@ -29,6 +29,8 @@ def get_nodes_state(session: Session, config: BootstrapConfig | None = None) -> 
     for node in nodes:
         latest_snapshot = latest_snapshot_by_node.get(node.node_id)
         last_seen_at = _timestamp(node.last_seen_at)
+        if node.created_from == "demo" and last_seen_at is not None:
+            last_seen_at = now
         freshness = "stale"
         observed_status = "unreachable"
 

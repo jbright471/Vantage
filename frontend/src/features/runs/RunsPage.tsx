@@ -232,6 +232,9 @@ export function RunsPage({ runs }: RunsPageProps) {
           <a className="action-button" href={buildRunExportUrl("json", exportQuery)}>
             Export JSON
           </a>
+          <a className="action-button" href={buildRunExportUrl("bundle.json", exportQuery)}>
+            Export Signed Bundle
+          </a>
         </div>
       </div>
 

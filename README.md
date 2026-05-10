@@ -35,12 +35,12 @@ Vantage exists to make that state visible and actionable without taking ownershi
 - Operator-editable routing policy lanes with model-specific rules, dry-run simulation, failover flags, route history, and strict override confirmation
 - Remote run ingestion from node agents
 - Backend-filtered run history with pagination
-- CSV and JSON audit exports for run history
+- CSV, JSON, and signed bundle audit exports for run history, plus a CLI verification helper
 - Local LLM capability checks from the Models surface
-- Eval Lab for prompt suites, executable eval runs, richer score types, placement comparison, baseline regression checks, configurable intelligence windows, saved local scope presets, trend summaries, flakiness detection, failure clustering, manual local-LLM assisted summaries, recurring schedules, suite import/export, lifecycle cleanup, and opt-in auto-execution
+- Eval Lab for prompt suites, executable eval runs, richer score types, placement comparison, baseline regression checks, configurable intelligence windows, managed scope presets, trend summaries, flakiness detection, failure clustering, manual local-LLM assisted summaries, recurring schedules, suite import/export, lifecycle cleanup, and opt-in auto-execution
 - SSE-based live UI updates
 - SQLite persistence with bounded snapshot pruning
-- Shared-token authentication for node agents
+- Shared-token authentication for node agents with optional HMAC request signing and replay protection
 - Deployment health endpoints for liveness and readiness checks
 - Structured JSON backend logs for container and service supervisors
 - Docker Compose development environment
@@ -49,14 +49,20 @@ Vantage exists to make that state visible and actionable without taking ownershi
 - First-class GitHub release bundle workflow with SHA256 checksums
 - Optional local node-agent boundary for future host-level remediation
 - Generic systemd installer for remote Linux agents
+- Demo mode with public-safe synthetic nodes, runs, models, evals, warnings, and routing policies
+- First-run onboarding checklist in the web UI
+- First-run setup wizard for token, node registry, local Ollama, and verification snippets
+- Public product microsite and install walkthrough assets
+- Integration API for n8n/scripts with event export, webhook and SMTP email dispatch, router-log import, scheduled Markdown reports, integration health, security-event counters, and collector discovery
+- GitHub Pages-ready product documentation and a Remotion-ready walkthrough video scaffold
 
 ## Quick Start
 
 From the repository root:
 
 ```powershell
-Copy-Item .env.example .env
-python -c "import secrets; print('VANTAGE_AGENT_SHARED_TOKEN=' + secrets.token_urlsafe(48))" | Set-Content .env
+$token = python -c "import secrets; print(secrets.token_urlsafe(48))"
+(Get-Content .env.example) -replace '^VANTAGE_AGENT_SHARED_TOKEN=.*', "VANTAGE_AGENT_SHARED_TOKEN=$token" | Set-Content .env
 docker compose up --build -d
 ```
 
@@ -73,6 +79,13 @@ docker compose ps
 docker compose logs -f
 Invoke-RestMethod http://127.0.0.1:8000/api/health/ready
 docker compose down
+```
+
+Try Vantage with synthetic data before connecting real nodes:
+
+```powershell
+(Get-Content .env) -replace '^VANTAGE_DEMO_MODE=.*', "VANTAGE_DEMO_MODE=1" | Set-Content .env
+docker compose up --build -d
 ```
 
 Production-style Compose:
@@ -97,29 +110,47 @@ Primary bootstrap config lives at [config/vantage.bootstrap.toml](./config/vanta
 | `snapshot_min_per_node` | Minimum retained snapshots per node | `1` |
 | `snapshot_prune_interval_seconds` | Background snapshot pruning cadence | `900` |
 | `eval_schedule_interval_seconds` | Background due-schedule check cadence | `60` |
+| `report_schedule_interval_seconds` | Optional scheduled report worker cadence | `3600` |
 | `agent_auth_token_env` | Env var used for agent bearer auth | `VANTAGE_AGENT_SHARED_TOKEN` |
 
 Local secrets belong in `.env`, which is ignored by git. See [.env.example](./.env.example).
 
 Production secrets belong in `.env.production`, which is also ignored by git. See [.env.production.example](./.env.production.example). Public-safe bootstrap defaults live at [config/vantage.bootstrap.example.toml](./config/vantage.bootstrap.example.toml).
 
+Signed audit bundles require `VANTAGE_AUDIT_SIGNING_KEY`. Stronger node-agent trust can be enabled with `VANTAGE_AGENT_AUTH_MODE=hmac`; see [Agent Authentication](./docs/security/AGENT_AUTH.md).
+
 ## Documentation
 
 - [Architecture](./ARCHITECTURE.md)
 - [Roadmap](./ROADMAP.md)
+- [Getting Started](./GETTING_STARTED.md)
 - [Operator Guide](./OPERATOR_GUIDE.md)
+- [Product Microsite](./docs/product/index.html)
+- [Install Walkthrough Script](./docs/walkthrough/INSTALL_WALKTHROUGH.md)
 - [Remote Agent Contract](./AGENT_CONTRACT.md)
+- [Agent Authentication](./docs/security/AGENT_AUTH.md)
+- [Audit Exports](./docs/security/AUDIT_EXPORTS.md)
+- [Action Idempotency Keys](./docs/security/IDEMPOTENCY_KEYS.md)
+- [Release Security Checklist](./docs/security/RELEASE_SECURITY_CHECKLIST.md)
+- [mTLS Research](./docs/security/MTLS_RESEARCH.md)
+- [Integrations](./docs/integrations/INTEGRATIONS.md)
+- [n8n Examples](./docs/integrations/N8N_EXAMPLES.md)
+- [Collector Plugins](./docs/integrations/COLLECTOR_PLUGINS.md)
 - [Operations](./OPERATIONS.md)
 - [Portainer Deployment](./PORTAINER.md)
 - [Release Packaging](./RELEASE.md)
 - [Optional Local Node Agent](./LOCAL_NODE_AGENT.md)
+- [Screenshot Guide](./SCREENSHOTS.md)
+- [Public Screenshots](./docs/screenshots)
+- [Changelog](./CHANGELOG.md)
 - [Security](./SECURITY.md)
 - [Contributing](./CONTRIBUTING.md)
+- [Support](./SUPPORT.md)
 
 ## Project Status
 
-Vantage has shipped Phase 1 through Phase 4: the control-plane foundation, operator attention, diagnostics, guided remediation, Eval Lab, Eval Intelligence, routing-policy control, and production packaging. It is moving into share/sell readiness next. The current version is useful for a single local AI operator and remains intentionally conservative about distributed control, authentication, and host-level remediation.
+Vantage has shipped Phase 1 through Phase 7 foundation work: the control-plane foundation, operator attention, diagnostics, guided remediation, Eval Lab, Eval Intelligence, routing-policy control, production packaging, demo mode, setup wizard, public product assets, open-source onboarding materials, signed audit bundles, optional HMAC agent authentication, replay protection, action allowlists, security-warning surfacing, managed eval presets, integration health, email/report automation, and local-first integration endpoints. The current version is useful for a single local AI operator and remains intentionally conservative about distributed control and host-level remediation.
 
 ## License
 
-No license file has been added yet.
+Vantage is released under the [MIT License](./LICENSE).

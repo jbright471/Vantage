@@ -19,6 +19,11 @@ from backend.app.services.eval_schedules import (
     serialize_eval_schedule,
     update_eval_schedule,
 )
+from backend.app.services.eval_presets import (
+    delete_eval_intelligence_preset,
+    list_eval_intelligence_presets,
+    upsert_eval_intelligence_preset,
+)
 from backend.app.services.evals import (
     build_eval_assisted_summary_run,
     build_score_history,
@@ -102,6 +107,19 @@ class EvalHistoryQuery(BaseModel):
     flakiness_min_rate: float = Field(default=0.2, ge=0, le=1)
     failure_cluster_min_count: int = Field(default=2, ge=1, le=100)
     recent_limit: int = Field(default=20, ge=1, le=200)
+
+
+class EvalIntelligencePresetControls(BaseModel):
+    window_days: str = Field(min_length=1)
+    placement_key: str = ""
+    flakiness_min_rate: str = Field(min_length=1)
+    failure_cluster_min_count: str = Field(min_length=1)
+
+
+class EvalIntelligencePresetUpsert(BaseModel):
+    id: str | None = None
+    name: str = Field(min_length=1, max_length=120)
+    controls: EvalIntelligencePresetControls
 
 
 def _serialize_suites(suites: list[EvalSuite], cases: list[EvalCase]) -> list[dict]:
@@ -194,6 +212,28 @@ def _build_eval_history_payload(session, query: EvalHistoryQuery) -> dict:
 def get_eval_score_history(query: EvalHistoryQuery = Depends(_eval_history_query)) -> dict:
     with SessionLocal() as session:
         return _build_eval_history_payload(session, query)
+
+
+@router.get("/evals/intelligence-presets")
+def get_eval_intelligence_presets() -> dict:
+    with SessionLocal() as session:
+        presets = list_eval_intelligence_presets(session)
+    return {"format": "vantage.eval-intelligence-presets.v1", "count": len(presets), "presets": presets}
+
+
+@router.put("/evals/intelligence-presets")
+def save_eval_intelligence_preset(payload: EvalIntelligencePresetUpsert) -> dict:
+    with SessionLocal() as session:
+        return upsert_eval_intelligence_preset(session, payload.model_dump())
+
+
+@router.delete("/evals/intelligence-presets/{preset_id}")
+def remove_eval_intelligence_preset(preset_id: str) -> dict:
+    with SessionLocal() as session:
+        deleted = delete_eval_intelligence_preset(session, preset_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Unknown eval intelligence preset '{preset_id}'")
+    return {"deleted": True, "preset_id": preset_id}
 
 
 @router.get("/evals/export.json")

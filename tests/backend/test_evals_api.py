@@ -38,6 +38,29 @@ def test_create_eval_suite_and_case() -> None:
         assert updated_suite["cases"][0]["score_type"] == "json_subset"
 
 
+def test_eval_intelligence_presets_are_managed_settings() -> None:
+    preset_payload = {
+        "name": "Managed flaky review",
+        "controls": {
+            "window_days": "14",
+            "placement_key": "qwen:test::bastet",
+            "flakiness_min_rate": "0.35",
+            "failure_cluster_min_count": "3",
+        },
+    }
+    with TestClient(app) as client:
+        created = client.put("/api/evals/intelligence-presets", json=preset_payload)
+        listed = client.get("/api/evals/intelligence-presets")
+        deleted = client.delete(f"/api/evals/intelligence-presets/{created.json()['id']}")
+
+    assert created.status_code == 200
+    assert created.json()["name"] == "Managed flaky review"
+    assert created.json()["storage"] == "managed"
+    assert listed.status_code == 200
+    assert any(preset["name"] == "Managed flaky review" for preset in listed.json()["presets"])
+    assert deleted.status_code == 200
+
+
 def test_update_and_duplicate_eval_suite_and_case() -> None:
     with TestClient(app) as client:
         suite_response = client.post(
