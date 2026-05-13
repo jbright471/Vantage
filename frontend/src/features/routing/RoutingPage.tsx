@@ -412,7 +412,7 @@ export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: Routi
             Preferred nodes
             <input
               value={ruleForm.preferred_nodes}
-              placeholder="bastet, jedi"
+              placeholder="remote-worker, control-plane"
               onChange={(event) => setRuleForm((current) => ({ ...current, preferred_nodes: event.target.value }))}
             />
           </label>

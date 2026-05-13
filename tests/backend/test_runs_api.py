@@ -34,18 +34,18 @@ def test_runs_endpoint_filters_and_paginates_by_status() -> None:
     now = datetime.now(UTC)
     detail_type = "run_api_filter_test"
     with TestClient(app) as client:
-        _seed_run("run-failed-1", status="failed", node_id="bastet", started_at=now, detail_type=detail_type)
+        _seed_run("run-failed-1", status="failed", node_id="remote-worker", started_at=now, detail_type=detail_type)
         _seed_run(
             "run-success-1",
             status="success",
-            node_id="jedi",
+            node_id="control-plane",
             started_at=now - timedelta(minutes=1),
             detail_type=detail_type,
         )
         _seed_run(
             "run-failed-2",
             status="failed",
-            node_id="jedi",
+            node_id="control-plane",
             started_at=now - timedelta(minutes=2),
             detail_type=detail_type,
         )
@@ -64,7 +64,7 @@ def test_runs_export_json_preserves_metadata() -> None:
     now = datetime.now(UTC)
     detail_type = "run_api_json_export_test"
     with TestClient(app) as client:
-        _seed_run("run-json-1", status="failed", node_id="bastet", started_at=now, detail_type=detail_type)
+        _seed_run("run-json-1", status="failed", node_id="remote-worker", started_at=now, detail_type=detail_type)
 
         response = client.get(f"/api/runs/export.json?status=failed&detail_type={detail_type}")
 
@@ -82,7 +82,7 @@ def test_runs_export_csv_includes_operator_columns() -> None:
         _seed_run(
             "run-csv-1",
             status="submitted_unverified",
-            node_id="bastet",
+            node_id="remote-worker",
             started_at=now,
             detail_type=detail_type,
         )
@@ -92,7 +92,7 @@ def test_runs_export_csv_includes_operator_columns() -> None:
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
     assert "run_id,status,node_id,summary" in response.text
-    assert "run-csv-1,submitted_unverified,bastet,Run run-csv-1" in response.text
+    assert "run-csv-1,submitted_unverified,remote-worker,Run run-csv-1" in response.text
 
 
 def test_runs_signed_audit_bundle_includes_payload_digest_and_signature(monkeypatch) -> None:
@@ -101,7 +101,7 @@ def test_runs_signed_audit_bundle_includes_payload_digest_and_signature(monkeypa
     now = datetime.now(UTC)
     detail_type = "run_api_audit_bundle_test"
     with TestClient(app) as client:
-        _seed_run("run-audit-1", status="failed", node_id="bastet", started_at=now, detail_type=detail_type)
+        _seed_run("run-audit-1", status="failed", node_id="remote-worker", started_at=now, detail_type=detail_type)
 
         response = client.get(f"/api/runs/export.bundle.json?status=failed&detail_type={detail_type}")
 

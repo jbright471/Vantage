@@ -39,6 +39,7 @@ if [[ ! -f "${INSTALL_DIR}/vantage-agent.env" ]]; then
     echo "VANTAGE_AGENT_KEY_ID=${VANTAGE_AGENT_KEY_ID:-}"
     echo "VANTAGE_AGENT_ALLOWED_ACTIONS=${VANTAGE_AGENT_ALLOWED_ACTIONS:-read,capability_check,eval_attempt}"
     echo "VANTAGE_AGENT_OLLAMA_BASE_URLS=${VANTAGE_AGENT_OLLAMA_BASE_URLS:-http://127.0.0.1:11434}"
+    echo "VANTAGE_AGENT_NODE_ID=${VANTAGE_AGENT_NODE_ID:-remote-agent}"
   } >"${INSTALL_DIR}/vantage-agent.env"
   chmod 600 "${INSTALL_DIR}/vantage-agent.env"
 fi

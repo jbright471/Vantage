@@ -13,11 +13,17 @@ import httpx
 
 DEFAULT_AGENT_OLLAMA_BASE_URLS = ("http://127.0.0.1:11435",)
 AGENT_OLLAMA_BASE_URLS_ENV = "VANTAGE_AGENT_OLLAMA_BASE_URLS"
+AGENT_NODE_ID_ENV = "VANTAGE_AGENT_NODE_ID"
+DEFAULT_AGENT_NODE_ID = "remote-agent"
 CAPABILITY_CHECK_PROMPT = (
     "Reply with a compact JSON object describing the model health for this control-plane check. "
     'Use keys "mode", "json", and "notes". Return JSON only.'
 )
 RECENT_RUNS: deque[dict] = deque(maxlen=25)
+
+
+def resolve_agent_node_id() -> str:
+    return os.getenv(AGENT_NODE_ID_ENV, DEFAULT_AGENT_NODE_ID).strip() or DEFAULT_AGENT_NODE_ID
 
 
 def resolve_ollama_base_urls() -> list[str]:
@@ -63,6 +69,7 @@ def _run_id(*parts: str) -> str:
 def _active_model_runs() -> list[dict]:
     runs: list[dict] = []
     observed_at = datetime.now(UTC)
+    node_id = resolve_agent_node_id()
     for base_url in resolve_ollama_base_urls():
         try:
             response = httpx.get(f"{base_url}/api/ps", timeout=5.0)
@@ -76,21 +83,21 @@ def _active_model_runs() -> list[dict]:
                 continue
 
             digest = model.get("digest") or ""
-            run_id = _run_id("ollama_loaded_model", "bastet", model_name, digest, base_url)
+            run_id = _run_id("ollama_loaded_model", node_id, model_name, digest, base_url)
             runs.append(
                 {
                     "run_id": run_id,
                     "source_type": "remote_agent",
                     "detail_type": "ollama_loaded_model",
                     "source_id": f"ollama-ps:{base_url}:{model_name}",
-                    "node_id": "bastet",
+                    "node_id": node_id,
                     "model_name": model_name,
                     "action_type": "infer",
                     "status": "running",
                     "started_at": observed_at,
                     "ended_at": None,
                     "duration_ms": None,
-                    "summary": f"Model {model_name} is currently loaded on bastet",
+                    "summary": f"Model {model_name} is currently loaded on {node_id}",
                     "metadata_json": {
                         "base_url": base_url,
                         "digest": model.get("digest"),
@@ -135,7 +142,7 @@ def _parse_response_json(response_text: str) -> dict | list | None:
 
 
 def get_health() -> dict:
-    return {"status": "ok", "node_id": "bastet"}
+    return {"status": "ok", "node_id": resolve_agent_node_id()}
 
 
 def get_gpu_stats() -> list[dict]:
@@ -185,6 +192,7 @@ def get_runs() -> list[dict]:
 def run_capability_check(model_name: str, *, prompt: str | None = None) -> dict:
     request_prompt = prompt or CAPABILITY_CHECK_PROMPT
     started_at = datetime.now(UTC)
+    node_id = resolve_agent_node_id()
     payload = {
         "model": model_name,
         "prompt": request_prompt,
@@ -207,15 +215,15 @@ def run_capability_check(model_name: str, *, prompt: str | None = None) -> dict:
                     "run_id": str(uuid4()),
                     "source_type": "inference",
                     "detail_type": "capability_check",
-                    "source_id": f"capability-check:bastet:{model_name}",
-                    "node_id": "bastet",
+                    "source_id": f"capability-check:{node_id}:{model_name}",
+                    "node_id": node_id,
                     "model_name": model_name,
                     "action_type": "infer",
                     "status": "success",
                     "started_at": started_at,
                     "ended_at": ended_at,
                     "duration_ms": int((ended_at - started_at).total_seconds() * 1000),
-                    "summary": f"Capability check passed for {model_name} on bastet",
+                    "summary": f"Capability check passed for {model_name} on {node_id}",
                     "metadata_json": {
                         "base_url": base_url,
                         "prompt": request_prompt,
@@ -233,15 +241,15 @@ def run_capability_check(model_name: str, *, prompt: str | None = None) -> dict:
             "run_id": str(uuid4()),
             "source_type": "inference",
             "detail_type": "capability_check",
-            "source_id": f"capability-check:bastet:{model_name}",
-            "node_id": "bastet",
+            "source_id": f"capability-check:{node_id}:{model_name}",
+            "node_id": node_id,
             "model_name": model_name,
             "action_type": "infer",
             "status": "failed",
             "started_at": started_at,
             "ended_at": ended_at,
             "duration_ms": int((ended_at - started_at).total_seconds() * 1000),
-            "summary": f"Capability check failed for {model_name} on bastet",
+            "summary": f"Capability check failed for {model_name} on {node_id}",
             "metadata_json": {
                 "prompt": request_prompt,
                 "errors": errors,
@@ -253,6 +261,7 @@ def run_capability_check(model_name: str, *, prompt: str | None = None) -> dict:
 
 def run_eval_attempt(model_name: str, *, prompt: str, expected_json: dict | None = None) -> dict:
     started_at = datetime.now(UTC)
+    node_id = resolve_agent_node_id()
     payload = {
         "model": model_name,
         "prompt": prompt,
@@ -276,15 +285,15 @@ def run_eval_attempt(model_name: str, *, prompt: str, expected_json: dict | None
                     "run_id": str(uuid4()),
                     "source_type": "eval",
                     "detail_type": "eval_attempt",
-                    "source_id": f"eval-attempt:bastet:{model_name}",
-                    "node_id": "bastet",
+                    "source_id": f"eval-attempt:{node_id}:{model_name}",
+                    "node_id": node_id,
                     "model_name": model_name,
                     "action_type": "eval",
                     "status": "success" if score.get("passed") is not False else "failed",
                     "started_at": started_at,
                     "ended_at": ended_at,
                     "duration_ms": int((ended_at - started_at).total_seconds() * 1000),
-                    "summary": f"Eval attempt completed for {model_name} on bastet",
+                    "summary": f"Eval attempt completed for {model_name} on {node_id}",
                     "metadata_json": {
                         "base_url": base_url,
                         "prompt": prompt,
@@ -305,15 +314,15 @@ def run_eval_attempt(model_name: str, *, prompt: str, expected_json: dict | None
             "run_id": str(uuid4()),
             "source_type": "eval",
             "detail_type": "eval_attempt",
-            "source_id": f"eval-attempt:bastet:{model_name}",
-            "node_id": "bastet",
+            "source_id": f"eval-attempt:{node_id}:{model_name}",
+            "node_id": node_id,
             "model_name": model_name,
             "action_type": "eval",
             "status": "failed",
             "started_at": started_at,
             "ended_at": ended_at,
             "duration_ms": int((ended_at - started_at).total_seconds() * 1000),
-            "summary": f"Eval attempt failed for {model_name} on bastet",
+            "summary": f"Eval attempt failed for {model_name} on {node_id}",
             "metadata_json": {
                 "prompt": prompt,
                 "expected_json": expected,

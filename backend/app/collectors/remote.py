@@ -12,7 +12,7 @@ class AgentAuthenticationError(RuntimeError):
     pass
 
 
-class BastetClient:
+class RemoteAgentClient:
     def __init__(
         self,
         base_url: str,

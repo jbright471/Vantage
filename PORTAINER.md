@@ -11,6 +11,7 @@ Use [docker-compose.prod.yml](./docker-compose.prod.yml). The production stack:
 - builds an immutable FastAPI backend image
 - runs `alembic upgrade head` before backend startup
 - stores SQLite in the `vantage_data` volume
+- includes the Postgres driver so `VANTAGE_DATABASE_URL` can point at Postgres when needed
 - serves the React frontend through Nginx
 - proxies `/api` and SSE traffic from frontend to backend
 - applies backend and frontend health checks
@@ -47,7 +48,7 @@ Create Portainer stack environment variables or secrets:
 | `VANTAGE_DISCORD_WEBHOOK_URL` | No | Discord-compatible webhook target. |
 | `VANTAGE_WEBHOOK_ALLOWED_HOSTS` | No | Optional comma-separated hostname allowlist for webhook dispatch. |
 | `VANTAGE_LOCAL_OLLAMA_BASE_URLS` | No | Comma-separated local Ollama endpoints reachable from the backend container. |
-| `VANTAGE_DATABASE_URL` | No | Overrides the default SQLite location. Production Compose defaults to `sqlite+pysqlite:////data/vantage.sqlite3`. |
+| `VANTAGE_DATABASE_URL` | No | Overrides the default SQLite location. Production Compose defaults to `sqlite+pysqlite:////data/vantage.sqlite3`; Postgres URLs can use `postgresql+psycopg://...`. |
 
 Do not paste real tokens or audit signing keys into the Compose file, docs, screenshots, or GitHub issues.
 
@@ -118,6 +119,8 @@ In Portainer, confirm:
 6. Verify `/api/health/ready`.
 7. Open the UI and confirm Nodes, Runs, Models, Routing, and Evals load.
 
+If you run Postgres instead of SQLite, use your Postgres backup and restore workflow instead of the SQLite backup steps. Postgres enables stronger database operations, but it does not by itself make multiple active Vantage control planes safe.
+
 ## Rollback
 
 Rollback quickly if readiness fails, migrations fail, or the UI cannot reach the backend.
@@ -145,6 +148,7 @@ Install the remote agent on each Linux worker:
 
 ```bash
 sudo VANTAGE_AGENT_SHARED_TOKEN="<same-token-as-control-plane>" \
+  VANTAGE_AGENT_NODE_ID="<your-node-id>" \
   VANTAGE_AGENT_OLLAMA_BASE_URLS="http://127.0.0.1:11434" \
   bash deploy/agent/install.sh
 ```

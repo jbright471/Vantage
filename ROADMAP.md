@@ -136,7 +136,7 @@ Status: shipped.
 Completed foundation:
 
 - Control-plane liveness endpoint for process-level service checks.
-- Control-plane readiness endpoint for SQLite, required schema tables, and bootstrap config verification.
+- Control-plane readiness endpoint for the configured database, required schema tables, and bootstrap config verification.
 - Backward-compatible basic health endpoint.
 - Structured JSON backend logs with timestamps and exception details.
 - Production Docker Compose profile with immutable backend and frontend images.
@@ -229,14 +229,30 @@ Completed foundation:
 - Richer collector descriptor contracts covering capabilities, endpoints, auth, config keys, and status.
 - n8n examples for scheduled event pulls, webhook dispatch, router-log import, and Markdown report export.
 
+## Phase 8: Advanced Eval Judges
+
+Status: foundation shipped.
+
+- Guarded `llm_judge` eval score type for using a selected local model as a bounded judge.
+- Guided Eval Lab judge configuration controls for selecting judge placement, pass threshold, context budget, and rubric without hand-authoring JSON.
+- Explicit judge config is still persisted through `score_config_json`: `judge_model_name`, `judge_node_id`, `rubric`, optional `pass_threshold`, and optional `max_context_chars`.
+- Judge prompt treats candidate prompt and candidate response as untrusted data.
+- Judge output must be strict JSON with `passed`, `score`, `reason`, and optional `evidence`.
+- Invalid judge config, missing judge placement, failed judge execution, malformed judge JSON, or invalid judge schema fails the eval run closed.
+- Judge decision, reason, evidence, threshold, model, and node are stored in durable eval Run metadata.
+
+Future tuning:
+
+- Add judge calibration reports comparing deterministic score types against `llm_judge` outcomes.
+- Add allowlisted judge model presets once multiple operators share prompt packs.
+
 ## Later Research
 
-Status: exploratory.
+Status: decisions recorded in `docs/architecture/LATER_RESEARCH_DECISIONS.md`.
 
-- Rust remote agent as a single drop-in binary for easier distribution.
-- Multi-user UI authentication and roles.
-- Multi-control-plane or team deployments.
-- Postgres support if SQLite becomes limiting.
-- Advanced local-LLM eval judges with strict guardrails.
-- Cross-node model synchronization planning.
-- Host service remediation through a privileged local agent with explicit allowlists.
+- Rust remote agent as a single drop-in binary for easier distribution: contract-preserving future implementation, deferred until packaging friction justifies it.
+- Multi-user UI authentication and roles: defer app-native users; use reverse-proxy or VPN auth for early shared installs.
+- Multi-control-plane or team deployments: not supported yet; requires Postgres, ownership leases, and control-plane identity.
+- Postgres support if SQLite becomes limiting: foundation shipped for non-SQLite SQLAlchemy URLs while SQLite remains the default.
+- Cross-node model synchronization planning: promote as a planning and dry-run surface before any model transfer action.
+- Host service remediation through a privileged local agent with explicit allowlists: boundary defined; backend containers must remain unprivileged.

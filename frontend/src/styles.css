@@ -23,6 +23,7 @@
   --healthy: #4edea3;
   --warning: #ffb597;
   --danger: #ffb4ab;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 * {
@@ -170,6 +171,33 @@ select {
 .rail-nav a:hover {
   border-color: var(--outline);
   background: var(--surface-low);
+}
+
+.rail-nav-label {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 9px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.rail-nav-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(182, 196, 255, 0.22);
+  border-radius: 5px;
+  background:
+    linear-gradient(135deg, rgba(46, 102, 255, 0.18), transparent),
+    rgba(12, 14, 18, 0.84);
+  color: var(--primary-soft);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
 }
 
 .rail-nav strong,
@@ -410,6 +438,134 @@ select {
   line-height: 1.55;
   tab-size: 2;
   white-space: pre;
+}
+
+.judge-config-panel {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(182, 196, 255, 0.26);
+  border-radius: 6px;
+  background:
+    linear-gradient(135deg, rgba(46, 102, 255, 0.08), transparent 42%),
+    rgba(12, 14, 18, 0.72);
+}
+
+.judge-config-header {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.judge-config-header h4 {
+  margin: 3px 0 4px;
+  color: var(--ink);
+  font-size: 0.98rem;
+}
+
+.judge-config-header p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+  text-transform: none;
+}
+
+.judge-config-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.1fr) minmax(0, 0.85fr);
+  gap: 10px;
+}
+
+.judge-threshold-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 82px;
+  gap: 8px;
+  align-items: center;
+}
+
+.judge-threshold-control input[type="range"] {
+  padding: 0;
+  accent-color: var(--primary);
+}
+
+.judge-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  gap: 12px;
+}
+
+.judge-rubric-field textarea {
+  min-height: 158px;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.judge-contract-preview {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(78, 222, 163, 0.26);
+  border-radius: 6px;
+  background: rgba(26, 28, 32, 0.88);
+}
+
+.judge-contract-preview ul {
+  display: grid;
+  gap: 7px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.judge-contract-preview li::marker {
+  color: var(--healthy);
+}
+
+.judge-contract-preview pre {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid rgba(141, 144, 161, 0.18);
+  border-radius: 4px;
+  overflow-x: auto;
+  background: rgba(12, 14, 18, 0.84);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.judge-config-status {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 10px;
+  border: 1px solid rgba(141, 144, 161, 0.2);
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: none;
+}
+
+.judge-config-status span:first-child {
+  color: var(--ink);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.judge-config-status.is-ready {
+  border-color: rgba(78, 222, 163, 0.34);
+  background: rgba(78, 222, 163, 0.06);
+}
+
+.judge-config-status.is-incomplete {
+  border-color: rgba(245, 158, 11, 0.34);
+  background: rgba(245, 158, 11, 0.06);
 }
 
 .eval-form .inline-check {
@@ -751,6 +907,22 @@ select {
 .telemetry-tile,
 .metric-card {
   padding: 14px;
+}
+
+.telemetry-tile-header {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.telemetry-tile-header .signal-label {
+  min-width: 0;
+}
+
+.telemetry-tile-header strong {
+  flex: 0 0 auto;
+  line-height: 1;
 }
 
 .telemetry-tile p,
@@ -2202,6 +2374,16 @@ select {
   text-transform: uppercase;
 }
 
+.state-token.is-accent {
+  color: var(--primary-soft);
+  background: rgba(46, 102, 255, 0.1);
+}
+
+.state-token.is-warning {
+  color: var(--warning);
+  background: rgba(245, 158, 11, 0.1);
+}
+
 .state-icon {
   display: inline-grid;
   place-items: center;
@@ -2487,6 +2669,8 @@ select {
   .eval-form-grid,
   .eval-control-grid,
   .eval-preset-row,
+  .judge-config-grid,
+  .judge-workbench,
   .routing-editor-grid,
   .score-grid,
   .node-metrics,
@@ -2513,6 +2697,11 @@ select {
 
   .run-stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .judge-config-header,
+  .judge-config-status {
+    display: grid;
   }
 
   .warning-item {

@@ -7,12 +7,12 @@ from backend.app.services.reconciliation import acknowledge_warning_record, dete
 
 def test_detect_config_drift_flags_enabled_node_without_recent_snapshot() -> None:
     warnings = detect_config_drift(
-        configured_nodes=[{"node_id": "bastet", "enabled": True}],
+        configured_nodes=[{"node_id": "remote-worker", "enabled": True}],
         observed_nodes={},
     )
 
     assert warnings[0]["warning_type"] == "config_drift"
-    assert warnings[0]["node_id"] == "bastet"
+    assert warnings[0]["node_id"] == "remote-worker"
 
 
 def test_upsert_warning_records_reuses_existing_active_warning() -> None:
@@ -21,7 +21,7 @@ def test_upsert_warning_records_reuses_existing_active_warning() -> None:
 
     with Session(engine) as session:
         warnings = detect_config_drift(
-            configured_nodes=[{"node_id": "bastet", "enabled": True}],
+            configured_nodes=[{"node_id": "remote-worker", "enabled": True}],
             observed_nodes={},
         )
         upsert_warning_records(session, warnings)
@@ -39,7 +39,7 @@ def test_acknowledged_warning_is_not_recreated_while_still_active() -> None:
 
     with Session(engine) as session:
         warnings = detect_config_drift(
-            configured_nodes=[{"node_id": "bastet", "enabled": True}],
+            configured_nodes=[{"node_id": "remote-worker", "enabled": True}],
             observed_nodes={},
         )
         upsert_warning_records(session, warnings)

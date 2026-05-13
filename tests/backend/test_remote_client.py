@@ -2,10 +2,10 @@ import asyncio
 import hashlib
 import hmac
 
-from backend.app.collectors.remote import BastetClient
+from backend.app.collectors.remote import RemoteAgentClient
 
 
-def test_bastet_client_sends_bearer_token(monkeypatch) -> None:
+def test_remote_agent_client_sends_bearer_token(monkeypatch) -> None:
     captured_headers = {}
 
     class FakeResponse:
@@ -31,13 +31,13 @@ def test_bastet_client_sends_bearer_token(monkeypatch) -> None:
 
     monkeypatch.setattr("backend.app.collectors.remote.httpx.AsyncClient", FakeAsyncClient)
 
-    payload = asyncio.run(BastetClient("http://bastet:9110", auth_token="secret-token").fetch_health())
+    payload = asyncio.run(RemoteAgentClient("http://remote-worker:9110", auth_token="secret-token").fetch_health())
 
     assert payload == {"status": "ok"}
     assert captured_headers["Authorization"] == "Bearer secret-token"
 
 
-def test_bastet_client_sends_hmac_signature(monkeypatch) -> None:
+def test_remote_agent_client_sends_hmac_signature(monkeypatch) -> None:
     captured_headers = {}
 
     class FakeResponse:
@@ -66,7 +66,12 @@ def test_bastet_client_sends_hmac_signature(monkeypatch) -> None:
     monkeypatch.setattr("backend.app.collectors.remote.secrets.token_urlsafe", lambda length: "nonce-1")
 
     payload = asyncio.run(
-        BastetClient("http://bastet:9110", auth_token="secret-token", auth_mode="hmac", key_id="agent-key-1").fetch_health()
+        RemoteAgentClient(
+            "http://remote-worker:9110",
+            auth_token="secret-token",
+            auth_mode="hmac",
+            key_id="agent-key-1",
+        ).fetch_health()
     )
 
     body_hash = hashlib.sha256(b"").hexdigest()

@@ -5,7 +5,7 @@ from backend.app.services.polling import classify_health, extract_model_placemen
 
 def test_classify_health_marks_partial_failure_as_degraded() -> None:
     snapshot = {
-        "node_id": "bastet",
+        "node_id": "remote-worker",
         "captured_at": datetime.now(UTC),
         "gpu_json": [],
         "cpu_json": {"usage_percent": 12},
@@ -20,9 +20,9 @@ def test_classify_health_marks_partial_failure_as_degraded() -> None:
 
 def test_extract_model_placements_creates_rows_per_model() -> None:
     placements = extract_model_placements(
-        node_id="bastet",
+        node_id="remote-worker",
         ollama_payload={"models": [{"name": "qwen3.6:latest", "digest": "sha256:abc"}]},
     )
 
-    assert placements[0]["node_id"] == "bastet"
+    assert placements[0]["node_id"] == "remote-worker"
     assert placements[0]["model_name"] == "qwen3.6:latest"

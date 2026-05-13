@@ -2,7 +2,7 @@
 
 Vantage is a local-first AI control plane for operators running private models across multiple machines. This guide is the daily manual for reading the web UI, tuning the bootstrap configuration, and performing common operating tasks safely.
 
-The examples below use `jedi` as an example control-plane node name and `bastet` as an example remote worker node name. Replace them with names from your own homelab.
+The examples below use `control-plane` as an example control-plane node name and `remote-worker` as an example remote worker node name. Replace them with names from your own homelab.
 
 ## Core Concepts
 
@@ -73,7 +73,7 @@ Use the backend health endpoints when starting, updating, or troubleshooting Van
 | --- | --- |
 | `/api/health` | Basic backward-compatible status check. |
 | `/api/health/live` | Confirms the backend process is alive. |
-| `/api/health/ready` | Confirms the backend can reach SQLite, see required tables, and load bootstrap config. |
+| `/api/health/ready` | Confirms the backend can reach the configured database, see required tables, and load bootstrap config. |
 
 Treat `/api/health/ready` as the deployment gate. If readiness returns HTTP `503`, inspect the failed check before trusting UI state or making routing changes.
 
@@ -150,7 +150,7 @@ Health and freshness are separate. A node can have a last-known healthy snapshot
 
 Each node card includes a heartbeat freshness meter and monospace signal age. The meter fades as freshness decays so stale data looks physically weaker before a node becomes unreachable. Treat the heartbeat as a visual confidence indicator, not just decoration.
 
-For remote workers such as example node `bastet`, the Remote Focus section shows agent endpoint health, Ollama status, host memory, CPU usage, GPU telemetry, and recent remote runs. GPU telemetry is especially useful for confirming whether a model host is actually available for local inference work.
+For remote workers such as example node `remote-worker`, the Remote Focus section shows agent endpoint health, Ollama status, host memory, CPU usage, GPU telemetry, and recent remote runs. GPU telemetry is especially useful for confirming whether a model host is actually available for local inference work.
 
 Use `Refresh node` when you want Vantage to retry one collector pass for that node. The action creates a durable Run record and closes as `success` when Vantage verifies a fresh observation, or `failed` when the collector cannot complete. `submitted_unverified` remains reserved for actions that have been accepted but not independently confirmed.
 
@@ -192,7 +192,7 @@ Key fields:
 - `Presence`: Whether visibility is node-local or cluster-wide.
 - `Actions`: Capability checks against a specific node placement.
 
-For replicated models across example nodes such as `jedi` and `bastet`, check placement before routing work. A model can exist on multiple nodes, but performance, VRAM, digest, and availability can still differ.
+For replicated models across example nodes such as `control-plane` and `remote-worker`, check placement before routing work. A model can exist on multiple nodes, but performance, VRAM, digest, and availability can still differ.
 
 ### Routing
 
@@ -204,7 +204,7 @@ Priority classes:
 - `interactive`: Operator-facing or latency-sensitive work.
 - `scheduled`: Automated jobs and recurring tasks.
 
-Route order is evaluated from left to right. For example, `bastet -> jedi` means Vantage should prefer the example `bastet` worker first, then the example `jedi` node as the next option.
+Route order is evaluated from left to right. For example, `remote-worker -> control-plane` means Vantage should prefer the example `remote-worker` worker first, then the example `control-plane` node as the next option.
 
 Operators can create model-specific routing lanes from the policy editor. A model-specific lane combines priority class, target model, preferred nodes, optional eval pass-rate threshold, and explicit failover allowances. Leave failover allowances off unless you intentionally want the rule to consider degraded, stale, or unreachable nodes.
 
@@ -218,7 +218,9 @@ Use `History` on a routing row to inspect create, update, and delete events for 
 
 The Eval Lab is the Phase 2 surface for prompt-suite testing. Operators can create, edit, duplicate, import, export, and clean up prompt suites; add or duplicate prompt cases; queue eval attempt `Run` records for a selected model placement; execute queued runs; compare recent pass rates; inspect scored responses; create recurring schedules; and review deterministic Eval Intelligence summaries.
 
-Eval scores are deterministic checks, not subjective quality judgments. Supported score types include `json_subset`, `exact_match`, `contains`, `regex`, `numeric_threshold`, and `json_schema`. A passing score means the response satisfied the selected check and scoring config; it does not prove broader model quality.
+Eval scores are auditable checks, not broad model-quality guarantees. Deterministic score types include `json_subset`, `exact_match`, `contains`, `regex`, `numeric_threshold`, and `json_schema`. The guarded `llm_judge` score type can ask a selected local model to judge a candidate response, but it must return strict JSON and Vantage fails the run closed if the judge output is malformed.
+
+Use the guided score controls when they are available. For `llm_judge`, Vantage renders an operator workbench for judge placement, pass threshold, context budget, and rubric, then writes the generated contract into `Score config JSON`. Keep the JSON visible as the audit/debug escape hatch; the guided controls are the safer daily path.
 
 Use `Score config JSON` for score-type-specific settings:
 
@@ -226,7 +228,21 @@ Use `Score config JSON` for score-type-specific settings:
 - `regex`: set `pattern`.
 - `numeric_threshold`: set `json_path`, `operator`, and `value`.
 - `json_schema`: set `required` and optional `properties` with `const` values.
+- `llm_judge`: set `judge_model_name`, `judge_node_id`, `rubric`, and optional `pass_threshold` and `max_context_chars`.
 - `json_subset`: usually uses `Expected JSON` and can leave score config empty.
+
+Example guarded judge config:
+
+```json
+{
+  "judge_model_name": "example-judge-model:latest",
+  "judge_node_id": "control-plane",
+  "rubric": "Pass only when the answer is accurate, concise, and follows the requested format.",
+  "pass_threshold": 0.8
+}
+```
+
+Treat `llm_judge` results as advisory-but-auditable. The judge model receives only a bounded JSON context containing the rubric, candidate prompt, candidate response, expected JSON, and pass threshold. It is instructed not to follow candidate text as instructions. Vantage accepts only JSON with `passed`, `score`, `reason`, and optional `evidence`, then stores the judge decision inside the eval Run metadata.
 
 Use `Inspect score` on a recent scored run when you need to see the exact case, target placement, score reason, missing or mismatched expected fields, response preview, and parsed response JSON.
 
@@ -324,7 +340,7 @@ Safe operating rule: never promote a node that is stale, unreachable, missing th
 2. In `Policy editor`, enter a unique `Rule ID`.
 3. Select `batch`, `interactive`, or `scheduled`.
 4. Enter the model tag, such as `qwen3.5:27b`.
-5. Enter preferred nodes as a comma-separated list, such as `bastet, jedi`.
+5. Enter preferred nodes as a comma-separated list, such as `remote-worker, control-plane`.
 6. Optionally set `Min eval pass rate` as a decimal between `0` and `1`.
 7. Leave degraded, stale, and unreachable allowances disabled unless you are intentionally testing failover behavior.
 8. Click `Create rule`.
@@ -425,7 +441,7 @@ If the node appears but remains stale or unreachable, check network reachability
 
 1. Restart the backend container, service, or development stack.
 2. Call `/api/health/live` to confirm the process is running.
-3. Call `/api/health/ready` to confirm SQLite, schema tables, and bootstrap config are usable.
+3. Call `/api/health/ready` to confirm the configured database, schema tables, and bootstrap config are usable.
 4. Open the UI only after readiness reports `ok`.
 5. If readiness fails, check Docker, Portainer, or systemd logs for JSON records from the backend.
 
@@ -455,6 +471,16 @@ $env:VANTAGE_AGENT_SHARED_TOKEN = "<same-token-as-control-plane>"
 4. Deploy the update or release bundle.
 5. Verify `/api/health/ready`.
 6. Keep the backup until the new deployment has been stable through normal polling and UI use.
+
+### Use Postgres Instead Of SQLite
+
+SQLite is the default and recommended database for a single local operator. Use Postgres only when the run ledger, snapshot history, backup requirements, or future multi-process deployment needs exceed SQLite.
+
+1. Install the optional Postgres driver when running outside the bundled Docker image: `pip install "vantage[postgres]"`.
+2. Set `VANTAGE_DATABASE_URL=postgresql+psycopg://vantage:<password>@<postgres-host>:5432/vantage`.
+3. Run migrations before starting normal polling or eval schedules.
+4. Call `/api/health/ready` and confirm the database and schema checks pass.
+5. Do not treat Postgres alone as multi-control-plane support. Multiple active control planes still require ownership leases and control-plane identity before they are safe.
 
 ### Verify a Signed Audit Bundle
 

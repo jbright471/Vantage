@@ -6,9 +6,9 @@ const runsPayload = {
   items: [
     {
       run_id: "99653acc5b7a4e41873652bbbf67a911b3af246b56176fe3d75f02beea467d40",
-      summary: "Restart Bastet agent",
+      summary: "Restart Remote Worker agent",
       status: "submitted_unverified",
-      node_id: "bastet",
+      node_id: "remote-worker",
       started_at: "2026-04-23T22:50:00Z",
       ended_at: null,
       duration_ms: null,
@@ -49,10 +49,10 @@ describe("RunsPage", () => {
     render(<RunsPage runs={runsPayload.items} />);
 
     await waitFor(() => {
-      expect(screen.getByText("Restart Bastet agent")).toBeTruthy();
+      expect(screen.getByText("Restart Remote Worker agent")).toBeTruthy();
     });
 
-    expect(screen.getByText("Restart Bastet agent")).toBeTruthy();
+    expect(screen.getByText("Restart Remote Worker agent")).toBeTruthy();
     expect(screen.getByText("submitted_unverified")).toBeTruthy();
     expect(screen.getByText("99653acc...")).toBeTruthy();
     expect(screen.queryByText("Request sent; Vantage has not verified completion yet.")).toBeNull();
@@ -146,7 +146,7 @@ describe("RunsPage", () => {
     render(<RunsPage runs={[]} />);
 
     await waitFor(() => {
-      expect(screen.getByText("Restart Bastet agent")).toBeTruthy();
+      expect(screen.getByText("Restart Remote Worker agent")).toBeTruthy();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /copy full run id/i }));
@@ -156,7 +156,7 @@ describe("RunsPage", () => {
     );
     expect(screen.queryByRole("dialog", { name: "Run Details" })).toBeNull();
 
-    fireEvent.click(screen.getByText("Restart Bastet agent"));
+    fireEvent.click(screen.getByText("Restart Remote Worker agent"));
 
     expect(screen.getByRole("dialog", { name: "Run Details" })).toBeTruthy();
     expect(screen.getByText("99653acc5b7a4e41873652bbbf67a911b3af246b56176fe3d75f02beea467d40")).toBeTruthy();

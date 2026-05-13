@@ -1,11 +1,27 @@
 import os
 
 from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import sessionmaker
 
 DATABASE_URL = os.getenv("VANTAGE_DATABASE_URL", "sqlite+pysqlite:///./vantage.sqlite3")
 
-engine = create_engine(DATABASE_URL, future=True, connect_args={"check_same_thread": False})
+
+def is_sqlite_database_url(database_url: str) -> bool:
+    return make_url(database_url).get_backend_name() == "sqlite"
+
+
+def engine_options_for_url(database_url: str) -> dict:
+    if is_sqlite_database_url(database_url):
+        return {"connect_args": {"check_same_thread": False}}
+    return {"pool_pre_ping": True}
+
+
+def create_vantage_engine(database_url: str = DATABASE_URL) -> Engine:
+    return create_engine(database_url, future=True, **engine_options_for_url(database_url))
+
+
+engine = create_vantage_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 

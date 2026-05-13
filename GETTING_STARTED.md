@@ -29,7 +29,7 @@ Add-Content .env "VANTAGE_ENABLE_BACKGROUND_POLLING=0"
 4. Start the backend and frontend with `docker compose up --build -d`.
 5. Open the in-app Operator Guide from the `Docs` button.
 
-`jedi` and `bastet` are example node names only. Use names that make sense for your homelab.
+`control-plane` and `remote-worker` are example node names only. Use names that make sense for your homelab.
 
 ## First Checks
 

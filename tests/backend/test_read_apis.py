@@ -19,12 +19,12 @@ def test_nodes_runs_models_routing_and_warnings_endpoints_exist() -> None:
         assert warnings.status_code == 200
         assert evals.status_code == 200
 
-        jedi = next(node for node in nodes.json() if node["node_id"] == "jedi")
+        control_plane = next(node for node in nodes.json() if node["node_id"] == "control-plane")
 
-        assert jedi["base_url"] == "http://127.0.0.1:8000"
-        assert "gpu_stats" in jedi
-        assert "model_count" in jedi
-        assert "ollama_status" in jedi
+        assert control_plane["base_url"] == "http://127.0.0.1:8000"
+        assert "gpu_stats" in control_plane
+        assert "model_count" in control_plane
+        assert "ollama_status" in control_plane
         assert isinstance(runs.json()["items"], list)
         assert isinstance(models.json(), list)
         assert isinstance(routing.json(), list)

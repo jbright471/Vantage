@@ -10,18 +10,18 @@ run_timeout_seconds = 300
 abandoned_after_seconds = 900
 idempotency_dedupe_seconds = 30
 agent_auth_token_env = "VANTAGE_AGENT_SHARED_TOKEN"
-local_ollama_base_urls = ["http://127.0.0.1:11434", "http://127.0.0.1:11435"]
+local_ollama_base_urls = ["http://127.0.0.1:11434"]
 
 [[nodes]]
-node_id = "jedi"
-display_name = "Jedi"
+node_id = "control-plane"
+display_name = "Control Plane"
 base_url = "http://127.0.0.1:8000"
 role = "primary"
 enabled = true
 
 [[nodes]]
-node_id = "bastet"
-display_name = "Bastet"
-base_url = "http://192.168.50.209:9110"
+node_id = "remote-worker"
+display_name = "Remote Worker"
+base_url = "http://10.0.0.25:9110"
 role = "remote"
-enabled = true
+enabled = false

@@ -34,7 +34,7 @@ def test_collect_local_snapshot_reads_models_from_http(monkeypatch) -> None:
     monkeypatch.setattr("backend.app.collectors.local.httpx.get", fake_get)
 
     snapshot = collect_local_snapshot(
-        node_id="jedi",
+        node_id="control-plane",
         base_urls=["http://127.0.0.1:11434", "http://127.0.0.1:11435"],
     )
 
@@ -54,7 +54,7 @@ def test_collect_local_snapshot_marks_partial_failure(monkeypatch) -> None:
     monkeypatch.setattr("backend.app.collectors.local.httpx.get", fake_get)
 
     snapshot = collect_local_snapshot(
-        node_id="jedi",
+        node_id="control-plane",
         base_urls=["http://127.0.0.1:11434", "http://127.0.0.1:11435"],
     )
 

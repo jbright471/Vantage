@@ -37,9 +37,9 @@ Vantage exists to make that state visible and actionable without taking ownershi
 - Backend-filtered run history with pagination
 - CSV, JSON, and signed bundle audit exports for run history, plus a CLI verification helper
 - Local LLM capability checks from the Models surface
-- Eval Lab for prompt suites, executable eval runs, richer score types, placement comparison, baseline regression checks, configurable intelligence windows, managed scope presets, trend summaries, flakiness detection, failure clustering, manual local-LLM assisted summaries, recurring schedules, suite import/export, lifecycle cleanup, and opt-in auto-execution
+- Eval Lab for prompt suites, executable eval runs, richer score types including guided guarded local-LLM judge configs, placement comparison, baseline regression checks, configurable intelligence windows, managed scope presets, trend summaries, flakiness detection, failure clustering, manual local-LLM assisted summaries, recurring schedules, suite import/export, lifecycle cleanup, and opt-in auto-execution
 - SSE-based live UI updates
-- SQLite persistence with bounded snapshot pruning
+- SQLite persistence with bounded snapshot pruning, plus optional non-SQLite SQLAlchemy URLs for Postgres-backed deployments
 - Shared-token authentication for node agents with optional HMAC request signing and replay protection
 - Deployment health endpoints for liveness and readiness checks
 - Structured JSON backend logs for container and service supervisors
@@ -60,9 +60,12 @@ Vantage exists to make that state visible and actionable without taking ownershi
 
 From the repository root:
 
+Run the public-safe demo first. Demo mode seeds synthetic nodes, models, runs, warnings, routing policies, and eval history so you can evaluate the UI without exposing or configuring real infrastructure.
+
 ```powershell
 $token = python -c "import secrets; print(secrets.token_urlsafe(48))"
 (Get-Content .env.example) -replace '^VANTAGE_AGENT_SHARED_TOKEN=.*', "VANTAGE_AGENT_SHARED_TOKEN=$token" | Set-Content .env
+(Get-Content .env) -replace '^VANTAGE_DEMO_MODE=.*', "VANTAGE_DEMO_MODE=1" | Set-Content .env
 docker compose up --build -d
 ```
 
@@ -81,10 +84,10 @@ Invoke-RestMethod http://127.0.0.1:8000/api/health/ready
 docker compose down
 ```
 
-Try Vantage with synthetic data before connecting real nodes:
+When you are ready to connect real nodes, turn demo mode off, edit [config/vantage.bootstrap.toml](./config/vantage.bootstrap.toml), and enable the remote workers you want Vantage to poll:
 
 ```powershell
-(Get-Content .env) -replace '^VANTAGE_DEMO_MODE=.*', "VANTAGE_DEMO_MODE=1" | Set-Content .env
+(Get-Content .env) -replace '^VANTAGE_DEMO_MODE=.*', "VANTAGE_DEMO_MODE=0" | Set-Content .env
 docker compose up --build -d
 ```
 
@@ -98,7 +101,7 @@ Invoke-RestMethod http://127.0.0.1:8000/api/health/ready
 
 ## Configuration
 
-Primary bootstrap config lives at [config/vantage.bootstrap.toml](./config/vantage.bootstrap.toml).
+Primary bootstrap config lives at [config/vantage.bootstrap.toml](./config/vantage.bootstrap.toml). The tracked default is public-safe: it enables only the local control-plane node and includes a disabled `remote-worker` example that you can rename, point at your own agent URL, and enable when ready.
 
 | Setting | Purpose | Default |
 | --- | --- | --- |
@@ -127,6 +130,7 @@ Signed audit bundles require `VANTAGE_AUDIT_SIGNING_KEY`. Stronger node-agent tr
 - [Operator Guide](./OPERATOR_GUIDE.md)
 - [Product Microsite](./docs/product/index.html)
 - [Install Walkthrough Script](./docs/walkthrough/INSTALL_WALKTHROUGH.md)
+- [Walkthrough Video Plan](./docs/walkthrough/video/README.md)
 - [Remote Agent Contract](./AGENT_CONTRACT.md)
 - [Agent Authentication](./docs/security/AGENT_AUTH.md)
 - [Audit Exports](./docs/security/AUDIT_EXPORTS.md)
@@ -150,6 +154,8 @@ Signed audit bundles require `VANTAGE_AUDIT_SIGNING_KEY`. Stronger node-agent tr
 ## Project Status
 
 Vantage has shipped Phase 1 through Phase 7 foundation work: the control-plane foundation, operator attention, diagnostics, guided remediation, Eval Lab, Eval Intelligence, routing-policy control, production packaging, demo mode, setup wizard, public product assets, open-source onboarding materials, signed audit bundles, optional HMAC agent authentication, replay protection, action allowlists, security-warning surfacing, managed eval presets, integration health, email/report automation, and local-first integration endpoints. The current version is useful for a single local AI operator and remains intentionally conservative about distributed control and host-level remediation.
+
+Later Research decisions are tracked in `docs/architecture/LATER_RESEARCH_DECISIONS.md`. SQLite remains the default database, but `VANTAGE_DATABASE_URL` can now point at a non-SQLite SQLAlchemy URL when an operator wants to experiment with Postgres-backed storage.
 
 ## License
 

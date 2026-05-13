@@ -8,7 +8,7 @@ import os
 from sqlalchemy import delete, select
 
 from backend.app.collectors.local import collect_local_snapshot
-from backend.app.collectors.remote import AgentAuthenticationError, BastetClient
+from backend.app.collectors.remote import AgentAuthenticationError, RemoteAgentClient
 from backend.app.config import BootstrapConfig
 from backend.app.db import SessionLocal
 from backend.app.models import ModelPlacement, Node, NodeSnapshot, Run, WarningRecord
@@ -86,7 +86,7 @@ def build_agent_auth_warning(node_id: str, error: Exception) -> dict:
 
 
 async def collect_remote_snapshot(node: Node, auth_token: str | None = None) -> dict:
-    client = BastetClient(
+    client = RemoteAgentClient(
         node.base_url,
         auth_token=auth_token,
         auth_mode=resolve_agent_auth_mode(node),

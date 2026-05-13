@@ -22,6 +22,6 @@ enabled = true
 [[nodes]]
 node_id = "remote-worker"
 display_name = "Remote Worker"
-base_url = "http://<remote-agent-ip>:9110"
+base_url = "http://10.0.0.25:9110"
 role = "remote"
-enabled = true
+enabled = false

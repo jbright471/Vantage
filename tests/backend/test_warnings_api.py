@@ -20,9 +20,9 @@ def test_acknowledge_warning_marks_warning_and_creates_run() -> None:
                     warning_id="warning-to-ack",
                     warning_type="config_drift",
                     severity="warning",
-                    node_id="bastet",
+                    node_id="remote-worker",
                     status="active",
-                    summary="Configured node bastet has no recent observation",
+                    summary="Configured node remote-worker has no recent observation",
                     metadata_json={},
                 )
             )

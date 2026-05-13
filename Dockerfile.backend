@@ -11,7 +11,7 @@ COPY agent ./agent
 COPY config ./config
 
 RUN python -m pip install --upgrade pip \
-    && python -m pip install --no-cache-dir -e . watchfiles
+    && python -m pip install --no-cache-dir -e ".[postgres]" watchfiles
 
 EXPOSE 8000
 

@@ -12,7 +12,7 @@ from agent.app.schemas import (
     RunsResponse,
 )
 
-app = FastAPI(title="Vantage Bastet Agent", dependencies=[Depends(require_agent_auth)])
+app = FastAPI(title="Vantage Remote Agent", dependencies=[Depends(require_agent_auth)])
 
 
 @app.get("/health", response_model=HealthResponse)

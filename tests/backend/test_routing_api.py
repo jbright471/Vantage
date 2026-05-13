@@ -12,25 +12,25 @@ def test_update_routing_rule_endpoint_reorders_nodes() -> None:
     with TestClient(app) as client:
         response = client.put(
             "/api/routing/interactive-default",
-            json={"preferred_nodes": ["bastet", "jedi"]},
+            json={"preferred_nodes": ["remote-worker", "control-plane"]},
         )
 
     assert response.status_code == 200
-    assert response.json()["preferred_nodes"] == ["bastet", "jedi"]
+    assert response.json()["preferred_nodes"] == ["remote-worker", "control-plane"]
 
 
 def test_dry_run_routing_explains_skipped_degraded_node() -> None:
     with TestClient(app) as client:
         now = datetime.now(UTC)
         with SessionLocal() as session:
-            for node_id in ("jedi", "bastet"):
+            for node_id in ("control-plane", "remote-worker"):
                 node = session.get(Node, node_id)
                 assert node is not None
                 node.last_seen_at = now
             session.add_all(
                 [
                     NodeSnapshot(
-                        node_id="bastet",
+                        node_id="remote-worker",
                         captured_at=now,
                         gpu_json=[],
                         cpu_json={},
@@ -39,7 +39,7 @@ def test_dry_run_routing_explains_skipped_degraded_node() -> None:
                         health_status="degraded",
                     ),
                     NodeSnapshot(
-                        node_id="jedi",
+                        node_id="control-plane",
                         captured_at=now,
                         gpu_json=[],
                         cpu_json={},
@@ -53,18 +53,18 @@ def test_dry_run_routing_explains_skipped_degraded_node() -> None:
 
         response = client.post(
             "/api/routing/scheduled-default/dry-run",
-            json={"preferred_nodes": ["bastet", "jedi"]},
+            json={"preferred_nodes": ["remote-worker", "control-plane"]},
         )
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["candidate_order"] == ["bastet", "jedi"]
-    assert payload["selected_node"] == "jedi"
-    assert payload["decisions"][0]["node_id"] == "bastet"
+    assert payload["candidate_order"] == ["remote-worker", "control-plane"]
+    assert payload["selected_node"] == "control-plane"
+    assert payload["decisions"][0]["node_id"] == "remote-worker"
     assert payload["decisions"][0]["decision"] == "rejected"
     assert "health:degraded" in payload["decisions"][0]["reasons"]
     assert payload["decisions"][1]["decision"] == "selected"
-    assert "Preferred node 'bastet' would be skipped" in payload["warnings"][0]
+    assert "Preferred node 'remote-worker' would be skipped" in payload["warnings"][0]
 
 
 def test_routing_rule_lifecycle_records_history() -> None:
@@ -77,7 +77,7 @@ def test_routing_rule_lifecycle_records_history() -> None:
                 "rule_id": rule_id,
                 "priority_class": "interactive",
                 "model_name": "qwen3.5:27b",
-                "preferred_nodes": ["jedi", "bastet"],
+                "preferred_nodes": ["control-plane", "remote-worker"],
                 "minimum_eval_pass_rate": 0.75,
             },
         )
@@ -123,13 +123,13 @@ def test_dry_run_uses_model_placement_and_eval_pass_rate_constraints() -> None:
                 "rule_id": rule_id,
                 "priority_class": "batch",
                 "model_name": model_name,
-                "preferred_nodes": ["bastet", "jedi"],
+                "preferred_nodes": ["remote-worker", "control-plane"],
                 "minimum_eval_pass_rate": 0.75,
             },
         )
 
         with SessionLocal() as session:
-            for node_id in ("jedi", "bastet"):
+            for node_id in ("control-plane", "remote-worker"):
                 node = session.get(Node, node_id)
                 assert node is not None
                 node.last_seen_at = now
@@ -161,7 +161,7 @@ def test_dry_run_uses_model_placement_and_eval_pass_rate_constraints() -> None:
                         source_type="eval",
                         detail_type="eval_attempt",
                         source_id="test",
-                        node_id="bastet",
+                        node_id="remote-worker",
                         model_name=model_name,
                         action_type=None,
                         status="success",
@@ -177,7 +177,7 @@ def test_dry_run_uses_model_placement_and_eval_pass_rate_constraints() -> None:
                         source_type="eval",
                         detail_type="eval_attempt",
                         source_id="test",
-                        node_id="bastet",
+                        node_id="remote-worker",
                         model_name=model_name,
                         action_type=None,
                         status="failed",
@@ -193,7 +193,7 @@ def test_dry_run_uses_model_placement_and_eval_pass_rate_constraints() -> None:
                         source_type="eval",
                         detail_type="eval_attempt",
                         source_id="test",
-                        node_id="jedi",
+                        node_id="control-plane",
                         model_name=model_name,
                         action_type=None,
                         status="success",
@@ -212,7 +212,7 @@ def test_dry_run_uses_model_placement_and_eval_pass_rate_constraints() -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["selected_node"] == "jedi"
+    assert payload["selected_node"] == "control-plane"
     assert "eval_pass_rate_below_minimum:0.5000<0.7500" in payload["decisions"][0]["reasons"]
     assert payload["decisions"][0]["eval_pass_rate"] == 0.5
     assert payload["decisions"][1]["decision"] == "selected"

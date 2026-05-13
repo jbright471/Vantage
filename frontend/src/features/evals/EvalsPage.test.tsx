@@ -122,6 +122,67 @@ describe("EvalsPage", () => {
     });
   });
 
+  it("renders guided LLM judge config controls and generated JSON", async () => {
+    const suite = {
+      suite_id: "suite-judge",
+      name: "Judge Suite",
+      description: "LLM judge checks",
+      created_at: "2026-05-12T12:00:00Z",
+      metadata_json: {},
+      case_count: 0,
+      cases: [],
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "/api/evals/score-history") {
+        return {
+          ok: true,
+          json: async () => ({ total_runs: 0, placements: [], suites: [], cases: [], recent_runs: [] }),
+        } as Response;
+      }
+      if (url === "/api/evals/schedules") {
+        return { ok: true, json: async () => [] } as Response;
+      }
+      if (url === "/api/evals/suites") {
+        return { ok: true, json: async () => [suite] } as Response;
+      }
+      return { ok: true, json: async () => [] } as Response;
+    });
+
+    render(
+      <EvalsPage
+        models={[
+          {
+            model_name: "judge-model:latest",
+            placements: ["control-plane"],
+            placement_details: [{ node_id: "control-plane", model_digest: "sha256:judge", available: true }],
+          },
+        ]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Judge Suite").length).toBeGreaterThan(0);
+    });
+
+    fireEvent.change(screen.getByLabelText("Score type"), { target: { value: "llm_judge" } });
+
+    expect(screen.getByText("LLM Judge Config")).toBeTruthy();
+    expect(screen.getByText("Fails Closed")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Judge placement"), { target: { value: "judge-model:latest::control-plane" } });
+    fireEvent.change(screen.getByLabelText("Evaluation rubric"), {
+      target: { value: "Pass only when the response is grounded and concise." },
+    });
+    fireEvent.change(screen.getByLabelText("Max context chars"), { target: { value: "6000" } });
+
+    const generatedConfig = screen.getByLabelText("Score config JSON") as HTMLTextAreaElement;
+    expect(generatedConfig.value).toContain("\"judge_model_name\": \"judge-model:latest\"");
+    expect(generatedConfig.value).toContain("\"judge_node_id\": \"control-plane\"");
+    expect(generatedConfig.value).toContain("\"max_context_chars\": 6000");
+    expect(screen.getByText("Judge config ready")).toBeTruthy();
+  });
+
   it("queues an eval attempt for a model placement", async () => {
     const suite = {
       suite_id: "suite-1",
@@ -150,7 +211,7 @@ describe("EvalsPage", () => {
             placements: [
               {
                 model_name: "llama3.2:latest",
-                node_id: "jedi",
+                node_id: "control-plane",
                 run_count: 1,
                 passed_count: 1,
                 failed_count: 0,
@@ -180,7 +241,7 @@ describe("EvalsPage", () => {
                 case_id: "case-1",
                 case_name: "JSON Answer",
                 model_name: "llama3.2:latest",
-                node_id: "jedi",
+                node_id: "control-plane",
                 status: "success",
                 passed: true,
                 score: 1,
@@ -209,16 +270,16 @@ describe("EvalsPage", () => {
           suite_id: "suite-1",
           suite_name: "Reasoning Smoke",
           model_name: "llama3.2:latest",
-          node_id: "jedi",
+          node_id: "control-plane",
           run_count: 1,
           runs: [
             {
               run_id: "run-1",
-              summary: "Queued eval case 'JSON Answer' for llama3.2:latest on jedi",
+              summary: "Queued eval case 'JSON Answer' for llama3.2:latest on control-plane",
               status: "queued",
               source_type: "eval",
               detail_type: "eval_attempt",
-              node_id: "jedi",
+              node_id: "control-plane",
               model_name: "llama3.2:latest",
               action_type: "eval",
               started_at: "2026-04-29T12:01:00Z",
@@ -233,11 +294,11 @@ describe("EvalsPage", () => {
           ok: true,
           json: async () => ({
           run_id: "run-1",
-          summary: "Eval case 'JSON Answer' passed for llama3.2:latest on jedi",
+          summary: "Eval case 'JSON Answer' passed for llama3.2:latest on control-plane",
           status: "success",
           source_type: "eval",
           detail_type: "eval_attempt",
-          node_id: "jedi",
+          node_id: "control-plane",
           model_name: "llama3.2:latest",
           action_type: "eval",
           started_at: "2026-04-29T12:01:00Z",
@@ -258,8 +319,8 @@ describe("EvalsPage", () => {
         models={[
           {
             model_name: "llama3.2:latest",
-            placements: ["jedi"],
-            placement_details: [{ node_id: "jedi", model_digest: null, available: true }],
+            placements: ["control-plane"],
+            placement_details: [{ node_id: "control-plane", model_digest: null, available: true }],
           },
         ]}
       />,
@@ -273,12 +334,12 @@ describe("EvalsPage", () => {
       target: { value: "suite-1" },
     });
     fireEvent.change(screen.getByLabelText("Model placement"), {
-      target: { value: "llama3.2:latest::jedi" },
+      target: { value: "llama3.2:latest::control-plane" },
     });
     fireEvent.click(screen.getByRole("button", { name: /queue eval attempt/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/1 run queued for llama3.2:latest on jedi/i)).toBeTruthy();
+      expect(screen.getByText(/1 run queued for llama3.2:latest on control-plane/i)).toBeTruthy();
     });
 
     fireEvent.click(screen.getByRole("button", { name: /^execute$/i }));
@@ -320,7 +381,7 @@ describe("EvalsPage", () => {
       suite_id: "suite-1",
       suite_name: "Reasoning Smoke",
       model_name: "llama3.2:latest",
-      node_id: "jedi",
+      node_id: "control-plane",
       interval_minutes: 30,
       enabled: true,
       auto_execute: true,
@@ -364,16 +425,16 @@ describe("EvalsPage", () => {
             suite_id: "suite-1",
             suite_name: "Reasoning Smoke",
             model_name: "llama3.2:latest",
-            node_id: "jedi",
+            node_id: "control-plane",
             run_count: 1,
             runs: [
               {
                 run_id: "schedule-run-1",
-                summary: "Queued eval case 'JSON Answer' for llama3.2:latest on jedi",
+                summary: "Queued eval case 'JSON Answer' for llama3.2:latest on control-plane",
                 status: "queued",
                 source_type: "eval",
                 detail_type: "eval_attempt",
-                node_id: "jedi",
+                node_id: "control-plane",
                 model_name: "llama3.2:latest",
                 action_type: "eval",
                 started_at: "2026-04-29T12:05:00Z",
@@ -405,8 +466,8 @@ describe("EvalsPage", () => {
         models={[
           {
             model_name: "llama3.2:latest",
-            placements: ["jedi"],
-            placement_details: [{ node_id: "jedi", model_digest: null, available: true }],
+            placements: ["control-plane"],
+            placement_details: [{ node_id: "control-plane", model_digest: null, available: true }],
           },
         ]}
       />,
@@ -420,7 +481,7 @@ describe("EvalsPage", () => {
       target: { value: "suite-1" },
     });
     fireEvent.change(screen.getByLabelText("Schedule placement"), {
-      target: { value: "llama3.2:latest::jedi" },
+      target: { value: "llama3.2:latest::control-plane" },
     });
     fireEvent.change(screen.getByLabelText("Interval minutes"), {
       target: { value: "30" },
@@ -439,7 +500,7 @@ describe("EvalsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /^queue now$/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/1 run queued for llama3.2:latest on jedi/i)).toBeTruthy();
+      expect(screen.getByText(/1 run queued for llama3.2:latest on control-plane/i)).toBeTruthy();
     });
     expect(screen.getByText(/Last queued:/)).toBeTruthy();
     expect(screen.getAllByText(/8:05/).length).toBeGreaterThan(0);
@@ -480,7 +541,7 @@ describe("EvalsPage", () => {
       suite_id: "suite-1",
       suite_name: "Reasoning Smoke",
       model_name: "llama3.2:latest",
-      node_id: "jedi",
+      node_id: "control-plane",
       interval_minutes: 30,
       enabled: true,
       auto_execute: false,
@@ -568,7 +629,7 @@ describe("EvalsPage", () => {
                 case_id: "case-1",
                 case_name: "JSON Answer",
                 model_name: "llama3.2:latest",
-                node_id: "jedi",
+                node_id: "control-plane",
                 status: "failed",
                 passed: false,
                 score: 0,
@@ -597,11 +658,11 @@ describe("EvalsPage", () => {
           ok: true,
           json: async () => ({
             run_id: "summary-run-1",
-            summary: "Generated assisted eval summary with llama3.2:latest on jedi",
+            summary: "Generated assisted eval summary with llama3.2:latest on control-plane",
             status: "success",
             source_type: "eval",
             detail_type: "eval_assisted_summary",
-            node_id: "jedi",
+            node_id: "control-plane",
             model_name: "llama3.2:latest",
             started_at: "2026-04-29T12:02:00Z",
             metadata_json: {
@@ -618,8 +679,8 @@ describe("EvalsPage", () => {
         models={[
           {
             model_name: "llama3.2:latest",
-            placements: ["jedi"],
-            placement_details: [{ node_id: "jedi", model_digest: null, available: true }],
+            placements: ["control-plane"],
+            placement_details: [{ node_id: "control-plane", model_digest: null, available: true }],
           },
         ]}
       />,
@@ -630,7 +691,7 @@ describe("EvalsPage", () => {
     });
 
     fireEvent.change(screen.getByLabelText("Summary model placement"), {
-      target: { value: "llama3.2:latest::jedi" },
+      target: { value: "llama3.2:latest::control-plane" },
     });
     fireEvent.click(screen.getByRole("button", { name: /generate summary/i }));
 
@@ -653,7 +714,7 @@ describe("EvalsPage", () => {
             placements: [
               {
                 model_name: "llama3.2:latest",
-                node_id: "jedi",
+                node_id: "control-plane",
                 run_count: 1,
                 passed_count: 1,
                 failed_count: 0,
@@ -667,7 +728,7 @@ describe("EvalsPage", () => {
             filters: {
               window_days: url.includes("window_days=7") ? 7 : 30,
               model_name: url.includes("model_name=") ? "llama3.2:latest" : null,
-              node_id: url.includes("node_id=") ? "jedi" : null,
+              node_id: url.includes("node_id=") ? "control-plane" : null,
               recent_limit: 20,
             },
             thresholds: {
@@ -688,8 +749,8 @@ describe("EvalsPage", () => {
         models={[
           {
             model_name: "llama3.2:latest",
-            placements: ["jedi"],
-            placement_details: [{ node_id: "jedi", model_digest: null, available: true }],
+            placements: ["control-plane"],
+            placement_details: [{ node_id: "control-plane", model_digest: null, available: true }],
           },
         ]}
       />,
@@ -700,7 +761,7 @@ describe("EvalsPage", () => {
     });
 
     fireEvent.change(screen.getByLabelText("Time window"), { target: { value: "7" } });
-    fireEvent.change(screen.getByLabelText("Placement filter"), { target: { value: "llama3.2:latest::jedi" } });
+    fireEvent.change(screen.getByLabelText("Placement filter"), { target: { value: "llama3.2:latest::control-plane" } });
     fireEvent.change(screen.getByLabelText("Flakiness sensitivity"), { target: { value: "0.1" } });
     fireEvent.change(screen.getByLabelText("Failure cluster minimum"), { target: { value: "3" } });
     fireEvent.click(screen.getByRole("button", { name: /apply controls/i }));
@@ -710,11 +771,11 @@ describe("EvalsPage", () => {
     });
     const filteredUrl = requestedUrls.find((url) => url.includes("window_days=7")) ?? "";
     expect(filteredUrl).toContain("model_name=llama3.2%3Alatest");
-    expect(filteredUrl).toContain("node_id=jedi");
+    expect(filteredUrl).toContain("node_id=control-plane");
     expect(filteredUrl).toContain("flakiness_min_rate=0.1");
     expect(filteredUrl).toContain("failure_cluster_min_count=3");
     expect(screen.getByText("7d window")).toBeTruthy();
-    expect(screen.getAllByText("llama3.2:latest / jedi").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("llama3.2:latest / control-plane").length).toBeGreaterThan(0);
   });
 
   it("saves and reapplies managed eval intelligence presets", async () => {

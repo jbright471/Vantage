@@ -2,9 +2,17 @@
 
 The Vantage remote agent is a lightweight FastAPI service intended to run on Linux worker nodes.
 
-The examples below use `jedi` as an example control-plane node name and `bastet` as an example remote worker node name. Replace them with names from your own homelab.
+The examples below use `control-plane` as an example control-plane node name and `remote-worker` as an example remote worker node name. Replace them with names from your own homelab.
 
 Operators can install the generic Linux agent service with `deploy/agent/install.sh`. The installer creates a systemd-managed `vantage-agent` service and writes runtime configuration to `/opt/vantage/vantage-agent.env`.
+
+Set the stable node identity reported by the agent with:
+
+```text
+VANTAGE_AGENT_NODE_ID=<your-node-id>
+```
+
+If this variable is omitted, the agent reports `remote-agent`. The value should match the node ID configured for that worker in `config/vantage.bootstrap.toml`.
 
 Example remote agent endpoint:
 
@@ -73,7 +81,7 @@ Returns basic agent health.
 ```json
 {
   "status": "ok",
-  "node_id": "bastet"
+  "node_id": "remote-worker"
 }
 ```
 
@@ -148,14 +156,14 @@ Current examples include loaded Ollama models, capability-check runs, and eval-a
       "source_type": "remote_agent",
       "detail_type": "ollama_loaded_model",
       "source_id": "ollama-ps:http://<ollama-host>:11435:gemma4:e4b",
-      "node_id": "bastet",
+      "node_id": "remote-worker",
       "model_name": "gemma4:e4b",
       "action_type": "infer",
       "status": "running",
       "started_at": "2026-04-23T15:12:23.118701Z",
       "ended_at": null,
       "duration_ms": null,
-      "summary": "Model gemma4:e4b is currently loaded on bastet",
+      "summary": "Model gemma4:e4b is currently loaded on remote-worker",
       "metadata_json": {
         "base_url": "http://<ollama-host>:11435"
       }

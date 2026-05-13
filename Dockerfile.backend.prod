@@ -12,7 +12,7 @@ COPY agent ./agent
 COPY config ./config
 
 RUN python -m pip install --upgrade pip \
-    && python -m pip install --no-cache-dir .
+    && python -m pip install --no-cache-dir ".[postgres]"
 
 EXPOSE 8000
 

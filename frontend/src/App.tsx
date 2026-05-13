@@ -14,6 +14,14 @@ const OperatorGuideDrawer = lazy(() =>
   import("./features/docs/OperatorGuideDrawer").then((module) => ({ default: module.OperatorGuideDrawer })),
 );
 
+const navItems = [
+  { href: "#nodes-title", label: "Nodes", icon: "ND" },
+  { href: "#runs-title", label: "Audit Log", icon: "AL" },
+  { href: "#models-title", label: "Models", icon: "MD" },
+  { href: "#routing-title", label: "Routing", icon: "RT" },
+  { href: "#evals-title", label: "Eval Lab", icon: "EV" },
+] as const;
+
 function formatRelativeSync(lastSyncAt: string | null): string {
   if (!lastSyncAt) {
     return "Awaiting first snapshot";
@@ -114,26 +122,30 @@ export default function App() {
         </div>
 
         <nav className="rail-nav" aria-label="Primary">
-          <a href="#nodes-title">
-            <span>hub Nodes</span>
-            <strong>{state.nodes.length}</strong>
-          </a>
-          <a href="#runs-title">
-            <span>analytics Runs</span>
-            <strong>{state.runs.length}</strong>
-          </a>
-          <a href="#models-title">
-            <span>memory Models</span>
-            <strong>{state.models.length}</strong>
-          </a>
-          <a href="#routing-title">
-            <span>route Routing</span>
-            <strong>{activePolicyCount}</strong>
-          </a>
-          <a href="#evals-title">
-            <span>science Evals</span>
-            <strong>{evalRunCount}</strong>
-          </a>
+          {navItems.map((item) => {
+            const count =
+              item.href === "#nodes-title"
+                ? state.nodes.length
+                : item.href === "#runs-title"
+                  ? state.runs.length
+                  : item.href === "#models-title"
+                    ? state.models.length
+                    : item.href === "#routing-title"
+                      ? activePolicyCount
+                      : evalRunCount;
+
+            return (
+              <a key={item.href} href={item.href}>
+                <span className="rail-nav-label">
+                  <span className="rail-nav-icon" aria-hidden="true">
+                    {item.icon}
+                  </span>
+                  {item.label}
+                </span>
+                <strong>{count}</strong>
+              </a>
+            );
+          })}
         </nav>
 
         <section className="rail-panel">
@@ -198,23 +210,31 @@ export default function App() {
 
         <section className="telemetry-strip" aria-label="Fleet summary">
           <article className="telemetry-tile">
-            <span className="signal-label">Tracked nodes</span>
-            <strong>{state.nodes.length}</strong>
+            <div className="telemetry-tile-header">
+              <span className="signal-label">Tracked nodes</span>
+              <strong>{state.nodes.length}</strong>
+            </div>
             <p>{liveNodes} live / {staleNodes} stale</p>
           </article>
           <article className="telemetry-tile">
-            <span className="signal-label">Run queue</span>
-            <strong>{pendingRuns}</strong>
+            <div className="telemetry-tile-header">
+              <span className="signal-label">Run queue</span>
+              <strong>{pendingRuns}</strong>
+            </div>
             <p>{state.runs.length} total observed runs</p>
           </article>
           <article className="telemetry-tile">
-            <span className="signal-label">Model registry</span>
-            <strong>{state.models.length}</strong>
+            <div className="telemetry-tile-header">
+              <span className="signal-label">Model registry</span>
+              <strong>{state.models.length}</strong>
+            </div>
             <p>{mirroredModels} mirrored across nodes</p>
           </article>
           <article className="telemetry-tile">
-            <span className="signal-label">Routing</span>
-            <strong>{activePolicyCount}</strong>
+            <div className="telemetry-tile-header">
+              <span className="signal-label">Routing</span>
+              <strong>{activePolicyCount}</strong>
+            </div>
             <p>{state.routing.length} policies visible</p>
           </article>
         </section>

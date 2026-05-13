@@ -36,7 +36,7 @@ export function RemoteFocusPanel({ nodes, runs }: RemoteFocusPanelProps) {
           <h2 id="remote-focus-title">Remote node telemetry and recent operations</h2>
         </div>
         <p className="section-copy">
-          Bastet-style remote workers should surface transport health, GPU telemetry, and the most recent remote runs
+          Remote workers should surface transport health, GPU telemetry, and the most recent remote runs
           without forcing you to leave the shell.
         </p>
       </header>
@@ -100,7 +100,7 @@ export function RemoteFocusPanel({ nodes, runs }: RemoteFocusPanelProps) {
 
                 <aside className="summary-panel">
                   <p className="info-kicker">Recent remote runs</p>
-                  <h3>Latest Bastet-side activity</h3>
+                  <h3>Latest agent-side activity</h3>
                   {remoteRuns.length === 0 ? (
                     <p className="info-copy">No remote runs have been recorded for this node yet.</p>
                   ) : (

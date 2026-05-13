@@ -40,10 +40,14 @@ function buildNodeToml(nodeName: string, nodeUrl: string, nodeRole: string): str
     "[[nodes]]",
     `node_id = "${nodeId}"`,
     `display_name = "${nodeName.trim() || "GPU Worker"}"`,
-    `base_url = "${nodeUrl.trim() || "http://<remote-agent-ip>:9110"}"`,
+    `base_url = "${nodeUrl.trim() || "http://10.0.0.25:9110"}"`,
     `role = "${nodeRole}"`,
     "enabled = true",
   ].join("\n");
+}
+
+function buildAgentNodeEnv(nodeName: string): string {
+  return `VANTAGE_AGENT_NODE_ID=${slugify(nodeName) || "gpu-worker"}`;
 }
 
 function buildOllamaEnv(endpointList: string): string {
@@ -89,7 +93,7 @@ export function SetupWizardDrawer({
   const [activeStep, setActiveStep] = useState<WizardStep>("token");
   const [token, setToken] = useState(() => generateToken());
   const [nodeName, setNodeName] = useState("gpu-worker-a");
-  const [nodeUrl, setNodeUrl] = useState("http://<remote-agent-ip>:9110");
+  const [nodeUrl, setNodeUrl] = useState("http://10.0.0.25:9110");
   const [nodeRole, setNodeRole] = useState("remote");
   const [ollamaEndpoints, setOllamaEndpoints] = useState("http://host.docker.internal:11434");
 
@@ -107,6 +111,7 @@ export function SetupWizardDrawer({
     "VANTAGE_WEBHOOK_ALLOWED_HOSTS=",
   ].join("\n");
   const nodeSnippet = buildNodeToml(nodeName, nodeUrl, nodeRole);
+  const agentNodeEnvSnippet = buildAgentNodeEnv(nodeName);
   const ollamaSnippet = buildOllamaEnv(ollamaEndpoints);
   const activeIndex = steps.findIndex((step) => step.id === activeStep);
   const hasObservedModels = models.length > 0;
@@ -199,6 +204,7 @@ export function SetupWizardDrawer({
                 </label>
               </div>
               <SetupCodeBlock label="config/vantage.bootstrap.toml" value={nodeSnippet} />
+              <SetupCodeBlock label="remote agent env" value={agentNodeEnvSnippet} />
             </section>
           ) : null}
 

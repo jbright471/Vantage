@@ -2,7 +2,7 @@
 
 This guide covers running Vantage locally with Docker Compose and deploying the lightweight remote agent to Linux worker nodes.
 
-The examples below use `jedi` as an example control-plane node name and `bastet` as an example remote worker node name. Replace them with names from your own homelab.
+The examples below use `control-plane` as an example control-plane node name and `remote-worker` as an example remote worker node name. Replace them with names from your own homelab.
 
 ## Local Development
 
@@ -80,7 +80,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up --build 
 Production posture:
 
 - do not mount source code into containers
-- persist `vantage.sqlite3` to the `vantage_data` volume or a controlled host path
+- persist `vantage.sqlite3` to the `vantage_data` volume or configure `VANTAGE_DATABASE_URL` for an external Postgres database
 - provide `VANTAGE_AGENT_SHARED_TOKEN` as a secret or environment variable, not in the Compose file
 - use `VANTAGE_AGENT_AUTH_MODE=hmac` when request signing and replay protection are required
 - provide `VANTAGE_AUDIT_SIGNING_KEY` when signed run-history bundles are part of your audit process
@@ -99,7 +99,7 @@ Short version:
 1. Push the Vantage repository, release bundle, or built images to a location your Portainer host can reach.
 2. Create a Portainer stack from `docker-compose.prod.yml`.
 3. Set `VANTAGE_AGENT_SHARED_TOKEN` in Portainer environment variables or secrets.
-4. Mount persistent storage for SQLite.
+4. Mount persistent storage for SQLite, or configure an external Postgres URL.
 5. Start the stack and confirm:
 
 ```powershell
@@ -126,6 +126,8 @@ $env:VANTAGE_AGENT_SHARED_TOKEN = "<same-token-as-control-plane>"
 ```
 
 The check covers Docker availability, Compose configuration, token presence, auth mode, optional audit signing key, bootstrap config presence, optional SQLite path parent directory, backend readiness, and remote-agent reachability.
+
+SQLite remains the default database. If you set `VANTAGE_DATABASE_URL=postgresql+psycopg://...`, use your Postgres backup and monitoring workflow and remember that Postgres alone does not make multiple active control planes safe.
 
 ## Integrations And Automation
 
@@ -211,6 +213,7 @@ Copy the repository, release bundle, or `agent/` plus `deploy/agent/` files onto
 
 ```bash
 sudo VANTAGE_AGENT_SHARED_TOKEN="<same-token-as-control-plane>" \
+  VANTAGE_AGENT_NODE_ID="<your-node-id>" \
   VANTAGE_AGENT_OLLAMA_BASE_URLS="http://127.0.0.1:11434" \
   bash deploy/agent/install.sh
 ```
@@ -222,7 +225,7 @@ The installer creates:
 - `/opt/vantage/vantage-agent.env`
 - `/etc/systemd/system/vantage-agent.service`
 
-If you need a custom install path, set `VANTAGE_INSTALL_DIR`. If you need a custom service user, set `VANTAGE_AGENT_USER`.
+Set `VANTAGE_AGENT_NODE_ID` to the same node ID used in `config/vantage.bootstrap.toml`. If you need a custom install path, set `VANTAGE_INSTALL_DIR`. If you need a custom service user, set `VANTAGE_AGENT_USER`.
 
 Check status:
 

@@ -28,8 +28,8 @@ def test_run_poll_cycle_persists_snapshots_and_model_inventory(monkeypatch) -> N
         local_ollama_base_urls=["http://127.0.0.1:11434", "http://127.0.0.1:11435"],
         nodes=[
             BootstrapNode(
-                node_id="jedi",
-                display_name="Jedi",
+                node_id="control-plane",
+                display_name="Control Plane",
                 base_url="http://127.0.0.1:8000",
                 role="primary",
                 enabled=True,
@@ -40,8 +40,8 @@ def test_run_poll_cycle_persists_snapshots_and_model_inventory(monkeypatch) -> N
     with session_factory() as session:
         session.add(
             Node(
-                node_id="jedi",
-                display_name="Jedi",
+                node_id="control-plane",
+                display_name="Control Plane",
                 base_url="http://127.0.0.1:8000",
                 role="primary",
                 enabled=True,
@@ -72,8 +72,8 @@ def test_run_poll_cycle_persists_snapshots_and_model_inventory(monkeypatch) -> N
     assert state["models"] == [
         {
             "model_name": "qwen3.5:27b",
-            "placements": ["jedi"],
-            "placement_details": [{"node_id": "jedi", "model_digest": "sha256:111", "available": True}],
+            "placements": ["control-plane"],
+            "placement_details": [{"node_id": "control-plane", "model_digest": "sha256:111", "available": True}],
         }
     ]
     assert state["nodes"][0]["model_count"] == 1
@@ -81,7 +81,7 @@ def test_run_poll_cycle_persists_snapshots_and_model_inventory(monkeypatch) -> N
     assert state["nodes"][0]["memory_used_mb"] == 4096
 
     with session_factory() as session:
-        node = session.get(Node, "jedi")
+        node = session.get(Node, "control-plane")
         placements = session.scalars(select(ModelPlacement)).all()
 
     assert node is not None
@@ -96,8 +96,8 @@ def test_get_nodes_state_marks_old_observation_as_unreachable() -> None:
         stale_time = datetime.now(UTC) - timedelta(seconds=45)
         session.add(
             Node(
-                node_id="bastet",
-                display_name="Bastet",
+                node_id="remote-worker",
+                display_name="Remote Worker",
                 base_url="http://10.0.0.20:9100",
                 role="remote",
                 enabled=True,
@@ -107,7 +107,7 @@ def test_get_nodes_state_marks_old_observation_as_unreachable() -> None:
         )
         session.add(
             NodeSnapshot(
-                node_id="bastet",
+                node_id="remote-worker",
                 captured_at=stale_time,
                 gpu_json=[],
                 cpu_json={},
@@ -135,8 +135,8 @@ def test_get_nodes_state_exposes_latest_gpu_and_model_details() -> None:
         captured_at = datetime.now(UTC)
         session.add(
             Node(
-                node_id="bastet",
-                display_name="Bastet",
+                node_id="remote-worker",
+                display_name="Remote Worker",
                 base_url="http://10.0.0.20:9110",
                 role="remote",
                 enabled=True,
@@ -146,7 +146,7 @@ def test_get_nodes_state_exposes_latest_gpu_and_model_details() -> None:
         )
         session.add(
             NodeSnapshot(
-                node_id="bastet",
+                node_id="remote-worker",
                 captured_at=captured_at,
                 gpu_json=[{"name": "RTX 3090", "memory_total_mb": 24576, "temperature_c": 42}],
                 cpu_json={"usage_percent": 11},
@@ -176,8 +176,8 @@ def test_run_poll_cycle_resolves_config_drift_warning_once_node_is_observed(monk
     config = BootstrapConfig(
         nodes=[
             BootstrapNode(
-                node_id="bastet",
-                display_name="Bastet",
+                node_id="remote-worker",
+                display_name="Remote Worker",
                 base_url="http://10.0.0.20:9100",
                 role="remote",
                 enabled=True,
@@ -188,8 +188,8 @@ def test_run_poll_cycle_resolves_config_drift_warning_once_node_is_observed(monk
     with session_factory() as session:
         session.add(
             Node(
-                node_id="bastet",
-                display_name="Bastet",
+                node_id="remote-worker",
+                display_name="Remote Worker",
                 base_url="http://10.0.0.20:9100",
                 role="remote",
                 enabled=True,
@@ -201,8 +201,8 @@ def test_run_poll_cycle_resolves_config_drift_warning_once_node_is_observed(monk
                 warning_id="warn-1",
                 warning_type="config_drift",
                 severity="warning",
-                node_id="bastet",
-                summary="Configured node bastet has no recent observation",
+                node_id="remote-worker",
+                summary="Configured node remote-worker has no recent observation",
                 metadata_json={},
             )
         )
@@ -238,8 +238,8 @@ def test_run_poll_cycle_persists_remote_runs(monkeypatch) -> None:
     config = BootstrapConfig(
         nodes=[
             BootstrapNode(
-                node_id="bastet",
-                display_name="Bastet",
+                node_id="remote-worker",
+                display_name="Remote Worker",
                 base_url="http://10.0.0.20:9110",
                 role="remote",
                 enabled=True,
@@ -250,8 +250,8 @@ def test_run_poll_cycle_persists_remote_runs(monkeypatch) -> None:
     with session_factory() as session:
         session.add(
             Node(
-                node_id="bastet",
-                display_name="Bastet",
+                node_id="remote-worker",
+                display_name="Remote Worker",
                 base_url="http://10.0.0.20:9110",
                 role="remote",
                 enabled=True,
@@ -274,15 +274,15 @@ def test_run_poll_cycle_persists_remote_runs(monkeypatch) -> None:
                     "run_id": "remote-run-1",
                     "source_type": "remote_agent",
                     "detail_type": "capability_check",
-                    "source_id": "capability-check:bastet:qwen3.6:latest",
-                    "node_id": "bastet",
+                    "source_id": "capability-check:remote-worker:qwen3.6:latest",
+                    "node_id": "remote-worker",
                     "model_name": "qwen3.6:latest",
                     "action_type": "infer",
                     "status": "success",
                     "started_at": captured_at,
                     "ended_at": captured_at,
                     "duration_ms": 321,
-                    "summary": "Capability check passed for qwen3.6:latest on bastet",
+                    "summary": "Capability check passed for qwen3.6:latest on remote-worker",
                     "metadata_json": {"response_preview": "{\"mode\":\"ok\"}"},
                 }
             ],
@@ -301,8 +301,8 @@ def test_run_poll_cycle_surfaces_agent_auth_failure_as_warning(monkeypatch) -> N
     config = BootstrapConfig(
         nodes=[
             BootstrapNode(
-                node_id="bastet",
-                display_name="Bastet",
+                node_id="remote-worker",
+                display_name="Remote Worker",
                 base_url="http://10.0.0.20:9110",
                 role="remote",
                 enabled=True,
@@ -313,8 +313,8 @@ def test_run_poll_cycle_surfaces_agent_auth_failure_as_warning(monkeypatch) -> N
     with session_factory() as session:
         session.add(
             Node(
-                node_id="bastet",
-                display_name="Bastet",
+                node_id="remote-worker",
+                display_name="Remote Worker",
                 base_url="http://10.0.0.20:9110",
                 role="remote",
                 enabled=True,
@@ -333,7 +333,7 @@ def test_run_poll_cycle_surfaces_agent_auth_failure_as_warning(monkeypatch) -> N
     auth_warning = next(warning for warning in state["warnings"] if warning["warning_type"] == "agent_auth_failed")
     assert auth_warning["severity"] == "critical"
     with session_factory() as session:
-        warning = session.get(WarningRecord, "agent-auth-failed:bastet")
+        warning = session.get(WarningRecord, "agent-auth-failed:remote-worker")
 
     assert warning is not None
     assert warning.status == "active"

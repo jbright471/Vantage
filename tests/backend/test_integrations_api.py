@@ -15,7 +15,7 @@ def _seed_integration_records() -> str:
                 warning_id=f"integration-warning-{suffix}",
                 warning_type="config_drift",
                 severity="warning",
-                node_id="bastet",
+                node_id="remote-worker",
                 status="active",
                 summary="Integration test warning",
                 metadata_json={"source": "test"},
@@ -27,7 +27,7 @@ def _seed_integration_records() -> str:
                 source_type="eval",
                 detail_type="eval_attempt",
                 source_id=f"integration:{suffix}",
-                node_id="bastet",
+                node_id="remote-worker",
                 model_name="qwen:test",
                 action_type="eval",
                 status="failed",
@@ -155,10 +155,10 @@ def test_router_log_import_creates_durable_runs(monkeypatch) -> None:
         "entries": [
             {
                 "run_id": run_id,
-                "node_id": "bastet",
+                "node_id": "remote-worker",
                 "model_name": "qwen:test",
                 "status": "success",
-                "summary": "Router selected bastet",
+                "summary": "Router selected remote-worker",
                 "started_at": "2026-05-10T01:00:00Z",
                 "metadata_json": {"priority_class": "interactive"},
             }
@@ -201,11 +201,11 @@ def test_integration_health_exposes_security_counters(monkeypatch) -> None:
     with SessionLocal() as session:
         from backend.app.services.security_events import increment_security_event_counter
 
-        increment_security_event_counter(session, event_type="agent_auth_failed", node_id="bastet")
+        increment_security_event_counter(session, event_type="agent_auth_failed", node_id="remote-worker")
 
     with TestClient(app) as client:
         response = client.get("/api/integrations/health")
 
     assert response.status_code == 200
     counters = response.json()["security_event_counters"]
-    assert any(counter["event_type"] == "agent_auth_failed" and counter["node_id"] == "bastet" for counter in counters)
+    assert any(counter["event_type"] == "agent_auth_failed" and counter["node_id"] == "remote-worker" for counter in counters)

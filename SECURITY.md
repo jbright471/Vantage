@@ -2,7 +2,7 @@
 
 Vantage is designed as a local-first control plane for private AI infrastructure.
 
-The examples below use `jedi` as an example control-plane node name and `bastet` as an example remote worker node name. Replace them with names from your own homelab.
+The examples below use `control-plane` as an example control-plane node name and `remote-worker` as an example remote worker node name. Replace them with names from your own homelab.
 
 ## Security Posture
 
@@ -18,7 +18,7 @@ The examples below use `jedi` as an example control-plane node name and `bastet`
 
 ## Agent Authentication
 
-The remote agent reads this environment variable. For example, an operator might run it on a worker node named `bastet`:
+The remote agent reads this environment variable. For example, an operator might run it on a worker node named `remote-worker`:
 
 ```text
 VANTAGE_AGENT_SHARED_TOKEN
@@ -30,7 +30,7 @@ Bearer mode is the default. When configured, all agent endpoints require:
 Authorization: Bearer <token>
 ```
 
-The control-plane backend sends this header when the same environment variable is available to the backend container. For example, an operator might run the backend on a node named `jedi`.
+The control-plane backend sends this header when the same environment variable is available to the backend container. For example, an operator might run the backend on a node named `control-plane`.
 
 For stronger node-to-node trust, set:
 

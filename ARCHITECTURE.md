@@ -2,11 +2,11 @@
 
 Vantage is a local-first control plane composed of three main pieces:
 
-The examples below use `jedi` as an example control-plane node name and `bastet` as an example remote worker node name. Replace them with names from your own homelab.
+The examples below use `control-plane` as an example control-plane node name and `remote-worker` as an example remote worker node name. Replace them with names from your own homelab.
 
-- `Control-plane backend`: FastAPI, SQLite, SQLAlchemy, Pydantic, collectors, polling, pruning, routing, run history, and SSE streaming. In examples, this node is named `jedi`.
+- `Control-plane backend`: FastAPI, SQLite, SQLAlchemy, Pydantic, collectors, polling, pruning, routing, run history, and SSE streaming. In examples, this node is named `control-plane`.
 - `Frontend`: Vite, React, and TypeScript operator UI for nodes, runs, models, routing, warning review, and in-app documentation.
-- `Remote agent`: lightweight FastAPI process on Linux worker nodes. In examples, one worker is named `bastet`.
+- `Remote agent`: lightweight FastAPI process on Linux worker nodes. In examples, one worker is named `remote-worker`.
 - `Integration surface`: optional API-token-protected endpoints for external automation, webhook dispatch, router-log import, Markdown reports, and collector discovery.
 
 The system is intentionally an observer and coordinator. It does not replace Ollama, routers, schedulers, or host services.
@@ -16,12 +16,12 @@ The system is intentionally an observer and coordinator. It does not replace Oll
 ```mermaid
 flowchart LR
     Browser["React/Vite UI<br/><operator-host>:5173"]
-    Backend["Control-Plane FastAPI Backend<br/><control-plane-host>:8000<br/>example: jedi"]
+    Backend["Control-Plane FastAPI Backend<br/><control-plane-host>:8000<br/>example: control-plane"]
     DB["SQLite<br/>vantage.sqlite3"]
-    LocalCollectors["Local Collectors<br/>example: jedi"]
+    LocalCollectors["Local Collectors<br/>example: control-plane"]
     Integrations["Integration Tools<br/>n8n / scripts / webhooks"]
     OllamaJ["Local Ollama Endpoints<br/>11434 / 11435"]
-    Agent["Remote Agent<br/><remote-agent-ip>:9110<br/>example: bastet"]
+    Agent["Remote Agent<br/><remote-agent-ip>:9110<br/>example: remote-worker"]
     OllamaB["Remote Ollama<br/>11435"]
     GPU["nvidia-smi"]
 

@@ -43,7 +43,7 @@ def test_eval_intelligence_presets_are_managed_settings() -> None:
         "name": "Managed flaky review",
         "controls": {
             "window_days": "14",
-            "placement_key": "qwen:test::bastet",
+            "placement_key": "qwen:test::remote-worker",
             "flakiness_min_rate": "0.35",
             "failure_cluster_min_count": "3",
         },
@@ -168,7 +168,7 @@ def test_delete_eval_schedule_removes_schedule() -> None:
         with SessionLocal() as session:
             session.add(
                 ModelPlacement(
-                    node_id="jedi",
+                    node_id="control-plane",
                     model_name=model_name,
                     model_digest="sha256:delete-schedule",
                     available=True,
@@ -182,7 +182,7 @@ def test_delete_eval_schedule_removes_schedule() -> None:
             json={
                 "suite_id": suite["suite_id"],
                 "model_name": model_name,
-                "node_id": "jedi",
+                "node_id": "control-plane",
                 "interval_minutes": 30,
                 "enabled": True,
                 "auto_execute": False,
@@ -282,7 +282,7 @@ def test_queue_eval_attempt_creates_run_records() -> None:
         with SessionLocal() as session:
             session.add(
                 ModelPlacement(
-                    node_id="jedi",
+                    node_id="control-plane",
                     model_name=model_name,
                     model_digest="sha256:test",
                     available=True,
@@ -293,7 +293,7 @@ def test_queue_eval_attempt_creates_run_records() -> None:
 
         response = client.post(
             f"/api/evals/suites/{suite['suite_id']}/attempts",
-            json={"model_name": model_name, "node_id": "jedi"},
+            json={"model_name": model_name, "node_id": "control-plane"},
         )
 
     assert response.status_code == 201
@@ -332,7 +332,7 @@ def test_execute_eval_attempt_batch_runs_all_queued_cases(monkeypatch) -> None:
         with SessionLocal() as session:
             session.add(
                 ModelPlacement(
-                    node_id="jedi",
+                    node_id="control-plane",
                     model_name=model_name,
                     model_digest="sha256:batch-execute",
                     available=True,
@@ -343,7 +343,7 @@ def test_execute_eval_attempt_batch_runs_all_queued_cases(monkeypatch) -> None:
 
         queue_response = client.post(
             f"/api/evals/suites/{suite['suite_id']}/attempts",
-            json={"model_name": model_name, "node_id": "jedi"},
+            json={"model_name": model_name, "node_id": "control-plane"},
         )
         attempt_id = queue_response.json()["attempt_id"]
         execute_response = client.post(f"/api/evals/attempts/{attempt_id}/execute")
@@ -367,7 +367,7 @@ def test_queue_eval_attempt_requires_cases() -> None:
         with SessionLocal() as session:
             session.add(
                 ModelPlacement(
-                    node_id="jedi",
+                    node_id="control-plane",
                     model_name=model_name,
                     model_digest="sha256:empty",
                     available=True,
@@ -378,7 +378,7 @@ def test_queue_eval_attempt_requires_cases() -> None:
 
         response = client.post(
             f"/api/evals/suites/{suite['suite_id']}/attempts",
-            json={"model_name": model_name, "node_id": "jedi"},
+            json={"model_name": model_name, "node_id": "control-plane"},
         )
 
     assert response.status_code == 409
@@ -409,7 +409,7 @@ def test_execute_queued_eval_attempt_updates_run_with_score(monkeypatch) -> None
         with SessionLocal() as session:
             session.add(
                 ModelPlacement(
-                    node_id="jedi",
+                    node_id="control-plane",
                     model_name=model_name,
                     model_digest="sha256:execute",
                     available=True,
@@ -420,7 +420,7 @@ def test_execute_queued_eval_attempt_updates_run_with_score(monkeypatch) -> None
 
         queue_response = client.post(
             f"/api/evals/suites/{suite['suite_id']}/attempts",
-            json={"model_name": model_name, "node_id": "jedi"},
+            json={"model_name": model_name, "node_id": "control-plane"},
         )
         run_id = queue_response.json()["runs"][0]["run_id"]
 
@@ -458,7 +458,7 @@ def test_score_history_endpoint_returns_eval_aggregates(monkeypatch) -> None:
         with SessionLocal() as session:
             session.add(
                 ModelPlacement(
-                    node_id="jedi",
+                    node_id="control-plane",
                     model_name=model_name,
                     model_digest="sha256:history",
                     available=True,
@@ -469,7 +469,7 @@ def test_score_history_endpoint_returns_eval_aggregates(monkeypatch) -> None:
 
         queue_response = client.post(
             f"/api/evals/suites/{suite['suite_id']}/attempts",
-            json={"model_name": model_name, "node_id": "jedi"},
+            json={"model_name": model_name, "node_id": "control-plane"},
         )
         run_id = queue_response.json()["runs"][0]["run_id"]
         client.post(f"/api/evals/runs/{run_id}/execute")
@@ -492,7 +492,7 @@ def test_score_history_filters_window_placement_and_thresholds() -> None:
                     source_type="eval",
                     detail_type="eval_attempt",
                     source_id="eval-suite:filter-suite:case:filter-case",
-                    node_id="jedi",
+                    node_id="control-plane",
                     model_name="filter-model-a:latest",
                     action_type="eval",
                     status="failed",
@@ -518,7 +518,7 @@ def test_score_history_filters_window_placement_and_thresholds() -> None:
                     source_type="eval",
                     detail_type="eval_attempt",
                     source_id="eval-suite:filter-suite:case:filter-case",
-                    node_id="jedi",
+                    node_id="control-plane",
                     model_name="filter-model-a:latest",
                     action_type="eval",
                     status="success",
@@ -539,7 +539,7 @@ def test_score_history_filters_window_placement_and_thresholds() -> None:
                     source_type="eval",
                     detail_type="eval_attempt",
                     source_id="eval-suite:filter-suite:case:filter-case",
-                    node_id="bastet",
+                    node_id="remote-worker",
                     model_name="filter-model-b:latest",
                     action_type="eval",
                     status="failed",
@@ -565,7 +565,7 @@ def test_score_history_filters_window_placement_and_thresholds() -> None:
                     source_type="eval",
                     detail_type="eval_attempt",
                     source_id="eval-suite:filter-suite:case:old-case",
-                    node_id="jedi",
+                    node_id="control-plane",
                     model_name="filter-model-a:latest",
                     action_type="eval",
                     status="failed",
@@ -596,7 +596,7 @@ def test_score_history_filters_window_placement_and_thresholds() -> None:
             params={
                 "window_days": 30,
                 "model_name": "filter-model-a:latest",
-                "node_id": "jedi",
+                "node_id": "control-plane",
                 "flakiness_min_rate": 0.4,
                 "failure_cluster_min_count": 2,
             },
@@ -606,7 +606,7 @@ def test_score_history_filters_window_placement_and_thresholds() -> None:
     payload = response.json()
     assert payload["filters"]["window_days"] == 30
     assert payload["filters"]["model_name"] == "filter-model-a:latest"
-    assert payload["filters"]["node_id"] == "jedi"
+    assert payload["filters"]["node_id"] == "control-plane"
     assert payload["thresholds"]["flakiness_min_rate"] == 0.4
     assert payload["total_runs"] == 2
     assert {run["run_id"] for run in payload["recent_runs"]} == {"eval-filter-run-1", "eval-filter-run-2"}
@@ -641,7 +641,7 @@ def test_eval_baseline_and_exports_report_regression(monkeypatch) -> None:
         with SessionLocal() as session:
             session.add(
                 ModelPlacement(
-                    node_id="jedi",
+                    node_id="control-plane",
                     model_name=model_name,
                     model_digest="sha256:baseline",
                     available=True,
@@ -652,17 +652,17 @@ def test_eval_baseline_and_exports_report_regression(monkeypatch) -> None:
 
         first_attempt = client.post(
             f"/api/evals/suites/{suite['suite_id']}/attempts",
-            json={"model_name": model_name, "node_id": "jedi"},
+            json={"model_name": model_name, "node_id": "control-plane"},
         ).json()
         client.post(f"/api/evals/attempts/{first_attempt['attempt_id']}/execute")
         baseline_response = client.post(
             f"/api/evals/suites/{suite['suite_id']}/baseline",
-            json={"model_name": model_name, "node_id": "jedi", "minimum_pass_rate": 1.0},
+            json={"model_name": model_name, "node_id": "control-plane", "minimum_pass_rate": 1.0},
         )
 
         second_attempt = client.post(
             f"/api/evals/suites/{suite['suite_id']}/attempts",
-            json={"model_name": model_name, "node_id": "jedi"},
+            json={"model_name": model_name, "node_id": "control-plane"},
         ).json()
         client.post(f"/api/evals/attempts/{second_attempt['attempt_id']}/execute")
         history_response = client.get("/api/evals/score-history")
@@ -695,7 +695,7 @@ def test_create_eval_assisted_summary_uses_selected_model(monkeypatch) -> None:
         with SessionLocal() as session:
             session.add(
                 ModelPlacement(
-                    node_id="jedi",
+                    node_id="control-plane",
                     model_name=model_name,
                     model_digest="sha256:assisted-summary",
                     available=True,
@@ -706,7 +706,7 @@ def test_create_eval_assisted_summary_uses_selected_model(monkeypatch) -> None:
 
         response = client.post(
             "/api/evals/assisted-summary",
-            json={"model_name": model_name, "node_id": "jedi"},
+            json={"model_name": model_name, "node_id": "control-plane"},
         )
 
     assert response.status_code == 201
@@ -715,6 +715,141 @@ def test_create_eval_assisted_summary_uses_selected_model(monkeypatch) -> None:
     assert payload["status"] == "success"
     assert payload["metadata_json"]["response_text"].startswith("## Situation")
     assert payload["metadata_json"]["disclaimer"]
+
+
+def test_llm_judge_eval_passes_with_strict_json(monkeypatch) -> None:
+    class FakeResponse:
+        responses = [
+            "The answer is safe and complete.",
+            '{"passed": true, "score": 0.91, "reason": "Rubric satisfied", "evidence": ["addresses the requested answer"]}',
+        ]
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"response": self.responses.pop(0)}
+
+    target_model = "judge-target-test-model:latest"
+    judge_model = "judge-model-test-model:latest"
+    monkeypatch.setattr("backend.app.services.evals.httpx.post", lambda *args, **kwargs: FakeResponse())
+
+    with TestClient(app) as client:
+        suite_response = client.post("/api/evals/suites", json={"name": "LLM Judge Suite", "description": "Guarded judge"})
+        suite = suite_response.json()
+        client.post(
+            f"/api/evals/suites/{suite['suite_id']}/cases",
+            json={
+                "name": "Judge Case",
+                "prompt": "Answer clearly.",
+                "expected_json": {},
+                "score_type": "llm_judge",
+                "score_config_json": {
+                    "judge_model_name": judge_model,
+                    "judge_node_id": "control-plane",
+                    "rubric": "Pass only when the response is clear, safe, and directly answers the prompt.",
+                    "pass_threshold": 0.8,
+                },
+            },
+        )
+        with SessionLocal() as session:
+            session.add_all(
+                [
+                    ModelPlacement(
+                        node_id="control-plane",
+                        model_name=target_model,
+                        model_digest="sha256:judge-target",
+                        available=True,
+                        last_seen_at=datetime.now(UTC),
+                    ),
+                    ModelPlacement(
+                        node_id="control-plane",
+                        model_name=judge_model,
+                        model_digest="sha256:judge-model",
+                        available=True,
+                        last_seen_at=datetime.now(UTC),
+                    ),
+                ]
+            )
+            session.commit()
+
+        attempt = client.post(
+            f"/api/evals/suites/{suite['suite_id']}/attempts",
+            json={"model_name": target_model, "node_id": "control-plane"},
+        ).json()
+        execute_response = client.post(f"/api/evals/attempts/{attempt['attempt_id']}/execute")
+
+    assert execute_response.status_code == 200
+    run = execute_response.json()["runs"][0]
+    score = run["metadata_json"]["score"]
+    assert run["status"] == "success"
+    assert score["reason"] == "llm_judge_passed"
+    assert score["judge"]["model_name"] == judge_model
+    assert score["judge"]["evidence"] == ["addresses the requested answer"]
+
+
+def test_llm_judge_eval_fails_closed_on_invalid_judge_json(monkeypatch) -> None:
+    class FakeResponse:
+        responses = ["Candidate answer", "This is not JSON"]
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"response": self.responses.pop(0)}
+
+    target_model = "judge-invalid-target-test-model:latest"
+    judge_model = "judge-invalid-model-test-model:latest"
+    monkeypatch.setattr("backend.app.services.evals.httpx.post", lambda *args, **kwargs: FakeResponse())
+
+    with TestClient(app) as client:
+        suite_response = client.post("/api/evals/suites", json={"name": "Invalid Judge Suite", "description": ""})
+        suite = suite_response.json()
+        client.post(
+            f"/api/evals/suites/{suite['suite_id']}/cases",
+            json={
+                "name": "Invalid Judge Case",
+                "prompt": "Answer clearly.",
+                "expected_json": {},
+                "score_type": "llm_judge",
+                "score_config_json": {
+                    "judge_model_name": judge_model,
+                    "judge_node_id": "control-plane",
+                    "rubric": "Return valid JSON only.",
+                },
+            },
+        )
+        with SessionLocal() as session:
+            session.add_all(
+                [
+                    ModelPlacement(
+                        node_id="control-plane",
+                        model_name=target_model,
+                        model_digest="sha256:judge-invalid-target",
+                        available=True,
+                        last_seen_at=datetime.now(UTC),
+                    ),
+                    ModelPlacement(
+                        node_id="control-plane",
+                        model_name=judge_model,
+                        model_digest="sha256:judge-invalid-model",
+                        available=True,
+                        last_seen_at=datetime.now(UTC),
+                    ),
+                ]
+            )
+            session.commit()
+
+        attempt = client.post(
+            f"/api/evals/suites/{suite['suite_id']}/attempts",
+            json={"model_name": target_model, "node_id": "control-plane"},
+        ).json()
+        execute_response = client.post(f"/api/evals/attempts/{attempt['attempt_id']}/execute")
+
+    assert execute_response.status_code == 200
+    run = execute_response.json()["runs"][0]
+    assert run["status"] == "failed"
+    assert run["metadata_json"]["score"]["reason"] == "judge_invalid_json"
 
 
 def test_create_eval_schedule_and_list_it() -> None:
@@ -733,7 +868,7 @@ def test_create_eval_schedule_and_list_it() -> None:
         with SessionLocal() as session:
             session.add(
                 ModelPlacement(
-                    node_id="jedi",
+                    node_id="control-plane",
                     model_name=model_name,
                     model_digest="sha256:schedule-api",
                     available=True,
@@ -747,7 +882,7 @@ def test_create_eval_schedule_and_list_it() -> None:
             json={
                 "suite_id": suite["suite_id"],
                 "model_name": model_name,
-                "node_id": "jedi",
+                "node_id": "control-plane",
                 "interval_minutes": 30,
                 "enabled": True,
                 "auto_execute": True,
@@ -760,7 +895,7 @@ def test_create_eval_schedule_and_list_it() -> None:
     assert created["suite_id"] == suite["suite_id"]
     assert created["suite_name"] == "Scheduled Suite"
     assert created["model_name"] == model_name
-    assert created["node_id"] == "jedi"
+    assert created["node_id"] == "control-plane"
     assert created["interval_minutes"] == 30
     assert created["enabled"] is True
     assert created["auto_execute"] is True
@@ -787,7 +922,7 @@ def test_update_eval_schedule_changes_interval_target_and_mode() -> None:
             for model_name in [first_model, second_model]:
                 session.add(
                     ModelPlacement(
-                        node_id="jedi",
+                        node_id="control-plane",
                         model_name=model_name,
                         model_digest=f"sha256:{model_name}",
                         available=True,
@@ -801,7 +936,7 @@ def test_update_eval_schedule_changes_interval_target_and_mode() -> None:
             json={
                 "suite_id": suite["suite_id"],
                 "model_name": first_model,
-                "node_id": "jedi",
+                "node_id": "control-plane",
                 "interval_minutes": 30,
                 "enabled": True,
                 "auto_execute": False,
@@ -812,7 +947,7 @@ def test_update_eval_schedule_changes_interval_target_and_mode() -> None:
             f"/api/evals/schedules/{schedule['schedule_id']}",
             json={
                 "model_name": second_model,
-                "node_id": "jedi",
+                "node_id": "control-plane",
                 "interval_minutes": 45,
                 "enabled": False,
                 "auto_execute": True,
@@ -843,7 +978,7 @@ def test_queue_eval_schedule_now_creates_runs_without_advancing_next_run() -> No
         with SessionLocal() as session:
             session.add(
                 ModelPlacement(
-                    node_id="jedi",
+                    node_id="control-plane",
                     model_name=model_name,
                     model_digest="sha256:queue-now",
                     available=True,
@@ -857,7 +992,7 @@ def test_queue_eval_schedule_now_creates_runs_without_advancing_next_run() -> No
             json={
                 "suite_id": suite["suite_id"],
                 "model_name": model_name,
-                "node_id": "jedi",
+                "node_id": "control-plane",
                 "interval_minutes": 30,
                 "enabled": True,
                 "auto_execute": False,
@@ -891,7 +1026,7 @@ def test_queue_eval_schedule_now_rejects_disabled_schedule() -> None:
         with SessionLocal() as session:
             session.add(
                 ModelPlacement(
-                    node_id="jedi",
+                    node_id="control-plane",
                     model_name=model_name,
                     model_digest="sha256:queue-now-disabled",
                     available=True,
@@ -905,7 +1040,7 @@ def test_queue_eval_schedule_now_rejects_disabled_schedule() -> None:
             json={
                 "suite_id": suite["suite_id"],
                 "model_name": model_name,
-                "node_id": "jedi",
+                "node_id": "control-plane",
                 "interval_minutes": 30,
                 "enabled": False,
                 "auto_execute": False,
@@ -936,7 +1071,7 @@ def test_due_eval_schedule_queues_runs_and_advances_next_run() -> None:
     with SessionLocal() as session:
         session.add(
             ModelPlacement(
-                node_id="jedi",
+                node_id="control-plane",
                 model_name=model_name,
                 model_digest="sha256:schedule-service",
                 available=True,
@@ -947,7 +1082,7 @@ def test_due_eval_schedule_queues_runs_and_advances_next_run() -> None:
             schedule_id="schedule-service-test",
             suite_id=suite["suite_id"],
             model_name=model_name,
-            node_id="jedi",
+            node_id="control-plane",
             interval_minutes=15,
             enabled=True,
             created_at=now - timedelta(minutes=30),
@@ -1004,7 +1139,7 @@ def test_due_auto_execute_eval_schedule_runs_and_scores(monkeypatch) -> None:
     with SessionLocal() as session:
         session.add(
             ModelPlacement(
-                node_id="jedi",
+                node_id="control-plane",
                 model_name=model_name,
                 model_digest="sha256:schedule-auto-exec",
                 available=True,
@@ -1016,7 +1151,7 @@ def test_due_auto_execute_eval_schedule_runs_and_scores(monkeypatch) -> None:
                 schedule_id="schedule-auto-exec-test",
                 suite_id=suite["suite_id"],
                 model_name=model_name,
-                node_id="jedi",
+                node_id="control-plane",
                 interval_minutes=15,
                 enabled=True,
                 auto_execute=True,
@@ -1075,7 +1210,7 @@ def test_failed_auto_execute_eval_schedule_creates_warning(monkeypatch) -> None:
     with SessionLocal() as session:
         session.add(
             ModelPlacement(
-                node_id="jedi",
+                node_id="control-plane",
                 model_name=model_name,
                 model_digest="sha256:schedule-warning",
                 available=True,
@@ -1087,7 +1222,7 @@ def test_failed_auto_execute_eval_schedule_creates_warning(monkeypatch) -> None:
                 schedule_id="schedule-warning-test",
                 suite_id=suite["suite_id"],
                 model_name=model_name,
-                node_id="jedi",
+                node_id="control-plane",
                 interval_minutes=15,
                 enabled=True,
                 auto_execute=True,
@@ -1109,7 +1244,7 @@ def test_failed_auto_execute_eval_schedule_creates_warning(monkeypatch) -> None:
     assert warning is not None
     assert warning.status == "active"
     assert warning.warning_type == "eval_schedule_failure"
-    assert warning.node_id == "jedi"
+    assert warning.node_id == "control-plane"
     assert warning.metadata_json["schedule_id"] == "schedule-warning-test"
     assert warning.metadata_json["failed_count"] == 1
 
@@ -1140,7 +1275,7 @@ def test_clean_auto_execute_eval_schedule_resolves_existing_warning(monkeypatch)
     with SessionLocal() as session:
         session.add(
             ModelPlacement(
-                node_id="jedi",
+                node_id="control-plane",
                 model_name=model_name,
                 model_digest="sha256:schedule-warning-resolve",
                 available=True,
@@ -1152,7 +1287,7 @@ def test_clean_auto_execute_eval_schedule_resolves_existing_warning(monkeypatch)
                 schedule_id="schedule-warning-resolve-test",
                 suite_id=suite["suite_id"],
                 model_name=model_name,
-                node_id="jedi",
+                node_id="control-plane",
                 interval_minutes=15,
                 enabled=True,
                 auto_execute=True,
@@ -1167,7 +1302,7 @@ def test_clean_auto_execute_eval_schedule_resolves_existing_warning(monkeypatch)
                 warning_id="eval-schedule-failure:schedule-warning-resolve-test",
                 warning_type="eval_schedule_failure",
                 severity="warning",
-                node_id="jedi",
+                node_id="control-plane",
                 first_seen_at=now - timedelta(minutes=20),
                 last_seen_at=now - timedelta(minutes=20),
                 status="active",

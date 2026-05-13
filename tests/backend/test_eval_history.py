@@ -22,7 +22,7 @@ def test_build_score_history_aggregates_eval_runs_by_placement() -> None:
                     source_type="eval",
                     detail_type="eval_attempt",
                     source_id="eval-suite:suite-1:case:case-1",
-                    node_id="jedi",
+                    node_id="control-plane",
                     model_name="model-a",
                     action_type="eval",
                     status="success",
@@ -44,7 +44,7 @@ def test_build_score_history_aggregates_eval_runs_by_placement() -> None:
                     source_type="eval",
                     detail_type="eval_attempt",
                     source_id="eval-suite:suite-1:case:case-2",
-                    node_id="jedi",
+                    node_id="control-plane",
                     model_name="model-a",
                     action_type="eval",
                     status="failed",
@@ -71,7 +71,7 @@ def test_build_score_history_aggregates_eval_runs_by_placement() -> None:
                     source_type="eval",
                     detail_type="eval_attempt",
                     source_id="eval-suite:suite-1:case:case-1",
-                    node_id="bastet",
+                    node_id="remote-worker",
                     model_name="model-a",
                     action_type="eval",
                     status="success",
@@ -95,9 +95,9 @@ def test_build_score_history_aggregates_eval_runs_by_placement() -> None:
 
     assert history["total_runs"] == 3
     assert history["placements"][0]["model_name"] == "model-a"
-    assert history["placements"][0]["node_id"] == "bastet"
+    assert history["placements"][0]["node_id"] == "remote-worker"
     assert history["placements"][0]["pass_rate"] == 1.0
-    assert history["placements"][1]["node_id"] == "jedi"
+    assert history["placements"][1]["node_id"] == "control-plane"
     assert history["placements"][1]["pass_rate"] == 0.5
     assert history["suites"][0]["suite_id"] == "suite-1"
     assert history["cases"][0]["case_name"] == "JSON answer"
@@ -129,8 +129,8 @@ def test_execute_eval_run_skips_disabled_local_ollama_endpoints(monkeypatch) -> 
 
     with session_factory() as session:
         node = Node(
-            node_id="jedi",
-            display_name="Jedi",
+            node_id="control-plane",
+            display_name="Control Plane",
             base_url="http://127.0.0.1:8000",
             role="primary",
             enabled=True,
@@ -141,7 +141,7 @@ def test_execute_eval_run_skips_disabled_local_ollama_endpoints(monkeypatch) -> 
             source_type="eval",
             detail_type="eval_attempt",
             source_id="eval-suite:suite-1:case:case-1",
-            node_id="jedi",
+            node_id="control-plane",
             model_name="model-a",
             action_type="eval",
             status="queued",

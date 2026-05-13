@@ -9,10 +9,10 @@ describe("ModelsPage", () => {
         models={[
           {
             model_name: "qwen3.6:latest",
-            placements: ["jedi", "bastet"],
+            placements: ["control-plane", "remote-worker"],
             placement_details: [
-              { node_id: "jedi", model_digest: "sha256:111", available: true },
-              { node_id: "bastet", model_digest: "sha256:222", available: true },
+              { node_id: "control-plane", model_digest: "sha256:111", available: true },
+              { node_id: "remote-worker", model_digest: "sha256:222", available: true },
             ],
           },
         ]}
@@ -20,8 +20,8 @@ describe("ModelsPage", () => {
     );
 
     expect(screen.getByText("qwen3.6:latest")).toBeTruthy();
-    expect(screen.getByText("jedi")).toBeTruthy();
-    expect(screen.getByText("bastet")).toBeTruthy();
+    expect(screen.getByText("control-plane")).toBeTruthy();
+    expect(screen.getByText("remote-worker")).toBeTruthy();
   });
 
   it("runs a capability check from a model placement", async () => {
@@ -29,9 +29,9 @@ describe("ModelsPage", () => {
       ok: true,
       json: async () => ({
         run_id: "run-1",
-        summary: "Capability check passed for qwen3.6:latest on bastet",
+        summary: "Capability check passed for qwen3.6:latest on remote-worker",
         status: "success",
-        node_id: "bastet",
+        node_id: "remote-worker",
         started_at: "2026-04-23T12:00:00Z",
         duration_ms: 812,
         metadata_json: {
@@ -45,14 +45,14 @@ describe("ModelsPage", () => {
         models={[
           {
             model_name: "qwen3.6:latest",
-            placements: ["bastet"],
-            placement_details: [{ node_id: "bastet", model_digest: "sha256:222", available: true }],
+            placements: ["remote-worker"],
+            placement_details: [{ node_id: "remote-worker", model_digest: "sha256:222", available: true }],
           },
         ]}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /check on bastet/i }));
+    fireEvent.click(screen.getByRole("button", { name: /check on remote-worker/i }));
 
     await waitFor(() => {
       expect(screen.getByText("success")).toBeTruthy();
@@ -66,7 +66,7 @@ describe("ModelsPage", () => {
       },
       body: JSON.stringify({
         model_name: "qwen3.6:latest",
-        node_id: "bastet",
+        node_id: "remote-worker",
       }),
     });
   });

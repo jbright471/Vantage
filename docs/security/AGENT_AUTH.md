@@ -12,6 +12,8 @@ Vantage supports two node-agent authentication modes. Bearer mode remains the de
 
 All modes use `VANTAGE_AGENT_SHARED_TOKEN` as the shared secret. HMAC mode signs each request with:
 
+Remote agents should also set `VANTAGE_AGENT_NODE_ID=<your-node-id>` so `/health`, `/runs`, capability checks, and eval attempts report the same identity configured in the control plane node registry.
+
 ```text
 METHOD
 PATH

@@ -14,8 +14,8 @@ unreachable_after_seconds = 30
 local_ollama_base_urls = ["http://127.0.0.1:11434", "http://127.0.0.1:11435"]
 
 [[nodes]]
-node_id = "jedi"
-display_name = "Jedi"
+node_id = "control-plane"
+display_name = "Control Plane"
 base_url = "http://127.0.0.1:9000"
 role = "primary"
 enabled = true
@@ -28,5 +28,5 @@ enabled = true
     assert config.app_name == "Vantage"
     assert config.poll_interval_seconds == 5
     assert config.local_ollama_base_urls == ["http://127.0.0.1:11434", "http://127.0.0.1:11435"]
-    assert config.nodes[0].node_id == "jedi"
+    assert config.nodes[0].node_id == "control-plane"
     assert config.nodes[0].role == "primary"

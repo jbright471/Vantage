@@ -8,7 +8,7 @@ function routingRule(overrides: Partial<RoutingRuleRecord>): RoutingRuleRecord {
     rule_id: "scheduled-default",
     priority_class: "scheduled",
     model_name: null,
-    preferred_nodes: ["jedi", "bastet"],
+    preferred_nodes: ["control-plane", "remote-worker"],
     enabled: true,
     allow_degraded: false,
     allow_stale: false,
@@ -30,15 +30,15 @@ describe("RoutingPage", () => {
           routingRule({
             rule_id: "scheduled-default",
             priority_class: "scheduled",
-            preferred_nodes: ["jedi", "bastet"],
+            preferred_nodes: ["control-plane", "remote-worker"],
           }),
         ]}
-        availableNodes={["jedi", "bastet"]}
+        availableNodes={["control-plane", "remote-worker"]}
       />,
     );
 
     expect(screen.getAllByText("scheduled").length).toBeGreaterThan(0);
-    expect(screen.getByText("jedi → bastet")).toBeTruthy();
+    expect(screen.getByText("control-plane → remote-worker")).toBeTruthy();
   });
 
   it("requires strict confirmation before promoting a preferred node", async () => {
@@ -51,12 +51,12 @@ describe("RoutingPage", () => {
             rule_id: "scheduled-default",
             priority_class: "scheduled",
             model_name: null,
-            candidate_order: ["bastet", "jedi"],
-            selected_node: "bastet",
+            candidate_order: ["remote-worker", "control-plane"],
+            selected_node: "remote-worker",
             decisions: [
               {
-                node_id: "bastet",
-                display_name: "Bastet",
+                node_id: "remote-worker",
+                display_name: "Remote Worker",
                 decision: "selected",
                 observed_status: "healthy",
                 freshness: "live",
@@ -66,8 +66,8 @@ describe("RoutingPage", () => {
                 reasons: ["selected:first_eligible"],
               },
               {
-                node_id: "jedi",
-                display_name: "Jedi",
+                node_id: "control-plane",
+                display_name: "Control Plane",
                 decision: "skipped",
                 observed_status: "healthy",
                 freshness: "live",
@@ -93,7 +93,7 @@ describe("RoutingPage", () => {
           allow_stale: false,
           allow_unreachable: false,
           minimum_eval_pass_rate: null,
-          preferred_nodes: ["bastet", "jedi"],
+          preferred_nodes: ["remote-worker", "control-plane"],
         }),
       } as Response;
     });
@@ -104,21 +104,21 @@ describe("RoutingPage", () => {
           routingRule({
             rule_id: "scheduled-default",
             priority_class: "scheduled",
-            preferred_nodes: ["jedi", "bastet"],
+            preferred_nodes: ["control-plane", "remote-worker"],
           }),
         ]}
-        availableNodes={["jedi", "bastet"]}
+        availableNodes={["control-plane", "remote-worker"]}
         nodeSummaries={[
           {
-            node_id: "jedi",
-            display_name: "Jedi",
+            node_id: "control-plane",
+            display_name: "Control Plane",
             observed_status: "healthy",
             freshness: "live",
             model_count: 4,
           },
           {
-            node_id: "bastet",
-            display_name: "Bastet",
+            node_id: "remote-worker",
+            display_name: "Remote Worker",
             observed_status: "healthy",
             freshness: "live",
             model_count: 8,
@@ -127,7 +127,7 @@ describe("RoutingPage", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /prefer bastet/i }));
+    fireEvent.click(screen.getByRole("button", { name: /prefer remote-worker/i }));
 
     expect(screen.getByRole("dialog", { name: /confirm preferred node change/i })).toBeTruthy();
     expect(screen.getByText("Target node state")).toBeTruthy();
@@ -150,7 +150,7 @@ describe("RoutingPage", () => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        preferred_nodes: ["bastet", "jedi"],
+        preferred_nodes: ["remote-worker", "control-plane"],
       }),
     });
     expect(fetchMock).toHaveBeenCalledWith("/api/routing/scheduled-default", {
@@ -160,7 +160,7 @@ describe("RoutingPage", () => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        preferred_nodes: ["bastet", "jedi"],
+        preferred_nodes: ["remote-worker", "control-plane"],
       }),
     });
   });
@@ -172,12 +172,12 @@ describe("RoutingPage", () => {
         rule_id: "interactive-default",
         priority_class: "interactive",
         model_name: null,
-        candidate_order: ["bastet", "jedi"],
-        selected_node: "jedi",
+        candidate_order: ["remote-worker", "control-plane"],
+        selected_node: "control-plane",
         decisions: [
           {
-            node_id: "bastet",
-            display_name: "Bastet",
+            node_id: "remote-worker",
+            display_name: "Remote Worker",
             decision: "rejected",
             observed_status: "degraded",
             freshness: "stale",
@@ -187,8 +187,8 @@ describe("RoutingPage", () => {
             reasons: ["health:degraded", "freshness:stale"],
           },
           {
-            node_id: "jedi",
-            display_name: "Jedi",
+            node_id: "control-plane",
+            display_name: "Control Plane",
             decision: "selected",
             observed_status: "healthy",
             freshness: "live",
@@ -198,7 +198,7 @@ describe("RoutingPage", () => {
             reasons: ["selected:first_eligible"],
           },
         ],
-        warnings: ["Preferred node 'bastet' would be skipped; 'jedi' is first eligible."],
+        warnings: ["Preferred node 'remote-worker' would be skipped; 'control-plane' is first eligible."],
       }),
     } as Response);
 
@@ -208,21 +208,21 @@ describe("RoutingPage", () => {
           routingRule({
             rule_id: "interactive-default",
             priority_class: "interactive",
-            preferred_nodes: ["jedi", "bastet"],
+            preferred_nodes: ["control-plane", "remote-worker"],
           }),
         ]}
-        availableNodes={["jedi", "bastet"]}
+        availableNodes={["control-plane", "remote-worker"]}
         nodeSummaries={[
           {
-            node_id: "jedi",
-            display_name: "Jedi",
+            node_id: "control-plane",
+            display_name: "Control Plane",
             observed_status: "healthy",
             freshness: "live",
             model_count: 4,
           },
           {
-            node_id: "bastet",
-            display_name: "Bastet",
+            node_id: "remote-worker",
+            display_name: "Remote Worker",
             observed_status: "degraded",
             freshness: "stale",
             model_count: 8,
@@ -231,7 +231,7 @@ describe("RoutingPage", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /prefer bastet/i }));
+    fireEvent.click(screen.getByRole("button", { name: /prefer remote-worker/i }));
 
     expect(screen.getByText("Target node state")).toBeTruthy();
     expect(screen.getByText("degraded")).toBeTruthy();
@@ -239,7 +239,7 @@ describe("RoutingPage", () => {
     expect(screen.getByText(/not currently healthy and live/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /confirm override/i })).toBeTruthy();
     await waitFor(() => {
-      expect(screen.getByText(/preferred node 'bastet' would be skipped/i)).toBeTruthy();
+      expect(screen.getByText(/preferred node 'remote-worker' would be skipped/i)).toBeTruthy();
     });
   });
 
@@ -253,7 +253,7 @@ describe("RoutingPage", () => {
             rule_id: "qwen-batch",
             priority_class: "batch",
             model_name: "qwen3.5:27b",
-            preferred_nodes: ["bastet", "jedi"],
+            preferred_nodes: ["remote-worker", "control-plane"],
             minimum_eval_pass_rate: 0.75,
           }),
         } as Response;
@@ -277,11 +277,11 @@ describe("RoutingPage", () => {
       return { ok: false, status: 404, json: async () => ({}) } as Response;
     });
 
-    render(<RoutingPage rules={[]} availableNodes={["jedi", "bastet"]} />);
+    render(<RoutingPage rules={[]} availableNodes={["control-plane", "remote-worker"]} />);
 
     fireEvent.change(screen.getByPlaceholderText("llama-batch"), { target: { value: "qwen-batch" } });
     fireEvent.change(screen.getByPlaceholderText("qwen3.5:27b"), { target: { value: "qwen3.5:27b" } });
-    fireEvent.change(screen.getByPlaceholderText("bastet, jedi"), { target: { value: "bastet, jedi" } });
+    fireEvent.change(screen.getByPlaceholderText("remote-worker, control-plane"), { target: { value: "remote-worker, control-plane" } });
     fireEvent.change(screen.getByPlaceholderText("0.75"), { target: { value: "0.75" } });
     fireEvent.click(screen.getByRole("button", { name: /create rule/i }));
 

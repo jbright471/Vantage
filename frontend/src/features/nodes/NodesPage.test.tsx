@@ -12,9 +12,9 @@ describe("NodesPage", () => {
       <NodesPage
         nodes={[
           {
-            node_id: "bastet",
+            node_id: "remote-worker",
             base_url: "http://10.0.0.20:9110",
-            display_name: "Bastet",
+            display_name: "Remote Worker",
             observed_status: "degraded",
             freshness: "stale",
             last_seen_at: "2026-04-22T12:00:00Z",
@@ -30,7 +30,7 @@ describe("NodesPage", () => {
       />,
     );
 
-    expect(screen.getByText("Bastet")).toBeTruthy();
+    expect(screen.getByText("Remote Worker")).toBeTruthy();
     expect(screen.getByText("degraded")).toBeTruthy();
     expect(screen.getByText(/stale/i)).toBeTruthy();
     expect(screen.getByText("Heartbeat")).toBeTruthy();
@@ -42,9 +42,9 @@ describe("NodesPage", () => {
       <NodesPage
         nodes={[
           {
-            node_id: "jedi",
+            node_id: "control-plane",
             base_url: "http://127.0.0.1:8000",
-            display_name: "Jedi",
+            display_name: "Control Plane",
             observed_status: "degraded",
             freshness: "live",
             last_seen_at: "2026-04-22T12:00:00Z",
@@ -67,7 +67,7 @@ describe("NodesPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /diagnose/i }));
 
-    expect(screen.getByRole("dialog", { name: /jedi/i })).toBeTruthy();
+    expect(screen.getByRole("dialog", { name: /control plane/i })).toBeTruthy();
     expect(screen.getByText(/one or more ollama endpoints failed/i)).toBeTruthy();
     expect(screen.getByText("http://host.docker.internal:11435")).toBeTruthy();
     expect(screen.getByText(/confirm the backend container can route/i)).toBeTruthy();
@@ -79,13 +79,13 @@ describe("NodesPage", () => {
       ok: true,
       json: async () => ({
         run_id: "run-1",
-        summary: "Refresh node bastet verified",
+        summary: "Refresh node remote-worker verified",
         status: "success",
-        node_id: "bastet",
+        node_id: "remote-worker",
         started_at: "2026-04-22T12:00:00Z",
         ended_at: "2026-04-22T12:00:01Z",
         duration_ms: 1000,
-        idempotency_key: "refresh-bastet",
+        idempotency_key: "refresh-remote-worker",
         metadata_json: { verified: true },
       }),
     } as Response);
@@ -94,9 +94,9 @@ describe("NodesPage", () => {
       <NodesPage
         nodes={[
           {
-            node_id: "bastet",
+            node_id: "remote-worker",
             base_url: "http://10.0.0.20:9110",
-            display_name: "Bastet",
+            display_name: "Remote Worker",
             observed_status: "healthy",
             freshness: "live",
             last_seen_at: "2026-04-22T12:00:00Z",
@@ -119,7 +119,7 @@ describe("NodesPage", () => {
     });
 
     expect(screen.getByText("success")).toBeTruthy();
-    expect(globalThis.fetch).toHaveBeenCalledWith("/api/actions/refresh-node/bastet", {
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/actions/refresh-node/remote-worker", {
       method: "POST",
       headers: {
         Accept: "application/json",
@@ -132,13 +132,13 @@ describe("NodesPage", () => {
       ok: true,
       json: async () => ({
         run_id: "run-quarantine",
-        summary: "Quarantine node bastet applied",
+        summary: "Quarantine node remote-worker applied",
         status: "success",
-        node_id: "bastet",
+        node_id: "remote-worker",
         started_at: "2026-04-22T12:00:00Z",
         ended_at: "2026-04-22T12:00:01Z",
         duration_ms: 1000,
-        idempotency_key: "quarantine-bastet",
+        idempotency_key: "quarantine-remote-worker",
         metadata_json: {
           previous_enabled: true,
           requested_enabled: false,
@@ -151,9 +151,9 @@ describe("NodesPage", () => {
       <NodesPage
         nodes={[
           {
-            node_id: "bastet",
+            node_id: "remote-worker",
             base_url: "http://10.0.0.20:9110",
-            display_name: "Bastet",
+            display_name: "Remote Worker",
             observed_status: "healthy",
             freshness: "live",
             last_seen_at: "2026-04-22T12:00:00Z",
@@ -178,12 +178,12 @@ describe("NodesPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /confirm quarantine/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/bastet quarantined/i)).toBeTruthy();
+      expect(screen.getByText(/remote worker quarantined/i)).toBeTruthy();
     });
 
     expect(screen.getByText("disabled")).toBeTruthy();
     expect(screen.getByRole("button", { name: /re-enable node/i })).toBeTruthy();
-    expect(globalThis.fetch).toHaveBeenCalledWith("/api/actions/nodes/bastet/enabled", {
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/actions/nodes/remote-worker/enabled", {
       method: "PATCH",
       headers: {
         Accept: "application/json",
@@ -200,11 +200,11 @@ describe("NodesPage", () => {
         run_id: "run-endpoint",
         summary: "Disable local Ollama endpoint http://127.0.0.1:11435 applied",
         status: "success",
-        node_id: "jedi",
+        node_id: "control-plane",
         started_at: "2026-04-22T12:00:00Z",
         ended_at: "2026-04-22T12:00:01Z",
         duration_ms: 1000,
-        idempotency_key: "endpoint-jedi",
+        idempotency_key: "endpoint-control-plane",
         metadata_json: {
           endpoint_url: "http://127.0.0.1:11435",
           requested_disabled: true,
@@ -216,9 +216,9 @@ describe("NodesPage", () => {
       <NodesPage
         nodes={[
           {
-            node_id: "jedi",
+            node_id: "control-plane",
             base_url: "http://127.0.0.1:8000",
-            display_name: "Jedi",
+            display_name: "Control Plane",
             observed_status: "degraded",
             freshness: "live",
             last_seen_at: "2026-04-22T12:00:00Z",
@@ -252,7 +252,7 @@ describe("NodesPage", () => {
       expect(screen.getByText(/endpoint disabled/i)).toBeTruthy();
     });
 
-    expect(globalThis.fetch).toHaveBeenCalledWith("/api/actions/nodes/jedi/local-ollama-endpoint", {
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/actions/nodes/control-plane/local-ollama-endpoint", {
       method: "PATCH",
       headers: {
         Accept: "application/json",
@@ -265,13 +265,13 @@ describe("NodesPage", () => {
     });
   });
 
-  it("renders the remote focus panel with bastet telemetry and recent runs", () => {
+  it("renders the remote focus panel with remote-worker telemetry and recent runs", () => {
     render(
       <NodesPage
         nodes={[
           {
-            node_id: "bastet",
-            display_name: "Bastet",
+            node_id: "remote-worker",
+            display_name: "Remote Worker",
             base_url: "http://10.0.0.20:9110",
             observed_status: "healthy",
             freshness: "live",
@@ -288,9 +288,9 @@ describe("NodesPage", () => {
         runs={[
           {
             run_id: "run-remote",
-            summary: "Refresh Bastet node",
+            summary: "Refresh Remote Worker node",
             status: "submitted_unverified",
-            node_id: "bastet",
+            node_id: "remote-worker",
             started_at: "2026-04-22T12:00:00Z",
           },
         ]}
@@ -300,6 +300,6 @@ describe("NodesPage", () => {
     expect(screen.getByText(/remote node telemetry and recent operations/i)).toBeTruthy();
     expect(screen.getByText("RTX 3090")).toBeTruthy();
     expect(screen.getByText("http://10.0.0.20:9110")).toBeTruthy();
-    expect(screen.getByText(/latest bastet-side activity/i)).toBeTruthy();
+    expect(screen.getByText(/latest agent-side activity/i)).toBeTruthy();
   });
 });

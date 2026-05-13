@@ -30,7 +30,7 @@ def test_prune_snapshots_deletes_old_rows_but_keeps_latest_per_node() -> None:
         session.add_all(
             [
                 NodeSnapshot(
-                    node_id="bastet",
+                    node_id="remote-worker",
                     captured_at=now - timedelta(hours=30),
                     gpu_json=[],
                     cpu_json={},
@@ -39,7 +39,7 @@ def test_prune_snapshots_deletes_old_rows_but_keeps_latest_per_node() -> None:
                     health_status="healthy",
                 ),
                 NodeSnapshot(
-                    node_id="bastet",
+                    node_id="remote-worker",
                     captured_at=now,
                     gpu_json=[],
                     cpu_json={},
@@ -68,7 +68,7 @@ def test_prune_snapshots_enforces_per_node_cap() -> None:
         for index in range(5):
             session.add(
                 NodeSnapshot(
-                    node_id="jedi",
+                    node_id="control-plane",
                     captured_at=now - timedelta(minutes=index),
                     gpu_json=[],
                     cpu_json={},
@@ -96,7 +96,7 @@ def test_prune_snapshots_respects_minimum_even_when_snapshots_are_old() -> None:
         for index in range(5):
             session.add(
                 NodeSnapshot(
-                    node_id="bastet",
+                    node_id="remote-worker",
                     captured_at=now - timedelta(hours=30, minutes=index),
                     gpu_json=[],
                     cpu_json={},
@@ -126,7 +126,7 @@ def test_run_snapshot_pruning_uses_bootstrap_config_limits() -> None:
         for index in range(4):
             session.add(
                 NodeSnapshot(
-                    node_id="bastet",
+                    node_id="remote-worker",
                     captured_at=now - timedelta(minutes=index),
                     gpu_json=[],
                     cpu_json={},

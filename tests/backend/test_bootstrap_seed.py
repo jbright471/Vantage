@@ -13,8 +13,8 @@ def test_seed_nodes_from_config_inserts_without_duplicates() -> None:
     config = BootstrapConfig(
         nodes=[
             BootstrapNode(
-                node_id="jedi",
-                display_name="Jedi",
+                node_id="control-plane",
+                display_name="Control Plane",
                 base_url="http://127.0.0.1:8000",
                 role="primary",
                 enabled=True,
@@ -48,8 +48,8 @@ def test_seed_nodes_from_config_updates_existing_bootstrap_node_fields() -> None
     with Session(engine) as session:
         session.add(
             Node(
-                node_id="bastet",
-                display_name="Bastet",
+                node_id="remote-worker",
+                display_name="Remote Worker",
                 base_url="http://10.0.0.20:9100",
                 role="remote",
                 enabled=True,
@@ -61,8 +61,8 @@ def test_seed_nodes_from_config_updates_existing_bootstrap_node_fields() -> None
         config = BootstrapConfig(
             nodes=[
                 BootstrapNode(
-                    node_id="bastet",
-                    display_name="Bastet",
+                    node_id="remote-worker",
+                    display_name="Remote Worker",
                     base_url="http://10.0.0.20:9110",
                     role="remote",
                     enabled=True,
@@ -71,7 +71,7 @@ def test_seed_nodes_from_config_updates_existing_bootstrap_node_fields() -> None
         )
 
         seed_nodes_from_config(session, config)
-        updated = session.get(Node, "bastet")
+        updated = session.get(Node, "remote-worker")
 
     assert updated is not None
     assert updated.base_url == "http://10.0.0.20:9110"
@@ -84,8 +84,8 @@ def test_seed_nodes_from_config_respects_runtime_enabled_override() -> None:
     config = BootstrapConfig(
         nodes=[
             BootstrapNode(
-                node_id="bastet",
-                display_name="Bastet",
+                node_id="remote-worker",
+                display_name="Remote Worker",
                 base_url="http://10.0.0.20:9110",
                 role="remote",
                 enabled=True,
@@ -94,11 +94,11 @@ def test_seed_nodes_from_config_respects_runtime_enabled_override() -> None:
     )
 
     with Session(engine) as session:
-        session.add(AppSetting(key="node_enabled_overrides", value_json={"nodes": {"bastet": False}}))
+        session.add(AppSetting(key="node_enabled_overrides", value_json={"nodes": {"remote-worker": False}}))
         session.commit()
 
         seed_nodes_from_config(session, config)
-        node = session.get(Node, "bastet")
+        node = session.get(Node, "remote-worker")
 
     assert node is not None
     assert node.enabled is False
@@ -110,15 +110,15 @@ def test_seed_routing_from_config_inserts_default_rule_order() -> None:
     config = BootstrapConfig(
         nodes=[
             BootstrapNode(
-                node_id="jedi",
-                display_name="Jedi",
+                node_id="control-plane",
+                display_name="Control Plane",
                 base_url="http://127.0.0.1:8000",
                 role="primary",
                 enabled=True,
             ),
             BootstrapNode(
-                node_id="bastet",
-                display_name="Bastet",
+                node_id="remote-worker",
+                display_name="Remote Worker",
                 base_url="http://10.0.0.20:9110",
                 role="remote",
                 enabled=True,
@@ -130,4 +130,4 @@ def test_seed_routing_from_config_inserts_default_rule_order() -> None:
         seed_routing_from_config(session, config)
         route_nodes = session.scalars(select(RoutingRuleNode).where(RoutingRuleNode.rule_id == "batch-default")).all()
 
-    assert [node.node_id for node in route_nodes] == ["bastet", "jedi"]
+    assert [node.node_id for node in route_nodes] == ["remote-worker", "control-plane"]

@@ -98,9 +98,9 @@ export function OnboardingPanel({
           <button type="button" className="action-button" onClick={onOpenDocs}>
             Read operator guide
           </button>
-          <a className="ghost-link" href="https://github.com/jbright471/Vantage" target="_blank" rel="noreferrer">
-            Prepare GitHub release
-          </a>
+          <button type="button" className="text-action-button" onClick={onOpenDocs}>
+            Review release checklist
+          </button>
           <button type="button" className="text-action-button" onClick={dismiss}>
             Dismiss
           </button>

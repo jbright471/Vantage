@@ -57,11 +57,27 @@ type EvalIntelligenceControls = {
 
 type EvalIntelligencePreset = EvalIntelligencePresetRecord;
 
+type JudgeConfigDraft = {
+  judge_model_name: string;
+  judge_node_id: string;
+  rubric: string;
+  pass_threshold: number;
+  max_context_chars: number;
+};
+
 const DEFAULT_EVAL_CONTROLS: EvalIntelligenceControls = {
   window_days: "30",
   placement_key: "",
   flakiness_min_rate: "0.2",
   failure_cluster_min_count: "2",
+};
+
+const DEFAULT_LLM_JUDGE_CONFIG: JudgeConfigDraft = {
+  judge_model_name: "",
+  judge_node_id: "",
+  rubric: "Pass only when the response is accurate, concise, safe, and follows the requested format.",
+  pass_threshold: 0.8,
+  max_context_chars: 4000,
 };
 
 const EVAL_PRESETS_STORAGE_KEY = "vantage.evalIntelligencePresets.v1";
@@ -138,6 +154,45 @@ function readEvalPresets(): EvalIntelligencePreset[] {
 
 function writeEvalPresets(presets: EvalIntelligencePreset[]) {
   window.localStorage.setItem(EVAL_PRESETS_STORAGE_KEY, JSON.stringify(presets));
+}
+
+function parseJsonObject(rawValue: string): Record<string, unknown> {
+  try {
+    const parsed = rawValue ? JSON.parse(rawValue) : {};
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function readJudgeConfig(rawValue: string): JudgeConfigDraft {
+  const parsed = parseJsonObject(rawValue);
+  return {
+    judge_model_name:
+      typeof parsed.judge_model_name === "string" ? parsed.judge_model_name : DEFAULT_LLM_JUDGE_CONFIG.judge_model_name,
+    judge_node_id: typeof parsed.judge_node_id === "string" ? parsed.judge_node_id : DEFAULT_LLM_JUDGE_CONFIG.judge_node_id,
+    rubric: typeof parsed.rubric === "string" ? parsed.rubric : DEFAULT_LLM_JUDGE_CONFIG.rubric,
+    pass_threshold:
+      typeof parsed.pass_threshold === "number" ? parsed.pass_threshold : DEFAULT_LLM_JUDGE_CONFIG.pass_threshold,
+    max_context_chars:
+      typeof parsed.max_context_chars === "number"
+        ? parsed.max_context_chars
+        : DEFAULT_LLM_JUDGE_CONFIG.max_context_chars,
+  };
+}
+
+function serializeJudgeConfig(config: JudgeConfigDraft): string {
+  return JSON.stringify(
+    {
+      judge_model_name: config.judge_model_name,
+      judge_node_id: config.judge_node_id,
+      rubric: config.rubric,
+      pass_threshold: Number(config.pass_threshold.toFixed(2)),
+      max_context_chars: Math.round(config.max_context_chars),
+    },
+    null,
+    2,
+  );
 }
 
 function trendToneClass(passRate: number): string {
@@ -291,6 +346,18 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
   const placementOptions: PlacementOption[] = Array.from(placementOptionMap.values()).sort((left, right) =>
     `${left.model_name}:${left.node_id}`.localeCompare(`${right.model_name}:${right.node_id}`),
   );
+  const judgeConfig = readJudgeConfig(caseForm.score_config_json);
+  const judgePlacementKey =
+    judgeConfig.judge_model_name && judgeConfig.judge_node_id
+      ? `${judgeConfig.judge_model_name}::${judgeConfig.judge_node_id}`
+      : "";
+  const judgeConfigIsComplete = Boolean(
+    judgeConfig.judge_model_name &&
+      judgeConfig.judge_node_id &&
+      judgeConfig.rubric.trim() &&
+      Number.isFinite(judgeConfig.pass_threshold) &&
+      Number.isFinite(judgeConfig.max_context_chars),
+  );
   const recentEvalRuns = dedupeRuns([
     ...queuedEvalRuns,
     ...runs.filter((run) => run.detail_type === "eval_attempt"),
@@ -301,6 +368,25 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
       return rightTime - leftTime;
     })
     .slice(0, 5);
+
+  function updateJudgeConfig(patch: Partial<JudgeConfigDraft>) {
+    const nextConfig = { ...readJudgeConfig(caseForm.score_config_json), ...patch };
+    setCaseForm((current) => ({
+      ...current,
+      score_config_json: serializeJudgeConfig(nextConfig),
+    }));
+  }
+
+  function handleScoreTypeChange(nextScoreType: string) {
+    setCaseForm((current) => ({
+      ...current,
+      score_type: nextScoreType,
+      score_config_json:
+        nextScoreType === "llm_judge" && Object.keys(parseJsonObject(current.score_config_json)).length === 0
+          ? serializeJudgeConfig(DEFAULT_LLM_JUDGE_CONFIG)
+          : current.score_config_json,
+    }));
+  }
 
   function suiteHasSchedule(suiteId: string): boolean {
     return schedules.some((schedule) => schedule.suite_id === suiteId);
@@ -915,10 +1001,10 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
         </p>
         <div className="button-row">
           <a className="text-action-button" href={buildEvalHistoryExportUrl("csv", activeEvalQuery)}>
-            Export eval CSV
+            Export CSV
           </a>
           <a className="text-action-button" href={buildEvalHistoryExportUrl("json", activeEvalQuery)}>
-            Export eval JSON
+            Export JSON
           </a>
           <button
             type="button"
@@ -1178,7 +1264,7 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
             <span>Score type</span>
             <select
               value={caseForm.score_type}
-              onChange={(event) => setCaseForm((current) => ({ ...current, score_type: event.target.value }))}
+              onChange={(event) => handleScoreTypeChange(event.target.value)}
               disabled={suites.length === 0}
             >
               <option value="json_subset">JSON subset</option>
@@ -1187,8 +1273,121 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
               <option value="regex">Regex</option>
               <option value="numeric_threshold">Numeric threshold</option>
               <option value="json_schema">JSON schema</option>
+              <option value="llm_judge">LLM judge</option>
             </select>
           </label>
+          {caseForm.score_type === "llm_judge" ? (
+            <div className="judge-config-panel">
+              <div className="judge-config-header">
+                <div>
+                  <p className="info-kicker">Guarded scorer</p>
+                  <h4>LLM Judge Config</h4>
+                  <p>
+                    Replace brittle raw JSON editing with explicit judge controls. Vantage still writes the exact
+                    config below for auditability.
+                  </p>
+                </div>
+                <div className="state-token-row">
+                  <span className="state-token is-accent">Guarded Judge</span>
+                  <span className="state-token is-warning">Fails Closed</span>
+                </div>
+              </div>
+
+              <div className="judge-config-grid">
+                <label>
+                  <span>Judge placement</span>
+                  <select
+                    value={judgePlacementKey}
+                    onChange={(event) => {
+                      const [modelName, nodeId] = event.target.value ? event.target.value.split("::") : ["", ""];
+                      updateJudgeConfig({ judge_model_name: modelName || "", judge_node_id: nodeId || "" });
+                    }}
+                    disabled={placementOptions.length === 0}
+                  >
+                    <option value="">Select judge model on node</option>
+                    {placementOptions.map((placement) => (
+                      <option key={placement.key} value={placement.key}>
+                        {placement.model_name} on {placement.node_id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Pass threshold</span>
+                  <div className="judge-threshold-control">
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={judgeConfig.pass_threshold}
+                      onChange={(event) => updateJudgeConfig({ pass_threshold: Number(event.target.value) })}
+                      disabled={suites.length === 0}
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={judgeConfig.pass_threshold}
+                      onChange={(event) => updateJudgeConfig({ pass_threshold: Number(event.target.value) })}
+                      disabled={suites.length === 0}
+                    />
+                  </div>
+                </label>
+                <label>
+                  <span>Max context chars</span>
+                  <input
+                    type="number"
+                    min="500"
+                    max="12000"
+                    step="500"
+                    value={judgeConfig.max_context_chars}
+                    onChange={(event) => updateJudgeConfig({ max_context_chars: Number(event.target.value) })}
+                    disabled={suites.length === 0}
+                  />
+                </label>
+              </div>
+
+              <div className="judge-workbench">
+                <label className="judge-rubric-field">
+                  <span>Evaluation rubric</span>
+                  <textarea
+                    value={judgeConfig.rubric}
+                    onChange={(event) => updateJudgeConfig({ rubric: event.target.value })}
+                    disabled={suites.length === 0}
+                    placeholder="Pass only when the response is accurate, concise, safe, and follows the requested format."
+                  />
+                </label>
+                <aside className="judge-contract-preview" aria-label="LLM judge safety contract">
+                  <div>
+                    <p className="info-kicker">Safety contract</p>
+                    <ul>
+                      <li>Prompt and response are treated as untrusted data.</li>
+                      <li>Judge must return JSON only.</li>
+                      <li>Context is bounded before judging.</li>
+                      <li>Decision is stored in Run metadata.</li>
+                    </ul>
+                  </div>
+                  <pre>{`{
+  "passed": boolean,
+  "score": 0.0-1.0,
+  "reason": "short string",
+  "evidence": ["short strings"]
+}`}</pre>
+                </aside>
+              </div>
+
+              <div className={`judge-config-status ${judgeConfigIsComplete ? "is-ready" : "is-incomplete"}`}>
+                <span>{judgeConfigIsComplete ? "Judge config ready" : "Judge config incomplete"}</span>
+                <span>
+                  {judgeConfigIsComplete
+                    ? "The generated JSON below can be saved with this prompt case."
+                    : "Select a judge placement and keep a non-empty rubric before saving."}
+                </span>
+              </div>
+            </div>
+          ) : null}
           <label>
             <span>Score config JSON</span>
             <textarea
