@@ -153,7 +153,7 @@ Signed audit bundles require `VANTAGE_AUDIT_SIGNING_KEY`. Stronger node-agent tr
 
 ## Project Status
 
-Vantage has shipped Phase 1 through Phase 7 foundation work: the control-plane foundation, operator attention, diagnostics, guided remediation, Eval Lab, Eval Intelligence, routing-policy control, production packaging, demo mode, setup wizard, public product assets, open-source onboarding materials, signed audit bundles, optional HMAC agent authentication, replay protection, action allowlists, security-warning surfacing, managed eval presets, integration health, email/report automation, and local-first integration endpoints. The current version is useful for a single local AI operator and remains intentionally conservative about distributed control and host-level remediation.
+Vantage v0.1.0 ships the control-plane foundation, operator attention, diagnostics, guided remediation, Eval Lab, Eval Intelligence, advanced local-LLM judge foundations, routing-policy control, production packaging, demo mode, setup wizard, public product assets, open-source onboarding materials, signed audit bundles, optional HMAC agent authentication, replay protection, action allowlists, security-warning surfacing, managed eval presets, integration health, email/report automation, and local-first integration endpoints. The current version is useful for a single local AI operator and remains intentionally conservative about distributed control and host-level remediation.
 
 Later Research decisions are tracked in `docs/architecture/LATER_RESEARCH_DECISIONS.md`. SQLite remains the default database, but `VANTAGE_DATABASE_URL` can now point at a non-SQLite SQLAlchemy URL when an operator wants to experiment with Postgres-backed storage.
 

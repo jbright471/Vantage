@@ -15,3 +15,9 @@ node_modules/
 dist/
 coverage/
 .playwright-cli/
+
+# Local planning/scratch artifacts used during implementation.
+*-plan.md
+phase-*.md
+docs/superpowers/
+.stitch/
