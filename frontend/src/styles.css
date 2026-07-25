@@ -60,6 +60,125 @@ select {
   min-height: 100vh;
 }
 
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.auth-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: min(520px, 100%);
+  padding: 28px;
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  background: var(--surface-low);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+}
+
+.auth-card h1 {
+  margin: 8px 0 0;
+  font-size: 1.65rem;
+}
+
+.auth-copy {
+  margin: 12px 0 0;
+  color: var(--muted);
+}
+
+.auth-copy code {
+  color: var(--primary-soft);
+  overflow-wrap: anywhere;
+}
+
+.auth-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.auth-form label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.auth-form input {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--outline);
+  border-radius: 6px;
+  background: var(--surface-lowest);
+  color: var(--ink);
+}
+
+.auth-form input:focus-visible {
+  border-color: var(--primary-soft);
+  outline: 2px solid rgba(182, 196, 255, 0.28);
+  outline-offset: 2px;
+}
+
+.auth-form button,
+.auth-error button,
+.session-lock-button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid rgba(182, 196, 255, 0.45);
+  border-radius: 6px;
+  background: rgba(46, 102, 255, 0.16);
+  color: var(--primary-soft);
+  cursor: pointer;
+}
+
+.auth-form button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.auth-error,
+.session-error {
+  color: var(--danger);
+}
+
+.auth-error p {
+  margin: 18px 0 10px;
+}
+
+.session-lock-button {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 10;
+  background: rgba(12, 14, 18, 0.94);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.32);
+}
+
+.session-error {
+  position: fixed;
+  right: 20px;
+  bottom: 72px;
+  z-index: 10;
+  max-width: 320px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 180, 171, 0.4);
+  border-radius: 6px;
+  background: var(--surface-lowest);
+}
+
 .command-shell {
   display: grid;
   grid-template-columns: 248px minmax(0, 1fr);

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -33,6 +34,29 @@ DEFAULT_EVAL_HISTORY_WINDOW_DAYS = 30
 DEFAULT_FLAKINESS_MIN_RATE = 0.2
 DEFAULT_FAILURE_CLUSTER_MIN_COUNT = 2
 DEFAULT_RECENT_RUN_LIMIT = 20
+DEFAULT_EVAL_NUM_PREDICT = 512
+DEFAULT_MAX_LLM_RESPONSE_CHARS = 65536
+
+
+def _bounded_env_int(name: str, default: int, *, minimum: int, maximum: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+    return max(minimum, min(value, maximum))
+
+
+def _bounded_response_text(value: Any) -> str:
+    response_text = str(value)
+    maximum = _bounded_env_int(
+        "VANTAGE_LLM_MAX_RESPONSE_CHARS",
+        DEFAULT_MAX_LLM_RESPONSE_CHARS,
+        minimum=1024,
+        maximum=1_000_000,
+    )
+    if len(response_text) > maximum:
+        raise RuntimeError("LLM response exceeded the configured size limit")
+    return response_text
 
 
 def queue_eval_case_runs(
@@ -297,7 +321,7 @@ def _run_remote_assisted_summary(
         timeout=120.0,
     )
     response.raise_for_status()
-    return str(response.json().get("metadata_json", {}).get("response_text", ""))
+    return _bounded_response_text(response.json().get("metadata_json", {}).get("response_text", ""))
 
 
 def _score_history_row(run: Run) -> dict[str, Any] | None:
@@ -579,7 +603,9 @@ def score_llm_judge_response(
                 timeout=90.0,
             )
             response.raise_for_status()
-            judge_response_text = str(response.json().get("metadata_json", {}).get("response_text", ""))
+            judge_response_text = _bounded_response_text(
+                response.json().get("metadata_json", {}).get("response_text", "")
+            )
         else:
             judge_response_text = _run_local_eval(
                 session,
@@ -757,7 +783,15 @@ def execute_eval_run(
         "model": run.model_name,
         "prompt": prompt,
         "stream": False,
-        "options": {"temperature": 0},
+        "options": {
+            "temperature": 0,
+            "num_predict": _bounded_env_int(
+                "VANTAGE_EVAL_NUM_PREDICT",
+                DEFAULT_EVAL_NUM_PREDICT,
+                minimum=16,
+                maximum=4096,
+            ),
+        },
     }
 
     try:
@@ -776,7 +810,7 @@ def execute_eval_run(
             )
             response.raise_for_status()
             body = response.json()
-            response_text = str(body.get("metadata_json", {}).get("response_text", ""))
+            response_text = _bounded_response_text(body.get("metadata_json", {}).get("response_text", ""))
             score = score_eval_response_with_context(
                 session,
                 response_text=response_text,
@@ -837,7 +871,7 @@ def _run_local_eval(session: Session, payload: dict[str, Any], config: Bootstrap
         try:
             response = httpx.post(f"{base_url}/api/generate", json=payload, timeout=90.0)
             response.raise_for_status()
-            return str(response.json().get("response", ""))
+            return _bounded_response_text(response.json().get("response", ""))
         except Exception as exc:
             errors.append({"base_url": base_url, "error": str(exc)})
     raise RuntimeError(f"Local Ollama eval failed on all configured endpoints: {errors}")

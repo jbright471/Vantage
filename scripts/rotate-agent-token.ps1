@@ -1,7 +1,8 @@
 param(
     [string]$EnvFile = ".env.production",
     [string]$TokenName = "VANTAGE_AGENT_SHARED_TOKEN",
-    [switch]$Apply
+    [switch]$Apply,
+    [switch]$ShowToken
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,9 +10,11 @@ $ErrorActionPreference = "Stop"
 $token = python -c "import secrets; print(secrets.token_urlsafe(48))"
 
 Write-Host "Generated new Vantage agent token."
-Write-Host ""
-Write-Host "$TokenName=$token"
-Write-Host ""
+if ($ShowToken) {
+    Write-Host "$TokenName=$token"
+} else {
+    Write-Host "Token value was not printed. Use -ShowToken only when your terminal output is private."
+}
 
 if ($Apply) {
     if (Test-Path $EnvFile) {

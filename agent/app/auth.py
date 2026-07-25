@@ -26,6 +26,7 @@ HMAC_KEY_ID_HEADER = "x-vantage-key-id"
 DEFAULT_ALLOWED_ACTIONS = "read,capability_check,eval_attempt"
 DEFAULT_AUTH_SKEW_SECONDS = 300
 DEFAULT_REPLAY_CACHE_SECONDS = 600
+MINIMUM_AGENT_TOKEN_LENGTH = 32
 
 bearer_scheme = HTTPBearer(auto_error=False)
 _seen_nonces: dict[str, float] = {}
@@ -124,12 +125,11 @@ async def require_agent_auth(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
 ) -> None:
-    _require_action_allowed(request)
-
     expected_token = os.getenv(AGENT_TOKEN_ENV)
-    if not expected_token:
-        return
+    if not expected_token or len(expected_token) < MINIMUM_AGENT_TOKEN_LENGTH:
+        raise HTTPException(status_code=503, detail="Agent authentication is not configured")
 
+    _require_action_allowed(request)
     mode = _auth_mode()
     if mode == "bearer":
         if _accept_bearer(expected_token, credentials):

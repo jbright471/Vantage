@@ -33,21 +33,23 @@ from backend.app.services.evals import (
 from backend.app.services.runs import serialize_run
 
 router = APIRouter()
+MAX_EVAL_CASES_PER_SUITE = 100
+MAX_EVAL_PROMPT_CHARS = 16000
 
 
 class EvalSuiteCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    description: str = ""
+    description: str = Field(default="", max_length=4000)
 
 
 class EvalSuiteUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
-    description: str | None = None
+    description: str | None = Field(default=None, max_length=4000)
 
 
 class EvalCaseCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    prompt: str = Field(min_length=1)
+    prompt: str = Field(min_length=1, max_length=MAX_EVAL_PROMPT_CHARS)
     expected_json: dict = Field(default_factory=dict)
     score_type: str = "json_subset"
     score_config_json: dict = Field(default_factory=dict)
@@ -55,7 +57,7 @@ class EvalCaseCreate(BaseModel):
 
 class EvalCaseUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
-    prompt: str | None = Field(default=None, min_length=1)
+    prompt: str | None = Field(default=None, min_length=1, max_length=MAX_EVAL_PROMPT_CHARS)
     expected_json: dict | None = None
     score_type: str | None = None
     score_config_json: dict | None = None
@@ -485,6 +487,15 @@ def export_eval_suite(suite_id: str) -> dict:
 
 @router.post("/evals/suites/import", status_code=201)
 def import_eval_suite(payload: dict) -> dict:
+    cases = payload.get("cases", [])
+    if not isinstance(cases, list):
+        raise HTTPException(status_code=422, detail="Eval suite cases must be a list")
+    if len(cases) > MAX_EVAL_CASES_PER_SUITE:
+        raise HTTPException(status_code=413, detail=f"Eval suites are limited to {MAX_EVAL_CASES_PER_SUITE} cases")
+    for item in cases:
+        if isinstance(item, dict) and len(str(item.get("prompt") or "")) > MAX_EVAL_PROMPT_CHARS:
+            raise HTTPException(status_code=413, detail="An imported eval prompt exceeds the configured size limit")
+
     with SessionLocal() as session:
         suite = EvalSuite(
             suite_id=str(uuid4()),
@@ -494,25 +505,23 @@ def import_eval_suite(payload: dict) -> dict:
             metadata_json=payload.get("metadata_json") if isinstance(payload.get("metadata_json"), dict) else {},
         )
         session.add(suite)
-        cases = payload.get("cases", [])
-        if isinstance(cases, list):
-            for index, item in enumerate(cases):
-                if not isinstance(item, dict):
-                    continue
-                session.add(
-                    EvalCase(
-                        case_id=str(uuid4()),
-                        suite_id=suite.suite_id,
-                        name=str(item.get("name") or f"Imported Case {index + 1}").strip(),
-                        prompt=str(item.get("prompt") or "").strip(),
-                        expected_json=item.get("expected_json") if isinstance(item.get("expected_json"), dict) else {},
-                        score_type=str(item.get("score_type") or "json_subset"),
-                        score_config_json=item.get("score_config_json")
-                        if isinstance(item.get("score_config_json"), dict)
-                        else {},
-                        sort_order=int(item.get("sort_order") or index),
-                    )
+        for index, item in enumerate(cases):
+            if not isinstance(item, dict):
+                continue
+            session.add(
+                EvalCase(
+                    case_id=str(uuid4()),
+                    suite_id=suite.suite_id,
+                    name=str(item.get("name") or f"Imported Case {index + 1}").strip()[:120],
+                    prompt=str(item.get("prompt") or "").strip(),
+                    expected_json=item.get("expected_json") if isinstance(item.get("expected_json"), dict) else {},
+                    score_type=str(item.get("score_type") or "json_subset")[:64],
+                    score_config_json=item.get("score_config_json")
+                    if isinstance(item.get("score_config_json"), dict)
+                    else {},
+                    sort_order=int(item.get("sort_order") or index),
                 )
+            )
         session.commit()
         return _get_suite_payload(session, suite.suite_id)
 

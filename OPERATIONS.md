@@ -10,13 +10,14 @@ Requirements:
 
 - Docker Desktop with WSL2 enabled on Windows
 - Git
-- Existing local Ollama endpoints if you want live model inventory
+- Existing local router/Ollama-compatible endpoints if you want live model inventory. On Jedi, use `http://127.0.0.1:11400`.
 
-Create a local token file:
+Create a local secret file with independent agent, operator, and session secrets:
 
 ```powershell
-$token = python -c "import secrets; print(secrets.token_urlsafe(48))"
-(Get-Content .env.example) -replace '^VANTAGE_AGENT_SHARED_TOKEN=.*', "VANTAGE_AGENT_SHARED_TOKEN=$token" | Set-Content .env
+Copy-Item .env.example .env
+.\scripts\rotate-agent-token.ps1 -EnvFile .env -Apply
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply
 ```
 
 Start the stack:
@@ -55,11 +56,15 @@ The current `docker-compose.yml` is development-oriented. It mounts local source
 
 Use [docker-compose.prod.yml](./docker-compose.prod.yml) for a production-style deployment through Portainer or another Compose host. It builds immutable backend and frontend images, persists SQLite to a named volume, runs Alembic migrations before the backend starts, serves the frontend through Nginx, and wires container health checks.
 
-Before starting production Compose, set a shared token:
+Production Compose publishes only the frontend on `VANTAGE_BIND_ADDRESS` (default `127.0.0.1`). The backend is reachable only through the internal Compose network and the frontend `/api` proxy. For trusted remote access, bind to a specific LAN/VPN interface and enforce host firewall rules; use `0.0.0.0` only when the host network policy already limits access.
+
+Before starting production Compose, create an ignored environment file and generate all required secrets:
 
 ```powershell
-$env:VANTAGE_AGENT_SHARED_TOKEN = python -c "import secrets; print(secrets.token_urlsafe(48))"
-docker compose -f docker-compose.prod.yml up --build -d
+Copy-Item .env.production.example .env.production
+.\scripts\rotate-agent-token.ps1 -EnvFile .env.production -Apply
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env.production -Apply
+docker compose -f docker-compose.prod.yml --env-file .env.production up --build -d
 ```
 
 If you need signed audit bundles, also set:
@@ -82,12 +87,15 @@ Production posture:
 - do not mount source code into containers
 - persist `vantage.sqlite3` to the `vantage_data` volume or configure `VANTAGE_DATABASE_URL` for an external Postgres database
 - provide `VANTAGE_AGENT_SHARED_TOKEN` as a secret or environment variable, not in the Compose file
+- provide independent `VANTAGE_CONTROL_PLANE_TOKEN` and `VANTAGE_SESSION_SIGNING_KEY` values
+- set `VANTAGE_SESSION_COOKIE_SECURE=1` whenever the browser reaches Vantage over HTTPS
+- retain the default LLM/eval rate, concurrency, output-token, and response-size bounds unless capacity testing justifies a change
 - use `VANTAGE_AGENT_AUTH_MODE=hmac` when request signing and replay protection are required
 - provide `VANTAGE_AUDIT_SIGNING_KEY` when signed run-history bundles are part of your audit process
 - set `VANTAGE_EXTERNAL_API_TOKEN` before exposing integration endpoints to n8n, scripts, or other automation
 - keep `VANTAGE_DEMO_MODE=0` unless intentionally running a public demo or screenshot instance
-- expose the frontend only to trusted LAN users
-- keep the backend reachable only from the frontend and trusted operator machines
+- keep `VANTAGE_BIND_ADDRESS=127.0.0.1`, or select a specific trusted LAN/VPN interface
+- keep the backend on the internal Compose network and use the frontend `/api` proxy
 - use `/api/health/ready` as the backend deployment gate
 
 ## Portainer Deployment Sketch
@@ -103,8 +111,8 @@ Short version:
 5. Start the stack and confirm:
 
 ```powershell
-Invoke-RestMethod http://<host>:8000/api/health/live
-Invoke-RestMethod http://<host>:8000/api/health/ready
+Invoke-RestMethod http://<host>:5173/api/health/live
+Invoke-RestMethod http://<host>:5173/api/health/ready
 ```
 
 6. Open the UI at:
@@ -122,7 +130,7 @@ $env:VANTAGE_AGENT_SHARED_TOKEN = "<same-token-as-control-plane>"
 .\scripts\check-setup.ps1 `
   -ComposeFile docker-compose.prod.yml `
   -RemoteAgentUrl http://<remote-agent-ip>:9110 `
-  -ControlPlaneUrl http://<control-plane-host>:8000
+  -ControlPlaneUrl http://<control-plane-host>:5173
 ```
 
 The check covers Docker availability, Compose configuration, token presence, auth mode, optional audit signing key, bootstrap config presence, optional SQLite path parent directory, backend readiness, and remote-agent reachability.
@@ -138,7 +146,8 @@ Recommended production environment:
 ```text
 VANTAGE_EXTERNAL_API_TOKEN=<generated-token>
 VANTAGE_WEBHOOK_URL=http://<automation-host>:<port>/<path>
-VANTAGE_WEBHOOK_ALLOWED_HOSTS=<automation-host>
+VANTAGE_WEBHOOK_ALLOWED_HOSTS=<automation-host>:<port>
+VANTAGE_WEBHOOK_ALLOW_PRIVATE_NETWORKS=1
 VANTAGE_EMAIL_SMTP_HOST=<smtp-host>
 VANTAGE_EMAIL_SMTP_PORT=587
 VANTAGE_EMAIL_SMTP_USERNAME=<smtp-user>
@@ -151,10 +160,10 @@ VANTAGE_EMAIL_USE_TLS=1
 Common checks:
 
 ```powershell
-Invoke-RestMethod http://<control-plane-host>:8000/api/integrations/events `
+Invoke-RestMethod http://<control-plane-host>:5173/api/integrations/events `
   -Headers @{ "X-Vantage-Api-Key" = "<external-api-token>" }
 
-Invoke-RestMethod http://<control-plane-host>:8000/api/integrations/reports/operator.md `
+Invoke-RestMethod http://<control-plane-host>:5173/api/integrations/reports/operator.md `
   -Headers @{ "X-Vantage-Api-Key" = "<external-api-token>" }
 ```
 
@@ -172,7 +181,7 @@ The worker writes Markdown reports on the cadence set by `report_schedule_interv
 Check integration health from the UI panel or API:
 
 ```powershell
-Invoke-RestMethod http://<control-plane-host>:8000/api/integrations/health
+Invoke-RestMethod http://<control-plane-host>:5173/api/integrations/health
 ```
 
 ## Token Rotation
@@ -214,7 +223,7 @@ Copy the repository, release bundle, or `agent/` plus `deploy/agent/` files onto
 ```bash
 sudo VANTAGE_AGENT_SHARED_TOKEN="<same-token-as-control-plane>" \
   VANTAGE_AGENT_NODE_ID="<your-node-id>" \
-  VANTAGE_AGENT_OLLAMA_BASE_URLS="http://127.0.0.1:11434" \
+  VANTAGE_AGENT_OLLAMA_BASE_URLS="http://127.0.0.1:11400" \
   bash deploy/agent/install.sh
 ```
 
@@ -251,7 +260,7 @@ Invoke-RestMethod http://<remote-agent-ip>:9110/health -Headers @{ Authorization
 The control plane should show the node as healthy:
 
 ```powershell
-Invoke-RestMethod http://<control-plane-host>:8000/api/nodes
+Invoke-RestMethod http://<control-plane-host>:5173/api/nodes
 ```
 
 ## Health Checks And Logs
@@ -318,7 +327,7 @@ Restore only while the backend is stopped:
 docker compose -f docker-compose.prod.yml stop backend
 Copy-Item backups/<backup-file>.sqlite3 <database-path-or-mounted-volume-file> -Force
 docker compose -f docker-compose.prod.yml start backend
-Invoke-RestMethod http://<host>:8000/api/health/ready
+Invoke-RestMethod http://<host>:5173/api/health/ready
 ```
 
 For always-on deployments, evaluate Litestream or another WAL-aware backup tool once Vantage is running continuously.

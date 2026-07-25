@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class HealthResponse(BaseModel):
@@ -49,13 +49,13 @@ class RunsResponse(BaseModel):
 
 
 class CapabilityCheckRequest(BaseModel):
-    model_name: str
-    prompt: str | None = None
+    model_name: str = Field(min_length=1, max_length=255)
+    prompt: str | None = Field(default=None, max_length=16000)
 
 
 class EvalAttemptRequest(BaseModel):
-    model_name: str
-    prompt: str
+    model_name: str = Field(min_length=1, max_length=255)
+    prompt: str = Field(min_length=1, max_length=16000)
     expected_json: dict | None = None
     score_type: str | None = None
     score_config_json: dict | None = None

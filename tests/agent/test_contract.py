@@ -4,6 +4,15 @@ from agent.app import collectors
 from agent.app.main import app
 
 
+CONTRACT_TEST_TOKEN = "contract-test-token-00000000000000000000"
+
+
+def _authenticated_client(monkeypatch) -> TestClient:
+    monkeypatch.setenv("VANTAGE_AGENT_SHARED_TOKEN", CONTRACT_TEST_TOKEN)
+    monkeypatch.setenv("VANTAGE_AGENT_AUTH_MODE", "bearer")
+    return TestClient(app, headers={"Authorization": f"Bearer {CONTRACT_TEST_TOKEN}"})
+
+
 def test_agent_reports_configured_node_id(monkeypatch) -> None:
     monkeypatch.setenv("VANTAGE_AGENT_NODE_ID", "worker-alpha")
 
@@ -21,7 +30,7 @@ def test_agent_exposes_health_gpu_and_models(monkeypatch) -> None:
         lambda: [{"model_name": "qwen3.6:latest", "model_digest": "sha256:abc", "available": True}],
     )
 
-    client = TestClient(app)
+    client = _authenticated_client(monkeypatch)
 
     assert client.get("/health").json()["status"] == "ok"
     assert client.get("/gpu").json()["gpus"][0]["name"] == "RTX 3090"
@@ -68,7 +77,7 @@ def test_agent_exposes_runs_and_capability_check(monkeypatch) -> None:
         },
     )
 
-    client = TestClient(app)
+    client = _authenticated_client(monkeypatch)
 
     assert client.get("/runs").json()["runs"][0]["run_id"] == "run-1"
     assert client.post("/capability-check", json={"model_name": "qwen3.6:latest"}).json()["status"] == "success"
@@ -94,7 +103,7 @@ def test_agent_exposes_eval_attempt(monkeypatch) -> None:
         },
     )
 
-    client = TestClient(app)
+    client = _authenticated_client(monkeypatch)
 
     response = client.post(
         "/eval-attempt",
@@ -103,3 +112,14 @@ def test_agent_exposes_eval_attempt(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json()["detail_type"] == "eval_attempt"
+
+
+def test_agent_rejects_oversized_eval_prompt(monkeypatch) -> None:
+    client = _authenticated_client(monkeypatch)
+
+    response = client.post(
+        "/eval-attempt",
+        json={"model_name": "qwen3.6:latest", "prompt": "x" * 16001},
+    )
+
+    assert response.status_code == 422

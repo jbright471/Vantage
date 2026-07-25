@@ -63,8 +63,9 @@ From the repository root:
 Run the public-safe demo first. Demo mode seeds synthetic nodes, models, runs, warnings, routing policies, and eval history so you can evaluate the UI without exposing or configuring real infrastructure.
 
 ```powershell
-$token = python -c "import secrets; print(secrets.token_urlsafe(48))"
-(Get-Content .env.example) -replace '^VANTAGE_AGENT_SHARED_TOKEN=.*', "VANTAGE_AGENT_SHARED_TOKEN=$token" | Set-Content .env
+Copy-Item .env.example .env
+.\scripts\rotate-agent-token.ps1 -EnvFile .env -Apply
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply
 (Get-Content .env) -replace '^VANTAGE_DEMO_MODE=.*', "VANTAGE_DEMO_MODE=1" | Set-Content .env
 docker compose up --build -d
 ```
@@ -74,6 +75,12 @@ Open:
 - UI: [http://127.0.0.1:5173](http://127.0.0.1:5173)
 - Backend API: [http://127.0.0.1:8000](http://127.0.0.1:8000)
 - Backend readiness: [http://127.0.0.1:8000/api/health/ready](http://127.0.0.1:8000/api/health/ready)
+
+The UI prompts for `VANTAGE_CONTROL_PLANE_TOKEN`. Copy it to the clipboard without displaying it:
+
+```powershell
+((Get-Content .env | Where-Object { $_ -like 'VANTAGE_CONTROL_PLANE_TOKEN=*' }) -split '=', 2)[1] | Set-Clipboard
+```
 
 Useful commands:
 
@@ -94,10 +101,14 @@ docker compose up --build -d
 Production-style Compose:
 
 ```powershell
-$env:VANTAGE_AGENT_SHARED_TOKEN = python -c "import secrets; print(secrets.token_urlsafe(48))"
-docker compose -f docker-compose.prod.yml up --build -d
-Invoke-RestMethod http://127.0.0.1:8000/api/health/ready
+Copy-Item .env.production.example .env.production
+.\scripts\rotate-agent-token.ps1 -EnvFile .env.production -Apply
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env.production -Apply
+docker compose -f docker-compose.prod.yml --env-file .env.production up --build -d
+Invoke-RestMethod http://127.0.0.1:5173/api/health/ready
 ```
+
+Production Compose publishes only the frontend, bound to `127.0.0.1` by default; the backend remains on the internal Compose network. Set `VANTAGE_BIND_ADDRESS` to a specific trusted LAN/VPN interface only when remote access is required.
 
 ## Configuration
 
@@ -136,6 +147,9 @@ Signed audit bundles require `VANTAGE_AUDIT_SIGNING_KEY`. Stronger node-agent tr
 - [Audit Exports](./docs/security/AUDIT_EXPORTS.md)
 - [Action Idempotency Keys](./docs/security/IDEMPOTENCY_KEYS.md)
 - [Release Security Checklist](./docs/security/RELEASE_SECURITY_CHECKLIST.md)
+- [Security Audit](./SECURITY_AUDIT.md)
+- [Threat Model](./docs/security/THREAT_MODEL.md)
+- [Single-operator Authentication ADR](./docs/architecture/ADR-001-single-operator-authentication.md)
 - [mTLS Research](./docs/security/MTLS_RESEARCH.md)
 - [Integrations](./docs/integrations/INTEGRATIONS.md)
 - [n8n Examples](./docs/integrations/N8N_EXAMPLES.md)
@@ -154,6 +168,8 @@ Signed audit bundles require `VANTAGE_AUDIT_SIGNING_KEY`. Stronger node-agent tr
 ## Project Status
 
 Vantage v0.1.0 ships the control-plane foundation, operator attention, diagnostics, guided remediation, Eval Lab, Eval Intelligence, advanced local-LLM judge foundations, routing-policy control, production packaging, demo mode, setup wizard, public product assets, open-source onboarding materials, signed audit bundles, optional HMAC agent authentication, replay protection, action allowlists, security-warning surfacing, managed eval presets, integration health, email/report automation, and local-first integration endpoints. The current version is useful for a single local AI operator and remains intentionally conservative about distributed control and host-level remediation.
+
+The unreleased tree adds fail-closed operator sessions, CSRF protection, resource limits, non-root containers, hardened network defaults, automated security scanning, SBOM generation, and the evidence-backed release gates documented in [SECURITY_AUDIT.md](./SECURITY_AUDIT.md).
 
 Later Research decisions are tracked in `docs/architecture/LATER_RESEARCH_DECISIONS.md`. SQLite remains the default database, but `VANTAGE_DATABASE_URL` can now point at a non-SQLite SQLAlchemy URL when an operator wants to experiment with Postgres-backed storage.
 

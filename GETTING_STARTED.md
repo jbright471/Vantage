@@ -7,13 +7,22 @@ This guide is for operators evaluating Vantage from a fresh clone.
 Demo mode seeds safe synthetic data so you can inspect the UI, exports, routing, evals, and warnings before connecting real hardware.
 
 ```powershell
-$token = python -c "import secrets; print(secrets.token_urlsafe(48))"
-(Get-Content .env.example) -replace '^VANTAGE_AGENT_SHARED_TOKEN=.*', "VANTAGE_AGENT_SHARED_TOKEN=$token" | Set-Content .env
+Copy-Item .env.example .env
+.\scripts\rotate-agent-token.ps1 -EnvFile .env -Apply
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply
 (Get-Content .env) -replace '^VANTAGE_DEMO_MODE=.*', "VANTAGE_DEMO_MODE=1" | Set-Content .env
 docker compose up --build -d
 ```
 
 Open [http://127.0.0.1:5173](http://127.0.0.1:5173).
+
+The browser prompts for the operator token. Copy it to the clipboard without printing it to the terminal:
+
+```powershell
+((Get-Content .env | Where-Object { $_ -like 'VANTAGE_CONTROL_PLANE_TOKEN=*' }) -split '=', 2)[1] | Set-Clipboard
+```
+
+Vantage exchanges the token for a signed, HttpOnly browser session. The token is not stored in browser local storage.
 
 If you want a frozen demo without live polling, also set:
 
@@ -27,7 +36,7 @@ Add-Content .env "VANTAGE_ENABLE_BACKGROUND_POLLING=0"
 2. Replace example node names and URLs with your own local hosts.
 3. Keep real bearer tokens in `.env`, never in TOML or committed docs.
 4. Start the backend and frontend with `docker compose up --build -d`.
-5. Open the in-app Operator Guide from the `Docs` button.
+5. Sign in with `VANTAGE_CONTROL_PLANE_TOKEN` and open the in-app Operator Guide from the `Docs` button.
 
 `control-plane` and `remote-worker` are example node names only. Use names that make sense for your homelab.
 
@@ -50,7 +59,7 @@ The wizard helps with:
 - setting `VANTAGE_LOCAL_OLLAMA_BASE_URLS`
 - restarting and verifying the stack
 
-The wizard does not write files, store secrets, or change routing state. It generates snippets so the operator can review and apply them deliberately.
+The wizard does not write files, store secrets, or change routing state. It generates snippets so the operator can review and apply them deliberately. Operator and session secrets must already exist; generate them with `scripts/rotate-control-plane-secrets.ps1` before starting Vantage.
 
 ## When Something Looks Wrong
 

@@ -240,7 +240,7 @@ def test_set_local_ollama_endpoint_action_rejects_last_enabled_endpoint() -> Non
     with TestClient(app) as client:
         response = client.patch(
             "/api/actions/nodes/control-plane/local-ollama-endpoint",
-            json={"endpoint_url": "http://127.0.0.1:11434", "disabled": True},
+            json={"endpoint_url": "http://127.0.0.1:11400", "disabled": True},
         )
 
     assert response.status_code == 400

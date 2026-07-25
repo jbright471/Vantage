@@ -37,6 +37,8 @@ $files = @(
     "RELEASE_ANNOUNCEMENT_TEMPLATE.md",
     "LOCAL_NODE_AGENT.md",
     "SECURITY.md",
+    "SECURITY_AUDIT.md",
+    ".security/findings.json",
     "CONTRIBUTING.md",
     "CODE_OF_CONDUCT.md",
     "SUPPORT.md",
@@ -70,6 +72,7 @@ $directories = @(
     "scripts/build-release.ps1",
     "scripts/check-setup.ps1",
     "scripts/rotate-agent-token.ps1",
+    "scripts/rotate-control-plane-secrets.ps1",
     "scripts/verify-audit-bundle.py"
 )
 
@@ -82,12 +85,25 @@ foreach ($file in $files) {
     }
 }
 
-foreach ($item in $directories) {
-    $source = Join-Path $root $item
-    if (Test-Path $source) {
-        $destination = Join-Path $staging $item
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    throw "git is required to build a release bundle from tracked source files"
+}
+
+$trackedDirectoryFiles = @(
+    foreach ($item in $directories) {
+        git -C $root ls-files -- $item
+        if ($LASTEXITCODE -ne 0) {
+            throw "git ls-files failed while collecting release path: $item"
+        }
+    }
+)
+
+foreach ($relativePath in ($trackedDirectoryFiles | Sort-Object -Unique)) {
+    $source = Join-Path $root $relativePath
+    if (Test-Path -LiteralPath $source -PathType Leaf) {
+        $destination = Join-Path $staging $relativePath
         New-Item -ItemType Directory -Force (Split-Path -Parent $destination) | Out-Null
-        Copy-Item -LiteralPath $source -Destination $destination -Recurse
+        Copy-Item -LiteralPath $source -Destination $destination
     }
 }
 
@@ -104,12 +120,13 @@ This bundle is safe to share. It includes production Compose assets, source code
 Before deployment:
 
 1. Copy `.env.production.example` to `.env.production`.
-2. Generate and set `VANTAGE_AGENT_SHARED_TOKEN`.
-3. Optionally generate and set `VANTAGE_AUDIT_SIGNING_KEY` for signed audit bundles.
-4. Optionally generate and set `VANTAGE_EXTERNAL_API_TOKEN` before connecting n8n or scripts.
-5. Edit `config/vantage.bootstrap.toml` for your node names and agent URLs.
-6. Run `scripts/check-setup.ps1`.
-7. Start with `docker compose -f docker-compose.prod.yml --env-file .env.production up --build -d`.
+2. Run `scripts/rotate-agent-token.ps1 -EnvFile .env.production -Apply`.
+3. Run `scripts/rotate-control-plane-secrets.ps1 -EnvFile .env.production -Apply`.
+4. Optionally generate and set `VANTAGE_AUDIT_SIGNING_KEY` for signed audit bundles.
+5. Optionally generate and set `VANTAGE_EXTERNAL_API_TOKEN` before connecting n8n or scripts.
+6. Edit `config/vantage.bootstrap.toml` for your node names and agent URLs.
+7. Run `scripts/check-setup.ps1 -EnvFile .env.production`.
+8. Start with `docker compose -f docker-compose.prod.yml --env-file .env.production up --build -d`.
 "@ | Set-Content -Path (Join-Path $staging "RELEASE_NOTES.md") -Encoding utf8
 
 if (Test-Path $zipPath) {

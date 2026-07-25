@@ -1,4 +1,5 @@
 fastapi>=0.116.0
 httpx>=0.28.0
+idna>=3.15
 pydantic>=2.11.0
 uvicorn>=0.35.0

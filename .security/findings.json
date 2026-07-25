@@ -1,0 +1,286 @@
+{
+  "schema_version": "1.0",
+  "audit": {
+    "mode": "patch-and-pre-release-verification",
+    "target": "jbright471/Vantage local working tree",
+    "base_commit": "75344c122ca6dda5e9d1cc025fb25f24971a112c",
+    "generated_at": "2026-07-25T19:17:37.1978345Z",
+    "release_decision": "CONDITIONAL_GO",
+    "decision_scope": "private release candidate",
+    "open_confirmed_p0": 0,
+    "open_confirmed_p1": 0,
+    "accepted_risks": [],
+    "limitations": [
+      "The deleted remote release asset was unavailable for rescanning.",
+      "CodeQL and dependency review require a GitHub-hosted workflow run before they are verified.",
+      "No remote agent, live LLM/router, SMTP server, or webhook receiver was contacted."
+    ]
+  },
+  "findings": [
+    {
+      "id": "VC-04-001",
+      "baseline_control": "VC-04",
+      "title": "Human control-plane routes lacked authentication",
+      "severity": "P0",
+      "confidence": "confirmed",
+      "status": "fixed",
+      "locations": [
+        "backend/app/security/control_plane.py",
+        "backend/app/api/control_plane_auth.py",
+        "frontend/src/features/auth/AuthGate.tsx"
+      ],
+      "root_cause": "The operator API had no server-side identity or session boundary.",
+      "impact": "A reachable client could read operational data, mutate configuration, and start costly operations.",
+      "remediation": "Added fail-closed middleware, a signed HttpOnly session, Bearer support, CSRF validation, expiry, login throttling, and strict browser headers.",
+      "regression_evidence": [
+        "tests/backend/test_control_plane_auth.py",
+        "frontend/src/features/auth/AuthGate.test.tsx"
+      ],
+      "secret_rotation_required": false
+    },
+    {
+      "id": "VC-17-001",
+      "baseline_control": "VC-17",
+      "title": "Remote agent accepted requests without a configured or strong token",
+      "severity": "P0",
+      "confidence": "confirmed",
+      "status": "fixed",
+      "locations": [
+        "agent/app/auth.py",
+        "deploy/agent/install.sh"
+      ],
+      "root_cause": "Missing authentication configuration was treated as an opt-out and weak tokens were accepted.",
+      "impact": "A reachable agent could expose telemetry or execute model/eval actions without adequate authentication.",
+      "remediation": "Missing or shorter-than-32-character tokens now fail closed with HTTP 503; new installs reject weak tokens.",
+      "regression_evidence": [
+        "tests/agent/test_auth.py::test_agent_fails_closed_when_shared_token_is_missing",
+        "tests/agent/test_auth.py::test_agent_fails_closed_when_shared_token_is_weak"
+      ],
+      "secret_rotation_required": false
+    },
+    {
+      "id": "VC-17-002",
+      "baseline_control": "VC-17",
+      "title": "Integration automation accepted requests without a configured token",
+      "severity": "P0",
+      "confidence": "confirmed",
+      "status": "fixed",
+      "locations": [
+        "backend/app/api/auth.py",
+        "backend/app/api/integrations.py"
+      ],
+      "root_cause": "Missing external API authentication was treated as an opt-out and one route omitted the dependency.",
+      "impact": "Unauthenticated imports, exports, reports, inventory, email, or webhook dispatch could be reached.",
+      "remediation": "Every automation route now fails closed and requires a distinct key of at least 32 characters.",
+      "regression_evidence": [
+        "tests/backend/test_integrations_api.py"
+      ],
+      "secret_rotation_required": false
+    },
+    {
+      "id": "VC-07-001",
+      "baseline_control": "VC-07",
+      "title": "Webhook dispatch allowed unrestricted targets and retained secret URLs",
+      "severity": "P0",
+      "confidence": "confirmed",
+      "status": "fixed",
+      "locations": [
+        "backend/app/services/integrations.py"
+      ],
+      "root_cause": "An empty allowlist allowed any HTTP(S) destination, resolved address classes were unchecked, redirects were allowed, and complete URLs were persisted.",
+      "impact": "SSRF against local/private/metadata services and disclosure of signed webhook URL paths.",
+      "remediation": "Required an exact authority allowlist, validated resolved addresses, disabled redirects, made private networks opt-in, applied timeouts, and redacted URLs.",
+      "regression_evidence": [
+        "tests/backend/test_integrations_api.py"
+      ],
+      "secret_rotation_required": "conditional-if-a-real-webhook-url-was-previously-exposed"
+    },
+    {
+      "id": "VC-01-001",
+      "baseline_control": "VC-01",
+      "title": "Docker ports defaulted to every host interface",
+      "severity": "P0",
+      "confidence": "confirmed",
+      "status": "fixed",
+      "locations": [
+        "docker-compose.yml",
+        "docker-compose.prod.yml"
+      ],
+      "root_cause": "Published ports omitted the host address.",
+      "impact": "Network peers could reach application services unintentionally.",
+      "remediation": "Defaulted published ports to 127.0.0.1 and removed the production backend publication.",
+      "regression_evidence": [
+        "docker compose ps reports only 127.0.0.1 publishers"
+      ],
+      "secret_rotation_required": false
+    },
+    {
+      "id": "VC-15-001",
+      "baseline_control": "VC-15",
+      "title": "Frontend development dependency graph contained known vulnerabilities",
+      "severity": "P1",
+      "confidence": "confirmed",
+      "status": "fixed",
+      "locations": [
+        "frontend/package-lock.json"
+      ],
+      "root_cause": "The lockfile selected vulnerable build and test dependencies.",
+      "impact": "Development and CI supply-chain exposure.",
+      "remediation": "Updated the lock graph within declared compatible versions.",
+      "regression_evidence": [
+        "npm audit: 0 vulnerabilities",
+        "37 frontend tests passed",
+        "production frontend build passed"
+      ],
+      "secret_rotation_required": false
+    },
+    {
+      "id": "VC-15-002",
+      "baseline_control": "VC-15",
+      "title": "CI used an EOL runtime, mutable Actions, and overbroad publication credentials",
+      "severity": "P1",
+      "confidence": "confirmed",
+      "status": "fixed",
+      "locations": [
+        ".github/workflows/release.yml",
+        ".github/workflows/pages.yml",
+        ".github/workflows/security.yml"
+      ],
+      "root_cause": "Node 20, mutable action tags, and combined build/publication permissions expanded supply-chain risk.",
+      "impact": "Unsupported build runtime and avoidable workflow-token exposure.",
+      "remediation": "Moved to Node 24, pinned every Action to a full SHA, defaulted permissions to read-only, and isolated write-token publication.",
+      "regression_evidence": [
+        "workflow YAML parses",
+        "all uses entries contain 40-character SHAs"
+      ],
+      "secret_rotation_required": false
+    },
+    {
+      "id": "VC-21-001",
+      "baseline_control": "VC-21",
+      "title": "Release bundles copied untracked cache and bytecode artifacts",
+      "severity": "P1",
+      "confidence": "confirmed",
+      "status": "fixed",
+      "locations": [
+        "scripts/build-release.ps1"
+      ],
+      "root_cause": "Recursive directory copies included local untracked content.",
+      "impact": "Release contamination, stale code, local metadata, or secret leakage.",
+      "remediation": "Release inputs now come only from git ls-files.",
+      "regression_evidence": [
+        "149-entry smoke ZIP: 0 forbidden entries and 0 required entries missing"
+      ],
+      "secret_rotation_required": "conditional-if-the-deleted-release-contained-a-real-secret"
+    },
+    {
+      "id": "VC-21-002",
+      "baseline_control": "VC-21",
+      "title": "Production containers ran as root",
+      "severity": "P1",
+      "confidence": "confirmed",
+      "status": "fixed",
+      "locations": [
+        "Dockerfile.backend.prod",
+        "frontend/Dockerfile.prod",
+        "docker-compose.prod.yml"
+      ],
+      "root_cause": "Production images did not declare unprivileged runtime users.",
+      "impact": "A container compromise would have broader filesystem and process impact.",
+      "remediation": "Added unprivileged users, unprivileged frontend port, read-only filesystems, tmpfs mounts, dropped capabilities, and no-new-privileges.",
+      "regression_evidence": [
+        "backend runtime UID 10001",
+        "frontend runtime UID 101",
+        "production health checks and proxy passed"
+      ],
+      "secret_rotation_required": false
+    },
+    {
+      "id": "VC-06-001",
+      "baseline_control": "VC-06",
+      "title": "Costly AI and evaluation routes lacked global abuse bounds",
+      "severity": "P1",
+      "confidence": "confirmed",
+      "status": "fixed",
+      "locations": [
+        "backend/app/security/resource_limits.py",
+        "backend/app/services/evals.py",
+        "agent/app/resource_limits.py",
+        "agent/app/schemas.py"
+      ],
+      "root_cause": "Authenticated callers could initiate costly work without shared rate, concurrency, input, or output limits.",
+      "impact": "Resource exhaustion, unexpected model cost, and oversized stored or returned data.",
+      "remediation": "Added bounded rate/concurrency leases plus prompt, suite, description, output-token, and response-size caps.",
+      "regression_evidence": [
+        "tests/backend/test_resource_limits.py",
+        "tests/agent/test_agent_resource_limits.py",
+        "134 Python tests passed"
+      ],
+      "secret_rotation_required": false
+    },
+    {
+      "id": "VC-15-003",
+      "baseline_control": "VC-15",
+      "title": "Dependency resolution could select a vulnerable idna release",
+      "severity": "P1",
+      "confidence": "confirmed",
+      "status": "fixed",
+      "locations": [
+        "pyproject.toml",
+        "deploy/agent/requirements-agent.txt"
+      ],
+      "root_cause": "The transitive dependency had no safe direct lower bound in standalone installation manifests.",
+      "impact": "A fresh installation could resolve an affected package version.",
+      "remediation": "Added idna>=3.15 to both dependency manifests.",
+      "regression_evidence": [
+        "OSV-Scanner: 0 vulnerabilities",
+        "pip-audit: 0 vulnerabilities",
+        "final backend image: 0 fixed HIGH/CRITICAL vulnerabilities"
+      ],
+      "secret_rotation_required": false
+    }
+  ],
+  "release_gates": [
+    {
+      "id": "GATE-001",
+      "owner": "repository-owner",
+      "status": "open",
+      "action": "Run .github/workflows/security.yml on GitHub and require a successful result before public release.",
+      "reason": "CodeQL and dependency review cannot be verified locally."
+    },
+    {
+      "id": "GATE-002",
+      "owner": "repository-owner",
+      "status": "open",
+      "action": "Enable protected branches, required checks, secret scanning, push protection, Dependabot alerts, and private vulnerability reporting.",
+      "reason": "These controls are repository settings rather than working-tree code."
+    },
+    {
+      "id": "GATE-003",
+      "owner": "deployment-owner",
+      "status": "open-for-non-loopback-only",
+      "action": "Terminate TLS, set VANTAGE_SESSION_COOKIE_SECURE=1, restrict ingress, configure egress controls, and use managed secrets before remote exposure.",
+      "reason": "The current verified deployment is loopback-only."
+    },
+    {
+      "id": "GATE-004",
+      "owner": "deployment-owner",
+      "status": "open-for-production-only",
+      "action": "Configure encrypted off-host backup retention, periodic restore drills, and external alert delivery.",
+      "reason": "Only a local synthetic restore was exercised."
+    }
+  ],
+  "verification": {
+    "python_tests": "134 passed",
+    "frontend_tests": "37 passed",
+    "npm_audit": "0 vulnerabilities",
+    "pip_audit": "0 vulnerabilities",
+    "osv_scanner": "0 vulnerabilities",
+    "gitleaks": "0 findings in 32-commit history and tracked working tree",
+    "semgrep": "0 findings across 225 rules and 91 files",
+    "trivy_backend": "0 fixed HIGH/CRITICAL vulnerabilities",
+    "trivy_frontend": "0 fixed HIGH/CRITICAL vulnerabilities",
+    "authenticated_zap": "0 failures; 2 informational observations",
+    "release_smoke": "149 entries; 0 forbidden; 0 required missing"
+  }
+}

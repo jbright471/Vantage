@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6
 
 WORKDIR /app
 
@@ -11,7 +11,12 @@ COPY agent ./agent
 COPY config ./config
 
 RUN python -m pip install --upgrade pip \
-    && python -m pip install --no-cache-dir -e ".[postgres]" watchfiles
+    && python -m pip install --no-cache-dir -e ".[postgres]" watchfiles \
+    && groupadd --system --gid 10001 vantage \
+    && useradd --system --uid 10001 --gid vantage --home-dir /nonexistent --shell /usr/sbin/nologin vantage \
+    && chown -R vantage:vantage /app
+
+USER 10001:10001
 
 EXPOSE 8000
 

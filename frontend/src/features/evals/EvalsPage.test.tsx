@@ -494,16 +494,18 @@ describe("EvalsPage", () => {
     });
     expect(screen.getByText("Every 30 min")).toBeTruthy();
     expect(screen.getByText("Auto-execute")).toBeTruthy();
-    expect(screen.getByText(/Next queue:/)).toBeTruthy();
-    expect(screen.getByText(/8:30/)).toBeTruthy();
+    expect(
+      screen.getByText(`Next queue: ${new Date(createdSchedule.next_run_at).toLocaleString()}`),
+    ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /^queue now$/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/1 run queued for llama3.2:latest on control-plane/i)).toBeTruthy();
     });
-    expect(screen.getByText(/Last queued:/)).toBeTruthy();
-    expect(screen.getAllByText(/8:05/).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(`Last queued: ${new Date(queuedSchedule.last_queued_at).toLocaleString()}`),
+    ).toBeTruthy();
     expect(screen.getByText(/Queued eval case 'JSON Answer'/)).toBeTruthy();
     expect(globalThis.fetch).toHaveBeenCalledWith("/api/evals/schedules/schedule-1/queue-now", {
       method: "POST",

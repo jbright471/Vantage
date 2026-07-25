@@ -10,7 +10,7 @@ These examples assume Vantage is reachable from n8n on a trusted LAN or VPN and 
 4. Set URL:
 
 ```text
-http://<vantage-host>:8000/api/integrations/events?limit=50
+http://<vantage-host>:5173/api/integrations/events?limit=50
 ```
 
 5. Add header:
@@ -26,7 +26,7 @@ X-Vantage-Api-Key: <external-api-token>
 Use Vantage's built-in webhook dispatcher when you want Vantage to format the notification:
 
 ```http
-POST http://<vantage-host>:8000/api/integrations/webhooks/dispatch
+POST http://<vantage-host>:5173/api/integrations/webhooks/dispatch
 ```
 
 Body:
@@ -42,13 +42,14 @@ Body:
 ```
 
 Set `VANTAGE_SLACK_WEBHOOK_URL` in the Vantage backend environment.
+The target hostname must be present in `VANTAGE_WEBHOOK_ALLOWED_HOSTS`. For a private RFC1918/ULA receiver, also set `VANTAGE_WEBHOOK_ALLOW_PRIVATE_NETWORKS=1`.
 
 ## Import Router Logs
 
 If an external local AI router emits logs, normalize them in n8n and post:
 
 ```http
-POST http://<vantage-host>:8000/api/integrations/import/router-runs
+POST http://<vantage-host>:5173/api/integrations/import/router-runs
 ```
 
 Body:
@@ -80,7 +81,7 @@ Vantage stores each entry as a durable `router_request` Run.
 Use an HTTP Request node:
 
 ```text
-GET http://<vantage-host>:8000/api/integrations/reports/operator.md
+GET http://<vantage-host>:5173/api/integrations/reports/operator.md
 ```
 
 Then write the response body into an Obsidian vault folder using your preferred file integration.

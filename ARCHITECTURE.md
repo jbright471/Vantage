@@ -9,7 +9,7 @@ The examples below use `control-plane` as an example control-plane node name and
 - `Remote agent`: lightweight FastAPI process on Linux worker nodes. In examples, one worker is named `remote-worker`.
 - `Integration surface`: optional API-token-protected endpoints for external automation, webhook dispatch, router-log import, Markdown reports, and collector discovery.
 
-The system is intentionally an observer and coordinator. It does not replace Ollama, routers, schedulers, or host services.
+The system is intentionally an observer and coordinator. It does not replace local LLM runtimes, routers, schedulers, or host services.
 
 ## Runtime Shape
 
@@ -20,9 +20,9 @@ flowchart LR
     DB["SQLite<br/>vantage.sqlite3"]
     LocalCollectors["Local Collectors<br/>example: control-plane"]
     Integrations["Integration Tools<br/>n8n / scripts / webhooks"]
-    OllamaJ["Local Ollama Endpoints<br/>11434 / 11435"]
+    OllamaJ["Local Router / LLM Endpoints<br/>Jedi: 11400"]
     Agent["Remote Agent<br/><remote-agent-ip>:9110<br/>example: remote-worker"]
-    OllamaB["Remote Ollama<br/>11435"]
+    OllamaB["Remote LLM Endpoint<br/>Bastet: 11436"]
     GPU["nvidia-smi"]
 
     Browser -- "SSE /api/stream" --> Backend

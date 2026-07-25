@@ -88,11 +88,11 @@ describe("SetupWizardDrawer", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.change(screen.getByLabelText("Node name"), { target: { value: "Render Worker" } });
     expect(screen.getByText(/node_id = "render-worker"/)).toBeTruthy();
-    expect(screen.getByText(/base_url = "http:\/\/10.0.0.25:9110"/)).toBeTruthy();
+    expect(screen.getByText(/base_url = "http:\/\/worker.example.invalid:9110"/)).toBeTruthy();
     expect(screen.getByText(/VANTAGE_AGENT_NODE_ID=render-worker/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByText(/VANTAGE_LOCAL_OLLAMA_BASE_URLS=http:\/\/host.docker.internal:11434/)).toBeTruthy();
+    expect(screen.getByText(/VANTAGE_LOCAL_OLLAMA_BASE_URLS=http:\/\/host.docker.internal:11400/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByText("Restart commands")).toBeTruthy();

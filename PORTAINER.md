@@ -37,17 +37,19 @@ Create Portainer stack environment variables or secrets:
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
+| `VANTAGE_BIND_ADDRESS` | No | Host interface for the frontend port. Defaults to `127.0.0.1`; set a specific trusted LAN/VPN address for remote access. |
 | `VANTAGE_AGENT_SHARED_TOKEN` | Yes | Shared token used between backend and agents. |
 | `VANTAGE_AGENT_AUTH_MODE` | No | `bearer` by default; use `hmac` for signed requests and replay protection. |
 | `VANTAGE_AGENT_ALLOWED_ACTIONS` | No | Agent allowlist. Default: `read,capability_check,eval_attempt`. |
 | `VANTAGE_AUDIT_SIGNING_KEY` | No | Required only for signed audit bundle exports. |
 | `VANTAGE_AUDIT_KEY_ID` | No | Operator-readable key ID written into signed audit bundle metadata. |
-| `VANTAGE_EXTERNAL_API_TOKEN` | No | Protects `/api/integrations/*` for n8n, scripts, and external tools. |
+| `VANTAGE_EXTERNAL_API_TOKEN` | No | Enables authenticated integration automation; protected routes return `503` when it is absent. |
 | `VANTAGE_WEBHOOK_URL` | No | Generic webhook target for integration dispatch. |
 | `VANTAGE_SLACK_WEBHOOK_URL` | No | Slack-compatible webhook target. |
 | `VANTAGE_DISCORD_WEBHOOK_URL` | No | Discord-compatible webhook target. |
-| `VANTAGE_WEBHOOK_ALLOWED_HOSTS` | No | Optional comma-separated hostname allowlist for webhook dispatch. |
-| `VANTAGE_LOCAL_OLLAMA_BASE_URLS` | No | Comma-separated local Ollama endpoints reachable from the backend container. |
+| `VANTAGE_WEBHOOK_ALLOWED_HOSTS` | For webhooks | Required comma-separated exact hostname or `hostname:port` allowlist for webhook dispatch. |
+| `VANTAGE_WEBHOOK_ALLOW_PRIVATE_NETWORKS` | No | Defaults to `0`; set to `1` only for explicitly allowlisted RFC1918/ULA receivers on a trusted network. |
+| `VANTAGE_LOCAL_OLLAMA_BASE_URLS` | No | Comma-separated local Ollama-compatible/router endpoints reachable from the backend container. On Jedi, use `http://host.docker.internal:11400` from Docker or `http://127.0.0.1:11400` from the host. |
 | `VANTAGE_DATABASE_URL` | No | Overrides the default SQLite location. Production Compose defaults to `sqlite+pysqlite:////data/vantage.sqlite3`; Postgres URLs can use `postgresql+psycopg://...`. |
 
 Do not paste real tokens or audit signing keys into the Compose file, docs, screenshots, or GitHub issues.
@@ -91,8 +93,8 @@ Then replace:
 From an operator workstation:
 
 ```powershell
-Invoke-RestMethod http://<control-plane-host>:8000/api/health/live
-Invoke-RestMethod http://<control-plane-host>:8000/api/health/ready
+Invoke-RestMethod http://<control-plane-host>:5173/api/health/live
+Invoke-RestMethod http://<control-plane-host>:5173/api/health/ready
 ```
 
 Open the UI:
@@ -149,7 +151,7 @@ Install the remote agent on each Linux worker:
 ```bash
 sudo VANTAGE_AGENT_SHARED_TOKEN="<same-token-as-control-plane>" \
   VANTAGE_AGENT_NODE_ID="<your-node-id>" \
-  VANTAGE_AGENT_OLLAMA_BASE_URLS="http://127.0.0.1:11434" \
+  VANTAGE_AGENT_OLLAMA_BASE_URLS="http://127.0.0.1:11400" \
   bash deploy/agent/install.sh
 ```
 
@@ -169,5 +171,5 @@ $env:VANTAGE_AGENT_SHARED_TOKEN = "<same-token-as-control-plane>"
 .\scripts\check-setup.ps1 `
   -ComposeFile docker-compose.prod.yml `
   -RemoteAgentUrl http://<remote-agent-ip>:9110 `
-  -ControlPlaneUrl http://<control-plane-host>:8000
+  -ControlPlaneUrl http://<control-plane-host>:5173
 ```

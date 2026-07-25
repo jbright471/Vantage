@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Vantage eval preset browser-storage key (not a credential)"
+regexTarget = "secret"
+regexes = ['''^vantage\.evalIntelligencePresets\.v1$''']

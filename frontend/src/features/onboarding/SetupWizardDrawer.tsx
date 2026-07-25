@@ -40,7 +40,7 @@ function buildNodeToml(nodeName: string, nodeUrl: string, nodeRole: string): str
     "[[nodes]]",
     `node_id = "${nodeId}"`,
     `display_name = "${nodeName.trim() || "GPU Worker"}"`,
-    `base_url = "${nodeUrl.trim() || "http://10.0.0.25:9110"}"`,
+    `base_url = "${nodeUrl.trim() || "http://worker.example.invalid:9110"}"`,
     `role = "${nodeRole}"`,
     "enabled = true",
   ].join("\n");
@@ -56,7 +56,7 @@ function buildOllamaEnv(endpointList: string): string {
     .map((endpoint) => endpoint.trim())
     .filter(Boolean)
     .join(",");
-  return `VANTAGE_LOCAL_OLLAMA_BASE_URLS=${normalized || "http://host.docker.internal:11434"}`;
+  return `VANTAGE_LOCAL_OLLAMA_BASE_URLS=${normalized || "http://host.docker.internal:11400"}`;
 }
 
 function SetupCodeBlock({ label, value }: { label: string; value: string }) {
@@ -93,9 +93,9 @@ export function SetupWizardDrawer({
   const [activeStep, setActiveStep] = useState<WizardStep>("token");
   const [token, setToken] = useState(() => generateToken());
   const [nodeName, setNodeName] = useState("gpu-worker-a");
-  const [nodeUrl, setNodeUrl] = useState("http://10.0.0.25:9110");
+  const [nodeUrl, setNodeUrl] = useState("http://worker.example.invalid:9110");
   const [nodeRole, setNodeRole] = useState("remote");
-  const [ollamaEndpoints, setOllamaEndpoints] = useState("http://host.docker.internal:11434");
+  const [ollamaEndpoints, setOllamaEndpoints] = useState("http://host.docker.internal:11400");
 
   if (!isOpen) {
     return null;

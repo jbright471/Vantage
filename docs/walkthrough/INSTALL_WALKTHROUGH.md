@@ -14,8 +14,9 @@ Use demo mode so no private topology is visible:
 
 ```powershell
 Copy-Item .env.example .env
+.\scripts\rotate-agent-token.ps1 -EnvFile .env -Apply
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply
 (Get-Content .env) -replace '^VANTAGE_DEMO_MODE=.*', "VANTAGE_DEMO_MODE=1" | Set-Content .env
-(Get-Content .env) -replace '^VANTAGE_AGENT_SHARED_TOKEN=.*', "VANTAGE_AGENT_SHARED_TOKEN=<generated-token>" | Set-Content .env
 docker compose up --build -d
 ```
 
@@ -30,7 +31,7 @@ http://127.0.0.1:5173
 | Segment | Visual | Narration |
 | --- | --- | --- |
 | 1. Problem | Show a terminal, Ollama endpoint, and Vantage dashboard preview. | "Local AI setups grow sideways. Vantage gives operators one place to see what is actually happening." |
-| 2. Quickstart | Show `.env.example`, generated token, and `docker compose up --build -d`. | "The dev stack is Docker Compose. Secrets stay in ignored env files." |
+| 2. Quickstart | Show `.env.example`, the safe rotation commands, and `docker compose up --build -d` without displaying generated values. | "The dev stack is Docker Compose. Independent secrets stay in ignored env files." |
 | 3. Demo Mode | Show seeded nodes, models, runs, routing, and evals. | "Demo mode gives public-safe synthetic data for evaluation and screenshots." |
 | 4. Setup Wizard | Click `Launch setup wizard`; show token, node, Ollama, verify steps. | "The wizard generates snippets instead of secretly changing your machine." |
 | 5. Operator Loop | Open Nodes, Runs drawer, Routing dry-run, Eval Intelligence. | "Daily work is observe, diagnose, act deliberately, and audit every meaningful action." |
@@ -41,6 +42,7 @@ http://127.0.0.1:5173
 - Keep the browser zoom at 100%.
 - Use a 1440x1000 or 1600x1000 viewport for legibility.
 - Do not show real `.env` files with live tokens.
+- Copy the operator token to the clipboard off-camera before recording the login step.
 - Do not show private IP addresses or real hostnames.
 - Use `demo-control`, `demo-worker`, and placeholder URLs in all public clips.
 
