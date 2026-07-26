@@ -20,6 +20,7 @@ import {
   fetchEvalScoreHistory,
   fetchEvalSuites,
   importEvalSuite,
+  installStarterEvalSuite,
   queueEvalAttempt,
   queueEvalScheduleNow,
   saveEvalIntelligencePreset,
@@ -36,6 +37,7 @@ import {
   type ModelRecord,
   type RunRecord,
 } from "../../api/client";
+import { OverlayHeader, OverlaySurface } from "../../components/OverlaySurface";
 
 type EvalsPageProps = {
   models?: ModelRecord[];
@@ -92,7 +94,7 @@ function formatTimestamp(value: string | null | undefined): string {
     return value;
   }
 
-  return timestamp.toLocaleString();
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(timestamp);
 }
 
 function dedupeRuns(runs: RunRecord[]): RunRecord[] {
@@ -331,6 +333,9 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
   }, [activeEvalQuery]);
 
   const totalCases = suites.reduce((total, suite) => total + suite.case_count, 0);
+  const starterSuiteInstalled = suites.some(
+    (suite) => suite.metadata_json.template_id === "vantage-starter-smoke-v1",
+  );
   const placementOptionMap = new Map<string, PlacementOption>();
   models
     .flatMap((model) =>
@@ -368,6 +373,9 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
       return rightTime - leftTime;
     })
     .slice(0, 5);
+  const activeEvalRunCount = recentEvalRuns.filter((run) =>
+    ["queued", "submitted_unverified", "running"].includes(run.status),
+  ).length;
 
   function updateJudgeConfig(patch: Partial<JudgeConfigDraft>) {
     const nextConfig = { ...readJudgeConfig(caseForm.score_config_json), ...patch };
@@ -431,6 +439,23 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
     } catch (error) {
       setMutationState("error");
       setErrorMessage(error instanceof Error ? error.message : "Eval suite creation failed.");
+    }
+  }
+
+  async function handleInstallStarterSuite() {
+    setMutationState("saving");
+    setErrorMessage(null);
+
+    try {
+      const suite = await installStarterEvalSuite();
+      upsertSuite(suite);
+      setCaseForm((current) => ({ ...current, suite_id: suite.suite_id }));
+      setAttemptForm((current) => ({ ...current, suite_id: suite.suite_id }));
+      setScheduleForm((current) => ({ ...current, suite_id: suite.suite_id }));
+      setMutationState("idle");
+    } catch (error) {
+      setMutationState("error");
+      setErrorMessage(error instanceof Error ? error.message : "Starter eval suite installation failed.");
     }
   }
 
@@ -993,13 +1018,21 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
       <header className="section-header">
         <div>
           <p className="section-kicker">Evals</p>
-          <h2 id="evals-title">Eval Lab foundation</h2>
+          <h2 id="evals-title">Measure local model behavior</h2>
         </div>
         <p className="section-copy">
-          Phase 2 starts with prompt-suite inventory and run-ready structure. Execution and score history come after the
-          run system is mature enough to stay truthful.
+          Build prompt suites, execute them on observed model placements, compare deterministic scores, schedule repeat
+          checks, and export the evidence behind each result.
         </p>
         <div className="button-row">
+          <button
+            type="button"
+            className="text-action-button"
+            disabled={mutationState === "saving" || starterSuiteInstalled}
+            onClick={() => void handleInstallStarterSuite()}
+          >
+            {starterSuiteInstalled ? "Starter suite installed" : "Install starter suite"}
+          </button>
           <a className="text-action-button" href={buildEvalHistoryExportUrl("csv", activeEvalQuery)}>
             Export CSV
           </a>
@@ -1028,7 +1061,7 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
         </article>
         <article className="metric-card">
           <p className="info-kicker">Execution</p>
-          <strong>{recentEvalRuns.length} queued</strong>
+          <strong>{activeEvalRunCount} active</strong>
         </article>
         <article className="metric-card">
           <p className="info-kicker">Scored</p>
@@ -1036,7 +1069,14 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
         </article>
       </div>
 
-      {errorMessage ? <p className="inline-warning">{errorMessage}</p> : null}
+      <nav className="eval-jump-nav" aria-label="Eval Lab sections">
+        <span>Jump to</span>
+        <a href="#eval-intelligence">Intelligence</a>
+        <a href="#eval-authoring">Author and run</a>
+        <a href="#eval-results">Results</a>
+      </nav>
+
+      {errorMessage ? <p className="inline-warning" role="alert">{errorMessage}</p> : null}
       {scoreHistory?.operator_summary ? (
         <div className="intelligence-brief">
           <span
@@ -1059,7 +1099,7 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
         </div>
       ) : null}
 
-      <form className="eval-control-panel" onSubmit={handleApplyEvalControls}>
+      <form id="eval-intelligence" className="eval-control-panel" onSubmit={handleApplyEvalControls}>
         <div>
           <p className="section-kicker">Chart controls</p>
           <h3>Eval intelligence window</h3>
@@ -1072,6 +1112,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <label>
             Time window
             <select
+              name="eval-window-days"
+              autoComplete="off"
               value={evalControls.window_days}
               onChange={(event) => setEvalControls((current) => ({ ...current, window_days: event.target.value }))}
             >
@@ -1084,6 +1126,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <label>
             Placement filter
             <select
+              name="eval-placement-filter"
+              autoComplete="off"
               value={evalControls.placement_key}
               onChange={(event) => setEvalControls((current) => ({ ...current, placement_key: event.target.value }))}
             >
@@ -1098,6 +1142,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <label>
             Flakiness sensitivity
             <select
+              name="eval-flakiness-sensitivity"
+              autoComplete="off"
               value={evalControls.flakiness_min_rate}
               onChange={(event) =>
                 setEvalControls((current) => ({ ...current, flakiness_min_rate: event.target.value }))
@@ -1111,6 +1157,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <label>
             Failure cluster minimum
             <input
+              name="eval-failure-cluster-minimum"
+              autoComplete="off"
               type="number"
               min="1"
               max="100"
@@ -1125,6 +1173,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <label>
             Saved preset
             <select
+              name="eval-saved-preset"
+              autoComplete="off"
               value={selectedPresetId}
               onChange={(event) => setSelectedPresetId(event.target.value)}
               aria-label="Saved preset"
@@ -1182,8 +1232,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
         </div>
       </form>
 
-      <div className="eval-form-grid">
-        <form className="eval-form is-setup" onSubmit={handleCreateSuite}>
+      <div id="eval-authoring" className="eval-form-grid">
+        <form className="eval-form is-setup" autoComplete="off" onSubmit={handleCreateSuite}>
           <div>
             <p className="info-kicker">Prompt suite</p>
             <h3>Create suite</h3>
@@ -1191,26 +1241,30 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <label>
             <span>Name</span>
             <input
+              name="eval-suite-name"
+              autoComplete="off"
               required
               value={suiteForm.name}
               onChange={(event) => setSuiteForm((current) => ({ ...current, name: event.target.value }))}
-              placeholder="Reasoning smoke test"
+              placeholder="e.g., Reasoning smoke test…"
             />
           </label>
           <label>
             <span>Description</span>
             <textarea
+              name="eval-suite-description"
+              autoComplete="off"
               value={suiteForm.description}
               onChange={(event) => setSuiteForm((current) => ({ ...current, description: event.target.value }))}
-              placeholder="Short operator note about what this suite measures."
+              placeholder="e.g., Measures concise reasoning output…"
             />
           </label>
           <button type="submit" className="action-button" disabled={mutationState === "saving"}>
-            {mutationState === "saving" ? "Saving..." : "Create suite"}
+            {mutationState === "saving" ? "Saving…" : "Create suite"}
           </button>
         </form>
 
-        <form className="eval-form is-setup" onSubmit={handleCreateCase}>
+        <form className="eval-form is-setup" autoComplete="off" onSubmit={handleCreateCase}>
           <div>
             <p className="info-kicker">Prompt case</p>
             <h3>Add case</h3>
@@ -1218,6 +1272,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <label>
             <span>Suite</span>
             <select
+              name="eval-case-suite"
+              autoComplete="off"
               required
               value={caseForm.suite_id}
               onChange={(event) => setCaseForm((current) => ({ ...current, suite_id: event.target.value }))}
@@ -1234,26 +1290,33 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <label>
             <span>Case name</span>
             <input
+              name="eval-case-name"
+              autoComplete="off"
               required
               value={caseForm.name}
               onChange={(event) => setCaseForm((current) => ({ ...current, name: event.target.value }))}
-              placeholder="JSON format check"
+              placeholder="e.g., JSON format check…"
               disabled={suites.length === 0}
             />
           </label>
           <label>
             <span>Prompt</span>
             <textarea
+              name="eval-case-prompt"
+              autoComplete="off"
               required
               value={caseForm.prompt}
               onChange={(event) => setCaseForm((current) => ({ ...current, prompt: event.target.value }))}
-              placeholder="Ask the model to produce a concise answer."
+              placeholder="e.g., Produce a concise answer as JSON…"
               disabled={suites.length === 0}
             />
           </label>
           <label>
             <span>Expected JSON</span>
             <textarea
+              name="eval-case-expected-json"
+              autoComplete="off"
+              spellCheck={false}
               className="code-textarea"
               value={caseForm.expected_json}
               onChange={(event) => setCaseForm((current) => ({ ...current, expected_json: event.target.value }))}
@@ -1263,6 +1326,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <label>
             <span>Score type</span>
             <select
+              name="eval-case-score-type"
+              autoComplete="off"
               value={caseForm.score_type}
               onChange={(event) => handleScoreTypeChange(event.target.value)}
               disabled={suites.length === 0}
@@ -1297,6 +1362,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
                 <label>
                   <span>Judge placement</span>
                   <select
+                    name="eval-judge-placement"
+                    autoComplete="off"
                     value={judgePlacementKey}
                     onChange={(event) => {
                       const [modelName, nodeId] = event.target.value ? event.target.value.split("::") : ["", ""];
@@ -1316,6 +1383,7 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
                   <span>Pass threshold</span>
                   <div className="judge-threshold-control">
                     <input
+                      name="eval-judge-threshold-range"
                       type="range"
                       min="0"
                       max="1"
@@ -1325,6 +1393,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
                       disabled={suites.length === 0}
                     />
                     <input
+                      name="eval-judge-threshold"
+                      autoComplete="off"
                       type="number"
                       min="0"
                       max="1"
@@ -1338,6 +1408,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
                 <label>
                   <span>Max context chars</span>
                   <input
+                    name="eval-judge-max-context"
+                    autoComplete="off"
                     type="number"
                     min="500"
                     max="12000"
@@ -1353,10 +1425,12 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
                 <label className="judge-rubric-field">
                   <span>Evaluation rubric</span>
                   <textarea
+                    name="eval-judge-rubric"
+                    autoComplete="off"
                     value={judgeConfig.rubric}
                     onChange={(event) => updateJudgeConfig({ rubric: event.target.value })}
                     disabled={suites.length === 0}
-                    placeholder="Pass only when the response is accurate, concise, safe, and follows the requested format."
+                    placeholder="e.g., Pass only when the response is accurate, concise, and safe…"
                   />
                 </label>
                 <aside className="judge-contract-preview" aria-label="LLM judge safety contract">
@@ -1391,6 +1465,9 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <label>
             <span>Score config JSON</span>
             <textarea
+              name="eval-case-score-config"
+              autoComplete="off"
+              spellCheck={false}
               className="code-textarea"
               value={caseForm.score_config_json}
               onChange={(event) =>
@@ -1400,11 +1477,11 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
             />
           </label>
           <button type="submit" className="action-button" disabled={mutationState === "saving" || suites.length === 0}>
-            {mutationState === "saving" ? "Saving..." : "Add case"}
+            {mutationState === "saving" ? "Saving…" : "Add case"}
           </button>
         </form>
 
-        <form className="eval-form is-execution" onSubmit={handleQueueEvalAttempt}>
+        <form className="eval-form is-execution" autoComplete="off" onSubmit={handleQueueEvalAttempt}>
           <div>
             <p className="info-kicker">Eval attempt</p>
             <h3>Queue attempt</h3>
@@ -1412,6 +1489,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <label>
             <span>Suite</span>
             <select
+              name="eval-attempt-suite"
+              autoComplete="off"
               required
               value={attemptForm.suite_id}
               onChange={(event) => setAttemptForm((current) => ({ ...current, suite_id: event.target.value }))}
@@ -1428,6 +1507,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <label>
             <span>Model placement</span>
             <select
+              name="eval-attempt-placement"
+              autoComplete="off"
               required
               value={attemptForm.placement_key}
               onChange={(event) => setAttemptForm((current) => ({ ...current, placement_key: event.target.value }))}
@@ -1442,15 +1523,15 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
             </select>
           </label>
           <p className="action-copy">
-            Queueing creates durable Run records only. Model execution, scoring, and comparisons stay in the next eval
-            slice.
+            Queueing creates durable Run records for every case. Review the queue, then execute and score each attempt
+            against the selected local model placement.
           </p>
           <button
             type="submit"
             className="action-button"
             disabled={mutationState === "saving" || suites.length === 0 || placementOptions.length === 0}
           >
-            {mutationState === "saving" ? "Queueing..." : "Queue eval attempt"}
+            {mutationState === "saving" ? "Queueing…" : "Queue eval attempt"}
           </button>
           {attemptResult ? (
             <div className="inline-result">
@@ -1471,7 +1552,7 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           ) : null}
         </form>
 
-        <form className="eval-form is-execution" onSubmit={handleCreateSchedule}>
+        <form className="eval-form is-execution" autoComplete="off" onSubmit={handleCreateSchedule}>
           <div>
             <p className="info-kicker">Recurring eval</p>
             <h3>Create schedule</h3>
@@ -1479,6 +1560,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <label>
             <span>Schedule suite</span>
             <select
+              name="eval-schedule-suite"
+              autoComplete="off"
               required
               value={scheduleForm.suite_id}
               onChange={(event) => setScheduleForm((current) => ({ ...current, suite_id: event.target.value }))}
@@ -1495,6 +1578,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <label>
             <span>Schedule placement</span>
             <select
+              name="eval-schedule-placement"
+              autoComplete="off"
               required
               value={scheduleForm.placement_key}
               onChange={(event) => setScheduleForm((current) => ({ ...current, placement_key: event.target.value }))}
@@ -1511,6 +1596,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <label>
             <span>Interval minutes</span>
             <input
+              name="eval-schedule-interval"
+              autoComplete="off"
               required
               type="number"
               min="1"
@@ -1523,6 +1610,7 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           </label>
           <label className="inline-check">
             <input
+              name="eval-schedule-auto-execute"
               type="checkbox"
               checked={scheduleForm.auto_execute}
               onChange={(event) =>
@@ -1540,11 +1628,11 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
             className="action-button"
             disabled={mutationState === "saving" || suites.length === 0 || placementOptions.length === 0}
           >
-            {mutationState === "saving" ? "Creating..." : "Create schedule"}
+            {mutationState === "saving" ? "Creating…" : "Create schedule"}
           </button>
         </form>
 
-        <form className="eval-form is-accented" onSubmit={handleCreateAssistedSummary}>
+        <form className="eval-form is-accented" autoComplete="off" onSubmit={handleCreateAssistedSummary}>
           <div>
             <p className="info-kicker">Assisted summary</p>
             <h3>Ask local model</h3>
@@ -1552,6 +1640,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <label>
             <span>Summary model placement</span>
             <select
+              name="eval-summary-placement"
+              autoComplete="off"
               required
               value={summaryForm.placement_key}
               onChange={(event) => setSummaryForm({ placement_key: event.target.value })}
@@ -1574,7 +1664,7 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
             className="action-button"
             disabled={mutationState === "saving" || placementOptions.length === 0 || !scoreHistory?.total_runs}
           >
-            {mutationState === "saving" ? "Generating..." : "Generate summary"}
+            {mutationState === "saving" ? "Generating…" : "Generate summary"}
           </button>
         </form>
       </div>
@@ -1596,6 +1686,10 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           </p>
         </div>
       ) : null}
+
+      <div id="eval-results" className="eval-results-divider" aria-hidden="true">
+        <span>Observed results</span>
+      </div>
 
       {schedules.length > 0 ? (
         <div className="eval-attempt-panel">
@@ -1671,7 +1765,7 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
                           }
                           onClick={() => void handleQueueScheduleNow(schedule)}
                         >
-                          {scheduleQueueStateById[schedule.schedule_id] === "queueing" ? "Queueing..." : "Queue now"}
+                          {scheduleQueueStateById[schedule.schedule_id] === "queueing" ? "Queueing…" : "Queue now"}
                         </button>
                         <button
                           type="button"
@@ -1744,9 +1838,9 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
           <div className="section-header is-compact">
             <div>
               <p className="section-kicker">Eval runs</p>
-              <h3>Recent queued attempts</h3>
+              <h3>Recent attempts</h3>
             </div>
-            <p className="section-copy">These are stored in the same durable Runs ledger as actions and checks.</p>
+            <p className="section-copy">Queued and completed attempts share the same durable Runs ledger as actions and checks.</p>
           </div>
           <div className="table-shell">
             <table className="inventory-table">
@@ -1778,7 +1872,7 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
                         onClick={() => void handleExecuteEvalRun(run.run_id)}
                       >
                         {executionStateByRun[run.run_id] === "running" || run.status === "running"
-                          ? "Executing..."
+                          ? "Executing…"
                           : run.status === "queued"
                             ? "Execute"
                             : "Re-run"}
@@ -2139,8 +2233,8 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
       {suites.length === 0 ? (
         <div className="empty-state">
           {requestState === "loading"
-            ? "Loading eval suites..."
-            : "No eval suites have been defined yet. Add prompt suites in Phase 2 before running comparisons."}
+            ? "Loading eval suites…"
+            : "No eval suites have been defined yet. Create a prompt suite to begin a repeatable local-model comparison."}
         </div>
       ) : (
         <div className="table-shell">
@@ -2248,19 +2342,17 @@ export function EvalsPage({ models = [], runs = [] }: EvalsPageProps) {
 
 function ScoreDetailDrawer({ run, onClose }: { run: EvalScoreRunRecord; onClose: () => void }) {
   return (
-    <div className="run-drawer-backdrop" role="dialog" aria-modal="true" aria-labelledby="score-detail-title">
-      <aside className="run-drawer">
-        <header className="drawer-header">
-          <div>
-            <p className="section-kicker">Eval score</p>
-            <h3 id="score-detail-title">Score detail</h3>
-            <p className="drawer-run-id">{run.run_id}</p>
-          </div>
-          <button type="button" className="drawer-close-button" onClick={onClose} aria-label="Close score detail">
-            x
-          </button>
-        </header>
-        <div className="drawer-content">
+    <OverlaySurface isOpen onClose={onClose} labelledBy="score-detail-title">
+      <OverlayHeader
+        titleId="score-detail-title"
+        title="Score detail"
+        kicker="Eval score"
+        meta={run.run_id}
+        closeLabel="Close score detail"
+        onClose={onClose}
+        headingLevel={3}
+      />
+      <div className="drawer-content">
           <dl className="run-stats-grid">
             <div>
               <dt>Case</dt>
@@ -2310,8 +2402,7 @@ function ScoreDetailDrawer({ run, onClose }: { run: EvalScoreRunRecord; onClose:
               <code>{JSON.stringify(run.response_json ?? {}, null, 2)}</code>
             </pre>
           </section>
-        </div>
-      </aside>
-    </div>
+      </div>
+    </OverlaySurface>
   );
 }

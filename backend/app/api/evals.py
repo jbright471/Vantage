@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 
-from backend.app.api.models import _agent_auth_headers
 from backend.app.config import DEFAULT_BOOTSTRAP_CONFIG_PATH, load_bootstrap_config
 from backend.app.db import SessionLocal
 from backend.app.models import EvalCase, EvalSchedule, EvalSuite, ModelPlacement, Node, Run
@@ -35,6 +34,23 @@ from backend.app.services.runs import serialize_run
 router = APIRouter()
 MAX_EVAL_CASES_PER_SUITE = 100
 MAX_EVAL_PROMPT_CHARS = 16000
+STARTER_EVAL_TEMPLATE_ID = "vantage-starter-smoke-v1"
+STARTER_EVAL_CASES = (
+    {
+        "name": "Structured JSON handshake",
+        "prompt": 'Return exactly this JSON object and no Markdown: {"vantage_smoke":true,"answer":7}',
+        "expected_json": {"vantage_smoke": True, "answer": 7},
+        "score_type": "json_subset",
+        "score_config_json": {},
+    },
+    {
+        "name": "Exact instruction following",
+        "prompt": "Return exactly VANTAGE_OK and nothing else.",
+        "expected_json": {},
+        "score_type": "exact_match",
+        "score_config_json": {"expected_text": "VANTAGE_OK"},
+    },
+)
 
 
 class EvalSuiteCreate(BaseModel):
@@ -172,6 +188,42 @@ def list_eval_suites() -> list[dict]:
     return _serialize_suites(suites, cases)
 
 
+@router.post("/evals/starter-suite", status_code=201)
+def install_starter_eval_suite() -> dict:
+    with SessionLocal() as session:
+        suites = session.scalars(select(EvalSuite)).all()
+        existing = next(
+            (
+                suite
+                for suite in suites
+                if (suite.metadata_json or {}).get("template_id") == STARTER_EVAL_TEMPLATE_ID
+            ),
+            None,
+        )
+        if existing is not None:
+            return _get_suite_payload(session, existing.suite_id)
+
+        suite = EvalSuite(
+            suite_id=str(uuid4()),
+            name="Vantage Starter Smoke",
+            description="Repeatable local-model readiness checks for structured output and instruction following.",
+            created_at=datetime.now(UTC),
+            metadata_json={"template_id": STARTER_EVAL_TEMPLATE_ID, "template_version": 1},
+        )
+        session.add(suite)
+        for sort_order, case_template in enumerate(STARTER_EVAL_CASES):
+            session.add(
+                EvalCase(
+                    case_id=str(uuid4()),
+                    suite_id=suite.suite_id,
+                    sort_order=sort_order,
+                    **case_template,
+                )
+            )
+        session.commit()
+        return _get_suite_payload(session, suite.suite_id)
+
+
 def _eval_history_query(
     window_days: int = Query(default=30, ge=1, le=3650),
     model_name: str | None = Query(default=None),
@@ -294,7 +346,6 @@ def create_eval_assisted_summary(payload: EvalAssistedSummaryCreate) -> dict:
             model_name=payload.model_name,
             node=node,
             config=config,
-            auth_headers=_agent_auth_headers(),
         )
         return serialize_run(run)
 
@@ -707,7 +758,6 @@ def execute_eval_attempt_batch(attempt_id: str) -> dict:
                     run,
                     node=node,
                     config=config,
-                    auth_headers=_agent_auth_headers(),
                 )
             )
         return {
@@ -769,7 +819,6 @@ def execute_eval_attempt_run(run_id: str) -> dict:
             run,
             node=node,
             config=config,
-            auth_headers=_agent_auth_headers(),
         )
         return serialize_run(updated)
 

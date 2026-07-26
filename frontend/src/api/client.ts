@@ -1,3 +1,5 @@
+import { apiFetch as fetch } from "./http";
+
 export type GpuStat = {
   name: string;
   memory_total_mb: number;
@@ -815,6 +817,21 @@ export async function createEvalSuite(payload: { name: string; description: stri
 
   if (!response.ok) {
     throw new Error(`Eval suite creation failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as EvalSuiteRecord;
+}
+
+export async function installStarterEvalSuite(): Promise<EvalSuiteRecord> {
+  const response = await fetch("/api/evals/starter-suite", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Starter eval suite installation failed with status ${response.status}`);
   }
 
   return (await response.json()) as EvalSuiteRecord;

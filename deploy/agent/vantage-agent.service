@@ -5,17 +5,32 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=vantage-agent
-Group=vantage-agent
-WorkingDirectory=/opt/vantage
-EnvironmentFile=/opt/vantage/vantage-agent.env
-ExecStart=/opt/vantage/.venv/bin/python -m uvicorn agent.app.main:app --host 0.0.0.0 --port ${VANTAGE_AGENT_PORT}
+User=@@AGENT_USER@@
+Group=@@AGENT_USER@@
+WorkingDirectory=@@INSTALL_DIR@@
+EnvironmentFile=@@INSTALL_DIR@@/vantage-agent.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=@@INSTALL_DIR@@/.venv/bin/python -m uvicorn agent.app.main:app --host 0.0.0.0 --port ${VANTAGE_AGENT_PORT}
 Restart=always
 RestartSec=5
 SyslogIdentifier=vantage-agent
+UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
+# NVIDIA telemetry requires the host GPU device nodes; the service remains
+# unprivileged, capability-free, and read-only outside its install directory.
+PrivateDevices=false
 ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
 
 [Install]
 WantedBy=multi-user.target

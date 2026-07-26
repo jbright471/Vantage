@@ -121,8 +121,8 @@ Before deployment:
 
 1. Copy `.env.production.example` to `.env.production`.
 2. Run `scripts/rotate-agent-token.ps1 -EnvFile .env.production -Apply`.
-3. Run `scripts/rotate-control-plane-secrets.ps1 -EnvFile .env.production -Apply`.
-4. Optionally generate and set `VANTAGE_AUDIT_SIGNING_KEY` for signed audit bundles.
+3. Run `scripts/rotate-control-plane-secrets.ps1 -EnvFile .env.production -Apply -IncludeAuditSigningKey`.
+4. Preserve `VANTAGE_AUDIT_SIGNING_KEY` after setup so previously exported signed audit bundles remain verifiable.
 5. Optionally generate and set `VANTAGE_EXTERNAL_API_TOKEN` before connecting n8n or scripts.
 6. Edit `config/vantage.bootstrap.toml` for your node names and agent URLs.
 7. Run `scripts/check-setup.ps1 -EnvFile .env.production`.

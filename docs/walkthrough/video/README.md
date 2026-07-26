@@ -11,7 +11,7 @@ Use demo mode for every public video:
 ```powershell
 Copy-Item .env.example .env
 .\scripts\rotate-agent-token.ps1 -EnvFile .env -Apply
-.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply -IncludeAuditSigningKey
 (Get-Content .env) -replace '^VANTAGE_DEMO_MODE=.*', "VANTAGE_DEMO_MODE=1" | Set-Content .env
 docker compose up --build -d
 ```

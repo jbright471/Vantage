@@ -7,6 +7,8 @@ This document converts the original Later Research list into explicit product an
 | Topic | Current decision | Status |
 | --- | --- | --- |
 | Rust remote agent | Keep the HTTP agent contract stable; defer Rust until distribution friction justifies a compiled binary. | Decided, not started |
+| Windows remote agent | Preserve the HTTP contract, then evaluate a signed Windows service package, scoped Defender Firewall rule, and Credential Manager/DPAPI-backed secret handling. | Planned after Linux v1 |
+| macOS remote agent | Plausible for Apple Silicon/Ollama hosts; evaluate a signed/notarized package, `launchd`, Keychain storage, and Metal-aware telemetry without assuming NVIDIA tools. | Planned after Linux v1 |
 | Multi-user UI authentication and roles | Do not build app-native users until there is a real multi-operator deployment. Use reverse-proxy auth for early shared installs. | Decided, deferred |
 | Multi-control-plane deployments | Not supported with SQLite. Requires Postgres, leader election or ownership leases, and agent-side control-plane identity. | Decided, deferred |
 | Postgres support | Support non-SQLite SQLAlchemy URLs at the engine layer; keep SQLite as the default. | Foundation shipped |
@@ -31,6 +33,28 @@ Do not plan a broad rewrite. Instead, preserve the agent boundary so a Rust impl
 - `GET /models`
 - `GET /runs`
 - future `POST /actions/*` endpoints only after allowlists and audit semantics are final
+
+## Windows And macOS Agents
+
+Linux with systemd is the only supported remote-agent platform for v1. Windows and macOS should reuse the same authenticated HTTP contract so the control plane does not need platform-specific behavior.
+
+Windows promotion criteria:
+
+- install and upgrade through a signed Windows service package rather than an elevated development shell
+- store the agent secret with DPAPI or Windows Credential Manager and grant access only to the service identity
+- create an opt-in Windows Defender Firewall rule scoped to the control-plane address
+- support NVIDIA telemetry when available and degrade truthfully when no compatible GPU collector exists
+- exercise install, restart, upgrade, uninstall, HMAC, firewall, and Ollama connectivity in CI or a maintained Windows test host
+
+macOS is technically plausible, including Apple Silicon machines serving Ollama models. Promotion criteria:
+
+- install a signed and notarized package with a least-privilege `launchd` service
+- store the agent secret in Keychain or a root-readable configuration boundary
+- scope the macOS application firewall or a VPN rule to the control plane
+- add Apple Silicon/Metal-aware telemetry rather than treating missing `nvidia-smi` as a GPU failure
+- exercise install, sleep/wake, upgrade, uninstall, HMAC, and Ollama connectivity on supported macOS versions
+
+Neither platform should be labeled supported until a clean external-user installation and removal path is repeatable and tested. A future compiled agent may reduce packaging friction, but changing languages is not required to prove either platform.
 
 ## Multi-User UI Authentication And Roles
 

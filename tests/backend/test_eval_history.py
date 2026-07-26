@@ -179,6 +179,70 @@ def test_execute_eval_run_skips_disabled_local_ollama_endpoints(monkeypatch) -> 
     assert called_urls == ["http://127.0.0.1:11435/api/generate"]
 
 
+def test_execute_eval_run_prefers_environment_local_ollama_endpoint(monkeypatch) -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+    Base.metadata.create_all(engine)
+    session_factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    now = datetime.now(UTC)
+    called_urls: list[str] = []
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"response": '{"ok": true}'}
+
+    def fake_post(url, *args, **kwargs):
+        called_urls.append(url)
+        return FakeResponse()
+
+    monkeypatch.setenv("VANTAGE_LOCAL_OLLAMA_BASE_URLS", "http://host.docker.internal:11400")
+    monkeypatch.setattr("backend.app.services.evals.httpx.post", fake_post)
+
+    with session_factory() as session:
+        node = Node(
+            node_id="control-plane",
+            display_name="Control Plane",
+            base_url="http://127.0.0.1:8000",
+            role="primary",
+            enabled=True,
+            created_from="bootstrap",
+        )
+        run = Run(
+            run_id="eval-run-env-override",
+            source_type="eval",
+            detail_type="eval_attempt",
+            source_id="eval-suite:suite-1:case:case-1",
+            node_id="control-plane",
+            model_name="model-a",
+            action_type="eval",
+            status="queued",
+            started_at=now,
+            summary="Queued eval",
+            metadata_json={
+                "suite_id": "suite-1",
+                "suite_name": "Reasoning",
+                "case_id": "case-1",
+                "case_name": "JSON answer",
+                "prompt": "Return ok true as JSON.",
+                "expected_json": {"ok": True},
+            },
+        )
+        session.add_all([node, run])
+        session.commit()
+
+        updated = execute_eval_run(
+            session,
+            run,
+            node=node,
+            config=BootstrapConfig(local_ollama_base_urls=["http://127.0.0.1:11400"]),
+        )
+        assert updated.status == "success"
+
+    assert called_urls == ["http://host.docker.internal:11400/api/generate"]
+
+
 def test_score_eval_response_supports_multiple_score_types() -> None:
     assert score_eval_response('{"answer": 42}', "json_subset", {"answer": 42}, {})["passed"] is True
     assert score_eval_response("hello world", "exact_match", {}, {"expected_text": "hello world"})["passed"] is True

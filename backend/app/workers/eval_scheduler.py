@@ -2,7 +2,6 @@ import asyncio
 from collections.abc import Callable
 from contextlib import suppress
 import logging
-import os
 
 from backend.app.config import BootstrapConfig
 from backend.app.db import SessionLocal
@@ -37,7 +36,7 @@ def run_due_eval_schedules(
             if node is None:
                 execution_error_count += 1
                 continue
-            updated = execute_eval_run(session, run, node=node, config=config, auth_headers=_agent_auth_headers(config))
+            updated = execute_eval_run(session, run, node=node, config=config)
             executed_count += 1
             schedule_id = updated.metadata_json.get("schedule_id") if isinstance(updated.metadata_json, dict) else None
             if isinstance(schedule_id, str):
@@ -79,11 +78,6 @@ def run_due_eval_schedules(
         "runs_failed": failed_run_count,
         "runs_execution_failed": execution_error_count,
     }
-
-
-def _agent_auth_headers(config: BootstrapConfig) -> dict[str, str]:
-    token = os.getenv(config.agent_auth_token_env)
-    return {"Authorization": f"Bearer {token}"} if token else {}
 
 
 def _sync_eval_schedule_warning(

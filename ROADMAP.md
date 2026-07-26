@@ -145,6 +145,9 @@ Completed foundation:
 - Compose healthcheck wiring for backend readiness and frontend static serving.
 - Initial Alembic migration baseline for the current SQLite schema.
 - Generic remote-agent install script and systemd service template.
+- Secure Linux multi-node onboarding: explicit registration, HMAC defaults, interactive secret entry, source-scoped firewall guidance, and hardened systemd service boundaries.
+- One signed agent transport for polling, capability checks, manual/scheduled evals, assisted summaries, and remote judges.
+- Authenticated HMAC setup-check support plus an in-process control-plane-to-agent contract test.
 - SQLite backup and restore guidance using the SQLite backup API.
 - Portainer deployment guide.
 - Hardened environment variable and secret handling through ignored env files, required production token injection, and public-safe examples.
@@ -160,6 +163,7 @@ Status: shipped.
 - Demo mode with seeded public-safe sample nodes, runs, models, warnings, eval data, and routing policies.
 - First-run onboarding checklist in the UI with stream, node, model, run, and routing checks.
 - First-run setup wizard for token generation, node registry snippets, local Ollama endpoint config, and verification.
+- Setup-wizard Linux agent commands and explicit install/register guidance for each trusted LAN worker.
 - Product screenshot guidance, public screenshot captures, and redaction rules for public media.
 - Polished README positioning Vantage as a local AI command center.
 - MIT license and open-source repository posture.
@@ -251,6 +255,8 @@ Future tuning:
 Status: decisions recorded in `docs/architecture/LATER_RESEARCH_DECISIONS.md`.
 
 - Rust remote agent as a single drop-in binary for easier distribution: contract-preserving future implementation, deferred until packaging friction justifies it.
+- Windows agent: planned after Linux v1; evaluate a signed service installer, DPAPI/Credential Manager secret storage, scoped Defender Firewall rules, and Windows CI coverage.
+- macOS agent: plausible after Linux v1; evaluate a signed/notarized `launchd` package, Keychain storage, scoped firewall/VPN rules, and Apple Silicon/Metal-aware telemetry.
 - Multi-user UI authentication and roles: defer app-native users; use reverse-proxy or VPN auth for early shared installs.
 - Multi-control-plane or team deployments: not supported yet; requires Postgres, ownership leases, and control-plane identity.
 - Postgres support if SQLite becomes limiting: foundation shipped for non-SQLite SQLAlchemy URLs while SQLite remains the default.

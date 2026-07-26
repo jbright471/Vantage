@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from backend.app.db import SessionLocal
 from backend.app.main import app
-from backend.app.models import EvalSchedule, ModelPlacement, Run, WarningRecord
+from backend.app.models import EvalSchedule, EvalSuite, ModelPlacement, Run, WarningRecord
 from backend.app.services.eval_schedules import queue_due_eval_schedules
 from backend.app.workers.eval_scheduler import run_due_eval_schedules
 
@@ -36,6 +36,35 @@ def test_create_eval_suite_and_case() -> None:
         assert updated_suite["case_count"] == 1
         assert updated_suite["cases"][0]["name"] == "JSON Answer"
         assert updated_suite["cases"][0]["score_type"] == "json_subset"
+
+
+def test_install_starter_eval_suite_is_idempotent() -> None:
+    with TestClient(app) as client:
+        first_response = client.post("/api/evals/starter-suite")
+        second_response = client.post("/api/evals/starter-suite")
+
+    assert first_response.status_code == 201
+    assert second_response.status_code == 201
+    first_suite = first_response.json()
+    second_suite = second_response.json()
+    assert first_suite["suite_id"] == second_suite["suite_id"]
+    assert first_suite["name"] == "Vantage Starter Smoke"
+    assert first_suite["metadata_json"] == {
+        "template_id": "vantage-starter-smoke-v1",
+        "template_version": 1,
+    }
+    assert first_suite["case_count"] == 2
+    assert [case["score_type"] for case in first_suite["cases"]] == ["json_subset", "exact_match"]
+
+    with SessionLocal() as session:
+        matching_suites = session.scalars(select(EvalSuite)).all()
+        matching_suites = [
+            suite
+            for suite in matching_suites
+            if suite.metadata_json.get("template_id") == "vantage-starter-smoke-v1"
+        ]
+
+    assert len(matching_suites) == 1
 
 
 def test_eval_case_rejects_oversized_prompt() -> None:

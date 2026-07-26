@@ -1,16 +1,26 @@
+import os
 from pathlib import Path
 import tomllib
 
 from pydantic import BaseModel, Field
 
-DEFAULT_BOOTSTRAP_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "vantage.bootstrap.toml"
+BOOTSTRAP_CONFIG_PATH_ENV = "VANTAGE_BOOTSTRAP_CONFIG_PATH"
+PUBLIC_DEFAULT_BOOTSTRAP_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "vantage.bootstrap.toml"
+
+
+def resolve_bootstrap_config_path() -> Path:
+    configured = os.getenv(BOOTSTRAP_CONFIG_PATH_ENV)
+    return Path(configured) if configured else PUBLIC_DEFAULT_BOOTSTRAP_CONFIG_PATH
+
+
+DEFAULT_BOOTSTRAP_CONFIG_PATH = resolve_bootstrap_config_path()
 
 
 class BootstrapNode(BaseModel):
     node_id: str
     display_name: str
     base_url: str
-    role: str = "worker"
+    role: str = "remote"
     enabled: bool = True
 
 

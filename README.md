@@ -37,7 +37,7 @@ Vantage exists to make that state visible and actionable without taking ownershi
 - Backend-filtered run history with pagination
 - CSV, JSON, and signed bundle audit exports for run history, plus a CLI verification helper
 - Local LLM capability checks from the Models surface
-- Eval Lab for prompt suites, executable eval runs, richer score types including guided guarded local-LLM judge configs, placement comparison, baseline regression checks, configurable intelligence windows, managed scope presets, trend summaries, flakiness detection, failure clustering, manual local-LLM assisted summaries, recurring schedules, suite import/export, lifecycle cleanup, and opt-in auto-execution
+- Eval Lab with a one-click starter smoke suite, executable prompt suites, richer score types including guided guarded local-LLM judge configs, placement comparison, baseline regression checks, configurable intelligence windows, managed scope presets, trend summaries, flakiness detection, failure clustering, manual local-LLM assisted summaries, recurring schedules, suite import/export, lifecycle cleanup, and opt-in auto-execution
 - SSE-based live UI updates
 - SQLite persistence with bounded snapshot pruning, plus optional non-SQLite SQLAlchemy URLs for Postgres-backed deployments
 - Shared-token authentication for node agents with optional HMAC request signing and replay protection
@@ -65,7 +65,7 @@ Run the public-safe demo first. Demo mode seeds synthetic nodes, models, runs, w
 ```powershell
 Copy-Item .env.example .env
 .\scripts\rotate-agent-token.ps1 -EnvFile .env -Apply
-.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply -IncludeAuditSigningKey
 (Get-Content .env) -replace '^VANTAGE_DEMO_MODE=.*', "VANTAGE_DEMO_MODE=1" | Set-Content .env
 docker compose up --build -d
 ```
@@ -91,19 +91,21 @@ Invoke-RestMethod http://127.0.0.1:8000/api/health/ready
 docker compose down
 ```
 
-When you are ready to connect real nodes, turn demo mode off, edit [config/vantage.bootstrap.toml](./config/vantage.bootstrap.toml), and enable the remote workers you want Vantage to poll:
+When you are ready to connect real nodes, turn demo mode off and use the setup wizard or [OPERATOR_GUIDE.md](./OPERATOR_GUIDE.md) to add each remote worker to [config/vantage.bootstrap.toml](./config/vantage.bootstrap.toml):
 
 ```powershell
 (Get-Content .env) -replace '^VANTAGE_DEMO_MODE=.*', "VANTAGE_DEMO_MODE=0" | Set-Content .env
 docker compose up --build -d
 ```
 
+Vantage does not scan the LAN. For v1, an operator explicitly installs the systemd-managed agent on each trusted Linux model host and registers its LAN URL. New installs use HMAC-signed requests and expose only telemetry, capability checks, and eval execution; restrict agent port `9110` to the control-plane IP or a trusted VPN. The desktop UI can remain bound to `127.0.0.1` while its backend polls those registered LAN agents.
+
 Production-style Compose:
 
 ```powershell
 Copy-Item .env.production.example .env.production
 .\scripts\rotate-agent-token.ps1 -EnvFile .env.production -Apply
-.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env.production -Apply
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env.production -Apply -IncludeAuditSigningKey
 docker compose -f docker-compose.prod.yml --env-file .env.production up --build -d
 Invoke-RestMethod http://127.0.0.1:5173/api/health/ready
 ```
@@ -112,7 +114,7 @@ Production Compose publishes only the frontend, bound to `127.0.0.1` by default;
 
 ## Configuration
 
-Primary bootstrap config lives at [config/vantage.bootstrap.toml](./config/vantage.bootstrap.toml). The tracked default is public-safe: it enables only the local control-plane node and includes a disabled `remote-worker` example that you can rename, point at your own agent URL, and enable when ready.
+Primary bootstrap config lives at [config/vantage.bootstrap.toml](./config/vantage.bootstrap.toml). The tracked default is public-safe and registers only the local control-plane node, so a clean installation starts healthy instead of reporting an unreachable placeholder. Use the setup wizard or the remote-node example in [OPERATOR_GUIDE.md](./OPERATOR_GUIDE.md) when you are ready to add a worker.
 
 | Setting | Purpose | Default |
 | --- | --- | --- |
@@ -125,17 +127,18 @@ Primary bootstrap config lives at [config/vantage.bootstrap.toml](./config/vanta
 | `snapshot_prune_interval_seconds` | Background snapshot pruning cadence | `900` |
 | `eval_schedule_interval_seconds` | Background due-schedule check cadence | `60` |
 | `report_schedule_interval_seconds` | Optional scheduled report worker cadence | `3600` |
-| `agent_auth_token_env` | Env var used for agent bearer auth | `VANTAGE_AGENT_SHARED_TOKEN` |
+| `agent_auth_token_env` | Env var used as the agent HMAC/bearer secret | `VANTAGE_AGENT_SHARED_TOKEN` |
 
 Local secrets belong in `.env`, which is ignored by git. See [.env.example](./.env.example).
 
 Production secrets belong in `.env.production`, which is also ignored by git. See [.env.production.example](./.env.production.example). Public-safe bootstrap defaults live at [config/vantage.bootstrap.example.toml](./config/vantage.bootstrap.example.toml).
 
-Signed audit bundles require `VANTAGE_AUDIT_SIGNING_KEY`. Stronger node-agent trust can be enabled with `VANTAGE_AGENT_AUTH_MODE=hmac`; see [Agent Authentication](./docs/security/AGENT_AUTH.md).
+Signed audit bundles require `VANTAGE_AUDIT_SIGNING_KEY`. New node-agent installations default to `VANTAGE_AGENT_AUTH_MODE=hmac`; bearer mode remains available for compatibility. See [Agent Authentication](./docs/security/AGENT_AUTH.md).
 
 ## Documentation
 
 - [Architecture](./ARCHITECTURE.md)
+- [V1 Multi-Node Acceptance](./docs/architecture/V1_MULTI_NODE_ACCEPTANCE.md)
 - [Roadmap](./ROADMAP.md)
 - [Getting Started](./GETTING_STARTED.md)
 - [Operator Guide](./OPERATOR_GUIDE.md)

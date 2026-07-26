@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { ModelsPage } from "./features/models/ModelsPage";
 import { NodesPage } from "./features/nodes/NodesPage";
 import { RoutingPage } from "./features/routing/RoutingPage";
@@ -9,6 +9,7 @@ import { OnboardingPanel } from "./features/onboarding/OnboardingPanel";
 import { SetupWizardDrawer } from "./features/onboarding/SetupWizardDrawer";
 import { useEventSource } from "./hooks/useEventSource";
 import { acknowledgeWarning } from "./api/client";
+import { useSessionActions } from "./features/auth/AuthGate";
 
 const OperatorGuideDrawer = lazy(() =>
   import("./features/docs/OperatorGuideDrawer").then((module) => ({ default: module.OperatorGuideDrawer })),
@@ -21,6 +22,26 @@ const navItems = [
   { href: "#routing-title", label: "Routing", icon: "RT" },
   { href: "#evals-title", label: "Eval Lab", icon: "EV" },
 ] as const;
+
+function readDocsSlug(): string | null {
+  return new URLSearchParams(window.location.search).get("docs");
+}
+
+function writeDocsSlug(slug: string | null, replace = false) {
+  const url = new URL(window.location.href);
+  if (slug) {
+    url.searchParams.set("docs", slug);
+  } else {
+    url.searchParams.delete("docs");
+  }
+
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  if (replace) {
+    window.history.replaceState(null, "", nextUrl);
+  } else {
+    window.history.pushState(null, "", nextUrl);
+  }
+}
 
 function formatRelativeSync(lastSyncAt: string | null): string {
   if (!lastSyncAt) {
@@ -62,13 +83,14 @@ function labelPrimaryNode(nodes: Array<{ node_id: string; role: string; observed
   return `${primaryNode.node_id.toUpperCase()}: ${status}`;
 }
 
-function summarizeAttention(
-  nodes: Array<{ observed_status: string; freshness: string }>,
+export function summarizeAttention(
+  nodes: Array<{ enabled: boolean; observed_status: string; freshness: string }>,
   pendingRuns: number,
   warningCount: number,
 ): string {
-  const staleNodes = nodes.filter((node) => node.freshness !== "live").length;
-  const degradedNodes = nodes.filter((node) => node.observed_status !== "healthy").length;
+  const enabledNodes = nodes.filter((node) => node.enabled);
+  const staleNodes = enabledNodes.filter((node) => node.freshness !== "live").length;
+  const degradedNodes = enabledNodes.filter((node) => node.observed_status !== "healthy").length;
   const issueCount = staleNodes + degradedNodes + pendingRuns + warningCount;
 
   if (issueCount === 0) {
@@ -80,16 +102,20 @@ function summarizeAttention(
 
 export default function App() {
   const { state, streamStatus, lastSyncAt, errorMessage } = useEventSource("/api/stream");
-  const [isDocsOpen, setIsDocsOpen] = useState(false);
+  const sessionActions = useSessionActions();
+  const [docsSlug, setDocsSlug] = useState<string | null>(() => readDocsSlug());
+  const [activeNavHref, setActiveNavHref] = useState<(typeof navItems)[number]["href"]>("#nodes-title");
   const [isSetupWizardOpen, setIsSetupWizardOpen] = useState(false);
   const [showAllWarnings, setShowAllWarnings] = useState(false);
   const [acknowledgedWarningIds, setAcknowledgedWarningIds] = useState<Set<string>>(() => new Set());
   const [warningActionState, setWarningActionState] = useState<Record<string, "idle" | "saving" | "error">>({});
 
   const activeWarnings = state.warnings.filter((warning) => !acknowledgedWarningIds.has(warning.warning_id));
-  const liveNodes = state.nodes.filter((node) => node.freshness === "live").length;
-  const staleNodes = state.nodes.filter((node) => node.freshness !== "live").length;
-  const degradedNodes = state.nodes.filter((node) => node.observed_status !== "healthy").length;
+  const attentionNodes = state.nodes.filter((node) => node.enabled);
+  const disabledNodes = state.nodes.length - attentionNodes.length;
+  const liveNodes = attentionNodes.filter((node) => node.freshness === "live").length;
+  const staleNodes = attentionNodes.filter((node) => node.freshness !== "live").length;
+  const degradedNodes = attentionNodes.filter((node) => node.observed_status !== "healthy").length;
   const pendingRuns = state.runs.filter((run) => ["submitted_unverified", "running"].includes(run.status)).length;
   const evalRunCount = state.runs.filter((run) => run.detail_type === "eval_attempt").length;
   const mirroredModels = state.models.filter((model) => model.placements.length > 1).length;
@@ -100,6 +126,52 @@ export default function App() {
   const visibleWarningLimit = showAllWarnings ? activeWarnings.length : 2;
   const visibleWarnings = activeWarnings.slice(0, visibleWarningLimit);
   const hiddenWarningCount = Math.max(0, activeWarnings.length - visibleWarnings.length);
+
+  useEffect(() => {
+    function syncDocsFromHistory() {
+      setDocsSlug(readDocsSlug());
+    }
+
+    window.addEventListener("popstate", syncDocsFromHistory);
+    return () => window.removeEventListener("popstate", syncDocsFromHistory);
+  }, []);
+
+  useEffect(() => {
+    if (!("IntersectionObserver" in window)) {
+      return;
+    }
+
+    const targets = navItems
+      .map((item) => document.querySelector<HTMLElement>(item.href))
+      .filter((target): target is HTMLElement => target !== null);
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visibleEntry = entries.find((entry) => entry.isIntersecting);
+        if (visibleEntry) {
+          setActiveNavHref(`#${visibleEntry.target.id}` as (typeof navItems)[number]["href"]);
+        }
+      },
+      { rootMargin: "-12% 0px -74%", threshold: 0 },
+    );
+
+    targets.forEach((target) => observer.observe(target));
+    return () => observer.disconnect();
+  }, []);
+
+  const navigateDocs = useCallback((slug: string, options?: { replace?: boolean }) => {
+    writeDocsSlug(slug, options?.replace);
+    setDocsSlug(slug);
+  }, []);
+
+  const openDocs = useCallback(() => {
+    navigateDocs(docsSlug ?? "welcome");
+  }, [docsSlug, navigateDocs]);
+
+  const closeDocs = useCallback(() => {
+    writeDocsSlug(null);
+    setDocsSlug(null);
+  }, []);
 
   async function handleAcknowledgeWarning(warningId: string) {
     setWarningActionState((current) => ({ ...current, [warningId]: "saving" }));
@@ -113,7 +185,11 @@ export default function App() {
   }
 
   return (
-    <main className="command-shell">
+    <>
+      <a className="skip-link" href="#dashboard-content">
+        Skip to dashboard content
+      </a>
+      <main id="dashboard-content" className="command-shell">
       <aside className="side-rail">
         <div className="brand-block">
           <p className="rail-label">terminal</p>
@@ -131,11 +207,17 @@ export default function App() {
                   : item.href === "#models-title"
                     ? state.models.length
                     : item.href === "#routing-title"
-                      ? activePolicyCount
+                      ? state.routing.length
                       : evalRunCount;
 
             return (
-              <a key={item.href} href={item.href}>
+              <a
+                key={item.href}
+                href={item.href}
+                className={activeNavHref === item.href ? "is-active" : undefined}
+                aria-current={activeNavHref === item.href ? "location" : undefined}
+                onClick={() => setActiveNavHref(item.href)}
+              >
                 <span className="rail-nav-label">
                   <span className="rail-nav-icon" aria-hidden="true">
                     {item.icon}
@@ -189,7 +271,7 @@ export default function App() {
           </div>
 
           <div className="header-meta">
-            <p className="command-breadcrumb">US_EAST_1 / CLUSTER_ALPHA / VANTAGE</p>
+            <p className="command-breadcrumb">LOCAL / DESKTOP / VANTAGE</p>
             <div className="header-status-row">
               <span className={`status-chip is-${streamStatus}`}>{labelStreamStatus(streamStatus)}</span>
               <span className="meta-chip">{primaryNodeLabel}</span>
@@ -198,13 +280,30 @@ export default function App() {
               <span className={needsAttention ? "attention-dot is-active" : "attention-dot"} />
               <strong>{attentionSummary}</strong>
               <small>
-                {degradedNodes} degraded / {staleNodes} stale / {activeWarnings.length} warnings / {pendingRuns} pending
+                {degradedNodes} degraded / {staleNodes} stale / {activeWarnings.length} warnings / {pendingRuns}{" "}
+                pending
               </small>
             </div>
-            <button type="button" className="docs-trigger-button" onClick={() => setIsDocsOpen(true)}>
-              <span aria-hidden="true">?</span>
-              Docs
-            </button>
+            <div className="header-action-row">
+              <button type="button" className="docs-trigger-button" onClick={openDocs}>
+                <span aria-hidden="true">?</span>
+                Docs
+              </button>
+              {sessionActions ? (
+                <button
+                  type="button"
+                  className="session-lock-button"
+                  onClick={() => void sessionActions.lockSession()}
+                >
+                  Lock session
+                </button>
+              ) : null}
+            </div>
+            {sessionActions?.error ? (
+              <p className="session-error" role="alert">
+                {sessionActions.error}
+              </p>
+            ) : null}
           </div>
         </header>
 
@@ -214,7 +313,7 @@ export default function App() {
               <span className="signal-label">Tracked nodes</span>
               <strong>{state.nodes.length}</strong>
             </div>
-            <p>{liveNodes} live / {staleNodes} stale</p>
+            <p>{liveNodes} live / {staleNodes} stale / {disabledNodes} disabled</p>
           </article>
           <article className="telemetry-tile">
             <div className="telemetry-tile-header">
@@ -233,9 +332,9 @@ export default function App() {
           <article className="telemetry-tile">
             <div className="telemetry-tile-header">
               <span className="signal-label">Routing</span>
-              <strong>{activePolicyCount}</strong>
+              <strong>{state.routing.length}</strong>
             </div>
-            <p>{state.routing.length} policies visible</p>
+            <p>{activePolicyCount} with configured targets</p>
           </article>
         </section>
 
@@ -247,7 +346,7 @@ export default function App() {
           modelCount={state.models.length}
           runCount={state.runs.length}
           routingRuleCount={state.routing.length}
-          onOpenDocs={() => setIsDocsOpen(true)}
+          onOpenDocs={openDocs}
           onOpenSetupWizard={() => setIsSetupWizardOpen(true)}
         />
 
@@ -276,7 +375,7 @@ export default function App() {
                     disabled={warningActionState[warning.warning_id] === "saving"}
                     onClick={() => void handleAcknowledgeWarning(warning.warning_id)}
                   >
-                    {warningActionState[warning.warning_id] === "saving" ? "Acknowledging..." : "Acknowledge"}
+                    {warningActionState[warning.warning_id] === "saving" ? "Acknowledging…" : "Acknowledge"}
                   </button>
                 </article>
               ))}
@@ -310,9 +409,14 @@ export default function App() {
         <EvalsPage models={state.models} runs={state.runs} />
       </section>
 
-      {isDocsOpen ? (
+      {docsSlug ? (
         <Suspense fallback={null}>
-          <OperatorGuideDrawer isOpen={isDocsOpen} onClose={() => setIsDocsOpen(false)} />
+          <OperatorGuideDrawer
+            isOpen={true}
+            selectedSlug={docsSlug}
+            onClose={closeDocs}
+            onNavigate={navigateDocs}
+          />
         </Suspense>
       ) : null}
 
@@ -324,6 +428,7 @@ export default function App() {
         routingRules={state.routing}
         streamStatus={streamStatus}
       />
-    </main>
+      </main>
+    </>
   );
 }

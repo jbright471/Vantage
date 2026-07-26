@@ -17,7 +17,7 @@ Create a local secret file with independent agent, operator, and session secrets
 ```powershell
 Copy-Item .env.example .env
 .\scripts\rotate-agent-token.ps1 -EnvFile .env -Apply
-.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply -IncludeAuditSigningKey
 ```
 
 Start the stack:
@@ -63,16 +63,11 @@ Before starting production Compose, create an ignored environment file and gener
 ```powershell
 Copy-Item .env.production.example .env.production
 .\scripts\rotate-agent-token.ps1 -EnvFile .env.production -Apply
-.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env.production -Apply
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env.production -Apply -IncludeAuditSigningKey
 docker compose -f docker-compose.prod.yml --env-file .env.production up --build -d
 ```
 
-If you need signed audit bundles, also set:
-
-```powershell
-$env:VANTAGE_AUDIT_SIGNING_KEY = python -c "import secrets; print(secrets.token_urlsafe(48))"
-$env:VANTAGE_AUDIT_KEY_ID = "production-audit-key"
-```
+The audit-signing option enables signed bundles during initial setup. Preserve that generated key so older bundles remain verifiable; omit the option during routine operator/session credential rotation unless you intentionally want to rotate the audit trust root.
 
 If you keep production values in a file, copy [.env.production.example](./.env.production.example) to `.env.production`, fill in real values, and run:
 
@@ -126,8 +121,8 @@ http://<host>:5173
 Use [scripts/check-setup.ps1](./scripts/check-setup.ps1) to validate the local deployment surface before trusting a stack:
 
 ```powershell
-$env:VANTAGE_AGENT_SHARED_TOKEN = "<same-token-as-control-plane>"
 .\scripts\check-setup.ps1 `
+  -EnvFile .env.production `
   -ComposeFile docker-compose.prod.yml `
   -RemoteAgentUrl http://<remote-agent-ip>:9110 `
   -ControlPlaneUrl http://<control-plane-host>:5173
@@ -198,7 +193,7 @@ Apply a new token to `.env.production`:
 .\scripts\rotate-agent-token.ps1 -EnvFile .env.production -Apply
 ```
 
-Then copy the same value into each remote agent env file, restart the backend, restart every `vantage-agent` service, and verify node health. If you use `VANTAGE_AGENT_AUTH_MODE=bearer_or_hmac` during migration, return to `bearer` or `hmac` once all nodes are aligned.
+Then copy the same value into each protected remote agent env file, restart the backend, restart every `vantage-agent` service, and verify node health. If you use `VANTAGE_AGENT_AUTH_MODE=bearer_or_hmac` during migration, return to `hmac` once all nodes are aligned.
 
 ## Remote Linux Agent
 
@@ -221,11 +216,15 @@ Default port:
 Copy the repository, release bundle, or `agent/` plus `deploy/agent/` files onto the worker node. From the repository root on the worker:
 
 ```bash
-sudo VANTAGE_AGENT_SHARED_TOKEN="<same-token-as-control-plane>" \
-  VANTAGE_AGENT_NODE_ID="<your-node-id>" \
-  VANTAGE_AGENT_OLLAMA_BASE_URLS="http://127.0.0.1:11400" \
+sudo VANTAGE_AGENT_NODE_ID="<your-node-id>" \
+  VANTAGE_AGENT_AUTH_MODE="hmac" \
+  VANTAGE_AGENT_KEY_ID="vantage-lan-v1" \
+  VANTAGE_AGENT_OLLAMA_BASE_URLS="http://127.0.0.1:11434" \
+  VANTAGE_AGENT_CONTROL_PLANE_CIDRS="<control-plane-ip>/32" \
   bash deploy/agent/install.sh
 ```
+
+The installer prompts for the shared agent secret on an interactive terminal and does not place it in shell history. Use the same value stored as `VANTAGE_AGENT_SHARED_TOKEN` on the control plane.
 
 The installer creates:
 
@@ -233,8 +232,11 @@ The installer creates:
 - `/opt/vantage/.venv`
 - `/opt/vantage/vantage-agent.env`
 - `/etc/systemd/system/vantage-agent.service`
+- `/etc/systemd/system/vantage-agent.service.d/network-policy.conf` when control-plane CIDRs are supplied
 
 Set `VANTAGE_AGENT_NODE_ID` to the same node ID used in `config/vantage.bootstrap.toml`. If you need a custom install path, set `VANTAGE_INSTALL_DIR`. If you need a custom service user, set `VANTAGE_AGENT_USER`.
+
+The systemd service listens on TCP `9110` so the registered control plane can reach it. `VANTAGE_AGENT_CONTROL_PLANE_CIDRS` applies a service-local deny-by-default IP policy while preserving loopback access to Ollama. Retain a worker firewall or trusted VPN as defense in depth. HMAC authenticates and integrity-protects requests but does not encrypt prompts, responses, or telemetry; use a trusted LAN, VPN, or TLS tunnel and never publish the agent port to the internet.
 
 Check status:
 
@@ -250,11 +252,12 @@ Unauthenticated requests should fail:
 Invoke-WebRequest http://<remote-agent-ip>:9110/health -SkipHttpErrorCheck
 ```
 
-Authenticated requests should pass:
+Run the authenticated health check from the control-plane checkout. The checker generates an HMAC timestamp, nonce, body digest, and signature without printing the token:
 
 ```powershell
-$token = (Get-Content .env | Where-Object { $_ -like 'VANTAGE_AGENT_SHARED_TOKEN=*' }).Split('=',2)[1]
-Invoke-RestMethod http://<remote-agent-ip>:9110/health -Headers @{ Authorization = "Bearer $token" }
+.\scripts\check-setup.ps1 `
+  -EnvFile .env `
+  -RemoteAgentUrl http://<remote-agent-ip>:9110
 ```
 
 The control plane should show the node as healthy:

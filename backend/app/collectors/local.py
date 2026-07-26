@@ -1,24 +1,9 @@
 from collections.abc import Sequence
 from datetime import UTC, datetime
-import os
 
 import httpx
 
-
-DEFAULT_LOCAL_OLLAMA_BASE_URLS = ("http://127.0.0.1:11400",)
-LOCAL_OLLAMA_BASE_URLS_ENV = "VANTAGE_LOCAL_OLLAMA_BASE_URLS"
-
-
-def resolve_local_ollama_base_urls(configured_urls: Sequence[str] | None = None) -> list[str]:
-    raw_urls = os.getenv(LOCAL_OLLAMA_BASE_URLS_ENV)
-    if raw_urls:
-        candidates = [part.strip() for part in raw_urls.split(",")]
-    elif configured_urls:
-        candidates = list(configured_urls)
-    else:
-        candidates = list(DEFAULT_LOCAL_OLLAMA_BASE_URLS)
-
-    return [candidate.rstrip("/") for candidate in candidates if candidate.strip()]
+from backend.app.services.endpoint_overrides import resolve_local_ollama_base_urls
 
 
 def _parse_ollama_tags_payload(payload: dict) -> list[dict]:

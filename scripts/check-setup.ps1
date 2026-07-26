@@ -5,6 +5,7 @@ param(
     [string]$RemoteAgentUrl = "",
     [string]$AgentTokenEnv = "VANTAGE_AGENT_SHARED_TOKEN",
     [string]$AgentAuthModeEnv = "VANTAGE_AGENT_AUTH_MODE",
+    [string]$AgentKeyIdEnv = "VANTAGE_AGENT_KEY_ID",
     [string]$AuditSigningKeyEnv = "VANTAGE_AUDIT_SIGNING_KEY",
     [string]$ExternalApiTokenEnv = "VANTAGE_EXTERNAL_API_TOKEN",
     [string]$ControlPlaneTokenEnv = "VANTAGE_CONTROL_PLANE_TOKEN",
@@ -69,6 +70,54 @@ function Add-Warning {
     param([string]$Name, [string]$Detail)
     $warnings.Add("${Name}: $Detail") | Out-Null
     Write-Check $Name "WARN" $Detail
+}
+
+function Get-Sha256Hex {
+    param([byte[]]$Bytes)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return ([System.BitConverter]::ToString($sha256.ComputeHash($Bytes))).Replace("-", "").ToLowerInvariant()
+    } finally {
+        $sha256.Dispose()
+    }
+}
+
+function New-AgentHmacHeaders {
+    param(
+        [string]$Method,
+        [string]$Path,
+        [string]$SigningKey,
+        [string]$KeyId = "",
+        [byte[]]$Body = [byte[]]::new(0)
+    )
+    $timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds().ToString()
+    $nonceBytes = [byte[]]::new(18)
+    $random = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $random.GetBytes($nonceBytes)
+    } finally {
+        $random.Dispose()
+    }
+    $nonce = [Convert]::ToBase64String($nonceBytes).TrimEnd("=").Replace("+", "-").Replace("/", "_")
+    $bodyHash = Get-Sha256Hex $Body
+    $message = "$($Method.ToUpperInvariant())`n$Path`n$timestamp`n$nonce`n$bodyHash"
+    $keyBytes = [System.Text.Encoding]::UTF8.GetBytes($SigningKey)
+    $messageBytes = [System.Text.Encoding]::UTF8.GetBytes($message)
+    $hmac = [System.Security.Cryptography.HMACSHA256]::new($keyBytes)
+    try {
+        $signature = ([System.BitConverter]::ToString($hmac.ComputeHash($messageBytes))).Replace("-", "").ToLowerInvariant()
+    } finally {
+        $hmac.Dispose()
+    }
+    $headers = @{
+        "X-Vantage-Timestamp" = $timestamp
+        "X-Vantage-Nonce" = $nonce
+        "X-Vantage-Signature" = $signature
+    }
+    if ($KeyId) {
+        $headers["X-Vantage-Key-Id"] = $KeyId
+    }
+    return $headers
 }
 
 if (Get-Command docker -ErrorAction SilentlyContinue) {
@@ -138,7 +187,7 @@ if ([string]::IsNullOrWhiteSpace($sessionSigningKey)) {
 
 $authMode = Get-ConfiguredValue $AgentAuthModeEnv
 if ([string]::IsNullOrWhiteSpace($authMode)) {
-    $authMode = "bearer"
+    $authMode = "hmac"
 }
 if ($authMode.ToLowerInvariant() -in @("bearer", "hmac", "bearer_or_hmac")) {
     Write-Check "Agent auth mode" "OK" "$AgentAuthModeEnv=$authMode"
@@ -204,19 +253,21 @@ try {
 }
 
 if ($RemoteAgentUrl) {
-    if ($authMode.ToLowerInvariant() -eq "hmac") {
-        Add-Warning "Remote agent" "HMAC mode configured; verify $RemoteAgentUrl/health through Vantage or a signed request client"
-    } else {
-        try {
-            $headers = @{}
-            if ($token) {
+    try {
+        $remoteHealthUrl = "$($RemoteAgentUrl.TrimEnd('/'))/health"
+        $headers = @{}
+        if ($token) {
+            if ($authMode.ToLowerInvariant() -in @("hmac", "bearer_or_hmac")) {
+                $keyId = Get-ConfiguredValue $AgentKeyIdEnv
+                $headers = New-AgentHmacHeaders -Method "GET" -Path ([Uri]$remoteHealthUrl).AbsolutePath -SigningKey $token -KeyId $keyId
+            } else {
                 $headers.Authorization = "Bearer $token"
             }
-            $agentHealth = Invoke-RestMethod "$RemoteAgentUrl/health" -Headers $headers -TimeoutSec 5
-            Write-Check "Remote agent" "OK" "status=$($agentHealth.status)"
-        } catch {
-            Add-Failure "Remote agent" "failed to reach $RemoteAgentUrl/health"
         }
+        $agentHealth = Invoke-RestMethod $remoteHealthUrl -Headers $headers -TimeoutSec 5
+        Write-Check "Remote agent" "OK" "status=$($agentHealth.status), node_id=$($agentHealth.node_id), auth=$authMode"
+    } catch {
+        Add-Failure "Remote agent" "failed authenticated health check at $RemoteAgentUrl"
     }
 } else {
     Add-Warning "Remote agent" "not checked; pass -RemoteAgentUrl http://<remote-agent-ip>:9110"

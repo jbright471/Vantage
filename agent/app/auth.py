@@ -46,7 +46,7 @@ def sign_request_message(signing_key: str, message: str) -> str:
 
 
 def _auth_mode() -> str:
-    return os.getenv(AGENT_AUTH_MODE_ENV, "bearer").strip().lower()
+    return os.getenv(AGENT_AUTH_MODE_ENV, "hmac").strip().lower()
 
 
 def _allowed_actions() -> set[str]:

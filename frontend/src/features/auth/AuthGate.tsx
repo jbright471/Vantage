@@ -1,5 +1,6 @@
-import { FormEvent, ReactNode, useEffect, useState } from "react";
+import { createContext, FormEvent, ReactNode, useContext, useEffect, useState } from "react";
 
+import { readCsrfToken } from "../../api/http";
 
 type AuthStatus = {
   configured: boolean;
@@ -10,13 +11,15 @@ type AuthGateProps = {
   children: ReactNode;
 };
 
-function csrfToken(): string | null {
-  const prefix = "vantage_csrf=";
-  const value = document.cookie
-    .split(";")
-    .map((cookie) => cookie.trim())
-    .find((cookie) => cookie.startsWith(prefix));
-  return value ? decodeURIComponent(value.slice(prefix.length)) : null;
+type SessionActions = {
+  lockSession: () => Promise<void>;
+  error: string | null;
+};
+
+const SessionActionsContext = createContext<SessionActions | null>(null);
+
+export function useSessionActions(): SessionActions | null {
+  return useContext(SessionActionsContext);
 }
 
 async function readAuthStatus(): Promise<AuthStatus> {
@@ -78,7 +81,7 @@ export function AuthGate({ children }: AuthGateProps) {
   }
 
   async function handleLogout() {
-    const csrf = csrfToken();
+    const csrf = readCsrfToken();
     setError(null);
     try {
       const response = await fetch("/api/auth/logout", {
@@ -97,13 +100,9 @@ export function AuthGate({ children }: AuthGateProps) {
 
   if (status?.authenticated) {
     return (
-      <>
-        <button type="button" className="session-lock-button" onClick={() => void handleLogout()}>
-          Lock session
-        </button>
-        {error ? <p className="session-error" role="alert">{error}</p> : null}
+      <SessionActionsContext.Provider value={{ lockSession: handleLogout, error }}>
         {children}
-      </>
+      </SessionActionsContext.Provider>
     );
   }
 
@@ -156,7 +155,7 @@ export function AuthGate({ children }: AuthGateProps) {
                 onChange={(event) => setToken(event.target.value)}
               />
               <button type="submit" disabled={submitting}>
-                {submitting ? "Unlocking..." : "Unlock Vantage"}
+                {submitting ? "Unlocking…" : "Unlock Vantage"}
               </button>
             </form>
           </>

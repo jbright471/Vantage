@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { buildRunExportUrl, fetchRuns, type RunsQuery, type RunRecord } from "../../api/client";
+import { OverlayHeader, OverlaySurface } from "../../components/OverlaySurface";
 import { RunRow } from "./RunRow";
 
 type RunsPageProps = {
@@ -40,17 +41,6 @@ async function copyText(value: string) {
 }
 
 function RunDetailsDrawer({ run, onClose }: { run: RunRecord; onClose: () => void }) {
-  useEffect(() => {
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    }
-
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [onClose]);
-
   const metadataPayload = run.metadata_json ?? {};
   const metadataJson = Object.keys(metadataPayload).length
     ? JSON.stringify(metadataPayload, null, 2)
@@ -58,26 +48,18 @@ function RunDetailsDrawer({ run, onClose }: { run: RunRecord; onClose: () => voi
   const fullRunJson = JSON.stringify(run, null, 2);
 
   return (
-    <div className="run-drawer-backdrop" role="presentation" onClick={onClose}>
-      <aside
-        className="run-drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="run-drawer-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className="drawer-header">
-          <div>
-            <p className="section-kicker">Run details</p>
-            <h3 id="run-drawer-title">Run Details</h3>
-            <p className="drawer-run-id">{run.run_id}</p>
-          </div>
-          <button type="button" className="drawer-close-button" aria-label="Close run details" onClick={onClose}>
-            X
-          </button>
-        </header>
+    <OverlaySurface isOpen onClose={onClose} labelledBy="run-drawer-title">
+      <OverlayHeader
+        titleId="run-drawer-title"
+        title="Run Details"
+        kicker="Run details"
+        meta={run.run_id}
+        closeLabel="Close run details"
+        onClose={onClose}
+        headingLevel={3}
+      />
 
-        <div className="drawer-content">
+      <div className="drawer-content">
           <dl className="run-stats-grid">
             <div>
               <dt>Status</dt>
@@ -127,9 +109,8 @@ function RunDetailsDrawer({ run, onClose }: { run: RunRecord; onClose: () => voi
               <code>{fullRunJson}</code>
             </pre>
           </section>
-        </div>
-      </aside>
-    </div>
+      </div>
+    </OverlaySurface>
   );
 }
 
@@ -184,6 +165,19 @@ export function RunsPage({ runs }: RunsPageProps) {
       isCurrent = false;
     };
   }, [statusFilter, runLimit]);
+
+  useEffect(() => {
+    if (statusFilter !== null) {
+      return;
+    }
+
+    setPageState({
+      items: sortRunsByStartedAt(runs).slice(0, runLimit),
+      total: runs.length,
+      limit: runLimit,
+      offset: 0,
+    });
+  }, [runs, statusFilter, runLimit]);
 
   const orderedRuns = sortRunsByStartedAt(pageState.items).slice(0, runLimit);
   const visibleRunCount = Math.min(orderedRuns.length, pageState.total);
@@ -242,7 +236,7 @@ export function RunsPage({ runs }: RunsPageProps) {
 
       {orderedRuns.length === 0 ? (
         <div className="empty-state">
-          {requestState === "loading" ? "Loading run history..." : "No run history matches the current filter."}
+          {requestState === "loading" ? "Loading run history…" : "No run history matches the current filter."}
         </div>
       ) : (
         <div className="runs-layout">

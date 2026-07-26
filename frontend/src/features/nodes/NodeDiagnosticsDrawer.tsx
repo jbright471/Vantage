@@ -1,4 +1,5 @@
 import type { NodeRecord, OllamaErrorRecord } from "../../api/client";
+import { OverlayHeader, OverlaySurface } from "../../components/OverlaySurface";
 
 type DiagnosticNode = Pick<
   NodeRecord,
@@ -38,7 +39,7 @@ function formatTimestamp(value: string | null): string {
     return value;
   }
 
-  return parsed.toLocaleString();
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(parsed);
 }
 
 function summarizePrimaryIssue(node: DiagnosticNode): string {
@@ -114,26 +115,24 @@ export function NodeDiagnosticsDrawer({
   const uniqueSteps = Array.from(new Set(suggestedSteps));
 
   return (
-    <div className="run-drawer-backdrop" role="presentation" onClick={onClose}>
-      <aside
-        className="run-drawer diagnostics-drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="node-diagnostics-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className="drawer-header">
-          <div>
-            <p className="section-kicker">Node diagnostics</p>
-            <h3 id="node-diagnostics-title">{node.display_name}</h3>
-            <p className="drawer-run-id">{node.node_id}</p>
-          </div>
-          <button type="button" className="drawer-close-button" aria-label="Close node diagnostics" onClick={onClose}>
-            X
-          </button>
-        </header>
+    <OverlaySurface
+      isOpen
+      onClose={onClose}
+      labelledBy="node-diagnostics-title"
+      size="wide"
+      className="diagnostics-drawer"
+    >
+      <OverlayHeader
+        titleId="node-diagnostics-title"
+        title={node.display_name}
+        kicker="Node diagnostics"
+        meta={node.node_id}
+        closeLabel="Close node diagnostics"
+        onClose={onClose}
+        headingLevel={3}
+      />
 
-        <div className="drawer-content">
+      <div className="drawer-content">
           <section className="drawer-section">
             <h4>Primary issue</h4>
             <p>{summarizePrimaryIssue(node)}</p>
@@ -179,7 +178,7 @@ export function NodeDiagnosticsDrawer({
                           onClick={() => onDisableEndpoint(node.node_id, error.base_url as string)}
                         >
                           {endpointActionState[error.base_url]?.phase === "submitting"
-                            ? "Submitting..."
+                            ? "Submitting…"
                             : "Disable endpoint"}
                         </button>
                         {endpointActionState[error.base_url]?.message ? (
@@ -217,8 +216,7 @@ export function NodeDiagnosticsDrawer({
               routed through a future allowlisted node agent action, not silently executed from the dashboard.
             </p>
           </section>
-        </div>
-      </aside>
-    </div>
+      </div>
+    </OverlaySurface>
   );
 }
