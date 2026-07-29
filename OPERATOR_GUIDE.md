@@ -65,6 +65,23 @@ For stronger node-to-node trust, set `VANTAGE_AGENT_AUTH_MODE=hmac` in the backe
 
 Use `scripts/rotate-agent-token.ps1` when rotating `VANTAGE_AGENT_SHARED_TOKEN`. Rotation is a coordinated workflow: update the control-plane env, update every agent env, restart both sides, and verify `/health`.
 
+### Operator Authentication
+
+The web control plane is a single-operator application. It requires two independent values of at least 32 characters:
+
+- `VANTAGE_CONTROL_PLANE_TOKEN` authenticates browser login and trusted operator scripts.
+- `VANTAGE_SESSION_SIGNING_KEY` signs the short-lived browser session and must not equal the operator token.
+
+Generate both without printing them:
+
+```powershell
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply
+```
+
+After opening the UI, provide the operator token at the login screen. The browser receives an HttpOnly, SameSite session cookie; state-changing requests also require the session-bound CSRF token. Bearer-token scripts do not use cookie authentication or CSRF.
+
+Login attempts are throttled. Missing or weak operator/session configuration makes protected routes fail closed with HTTP `503`; missing credentials return HTTP `401`. Set `VANTAGE_SESSION_COOKIE_SECURE=1` whenever Vantage is served over HTTPS.
+
 ### Health Checks
 
 Use the backend health endpoints when starting, updating, or troubleshooting Vantage:
@@ -88,12 +105,13 @@ Production deployments use `docker-compose.prod.yml`, `.env.production`, and the
 | `.env.example` | Development environment template with no real secrets. |
 | `.env.production.example` | Production environment template with no real secrets. |
 | `config/vantage.bootstrap.example.toml` | Public-safe node registry sample for releases and other operators. |
-| `scripts/check-setup.ps1` | Preflight check for Docker, Compose config, token presence, auth mode, optional audit signing key, optional SQLite path, backend readiness, and remote-agent reachability. |
+| `scripts/check-setup.ps1` | Preflight check for Docker, Compose config, independent secrets, auth mode, optional audit signing key, optional SQLite path, backend readiness, and remote-agent reachability. Reads `.env` by default or `-EnvFile <path>`. |
 | `scripts/build-release.ps1` | Creates a shareable release zip and `SHA256SUMS.txt`. |
 | `scripts/rotate-agent-token.ps1` | Generates a new high-entropy agent token and optionally updates an env file. |
+| `scripts/rotate-control-plane-secrets.ps1` | Generates independent operator and session-signing secrets without printing them by default. |
 | `scripts/verify-audit-bundle.py` | Verifies signed audit bundle payload digests and HMAC signatures. |
 
-Production Compose requires `VANTAGE_AGENT_SHARED_TOKEN` to be supplied externally. Keep that value in `.env.production`, Portainer secrets, or Portainer environment variables. Do not paste real tokens into Compose YAML, screenshots, tickets, or documentation.
+Production Compose requires `VANTAGE_AGENT_SHARED_TOKEN`, `VANTAGE_CONTROL_PLANE_TOKEN`, and `VANTAGE_SESSION_SIGNING_KEY` to be supplied externally. Keep those values in `.env.production`, Portainer secrets, or a managed secret store. Do not paste real tokens into Compose YAML, screenshots, tickets, or documentation.
 
 Production Compose runs Alembic migrations before Uvicorn starts. Back up SQLite before updates, especially before pulling a release that changes database models.
 

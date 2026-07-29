@@ -9,13 +9,14 @@ The intended flow is Remotion-compatible, but Vantage does not require Remotion 
 Use demo mode for every public video:
 
 ```powershell
-$token = python -c "import secrets; print(secrets.token_urlsafe(48))"
-(Get-Content .env.example) -replace '^VANTAGE_AGENT_SHARED_TOKEN=.*', "VANTAGE_AGENT_SHARED_TOKEN=$token" | Set-Content .env
+Copy-Item .env.example .env
+.\scripts\rotate-agent-token.ps1 -EnvFile .env -Apply
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply
 (Get-Content .env) -replace '^VANTAGE_DEMO_MODE=.*', "VANTAGE_DEMO_MODE=1" | Set-Content .env
 docker compose up --build -d
 ```
 
-Open `http://127.0.0.1:5173` and confirm the UI shows demo nodes rather than real hostnames, private IPs, local paths, tokens, or personal prompts.
+Copy the operator token to the clipboard off-camera, open `http://127.0.0.1:5173`, sign in, and confirm the UI shows demo nodes rather than real hostnames, private IPs, local paths, tokens, or personal prompts.
 
 ## Storyboard
 

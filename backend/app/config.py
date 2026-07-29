@@ -29,7 +29,7 @@ class BootstrapConfig(BaseModel):
     abandoned_after_seconds: int = 900
     idempotency_dedupe_seconds: int = 30
     agent_auth_token_env: str = "VANTAGE_AGENT_SHARED_TOKEN"
-    local_ollama_base_urls: list[str] = Field(default_factory=lambda: ["http://127.0.0.1:11434"])
+    local_ollama_base_urls: list[str] = Field(default_factory=lambda: ["http://127.0.0.1:11400"])
     nodes: list[BootstrapNode] = Field(default_factory=list)
 
 

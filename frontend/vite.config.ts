@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react()],
+    cacheDir: env.VANTAGE_VITE_CACHE_DIR || "/tmp/vantage-vite-cache",
     server: {
       proxy: {
         "/api": apiProxyTarget,

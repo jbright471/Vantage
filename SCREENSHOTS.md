@@ -7,12 +7,15 @@ Use this guide when preparing README images, GitHub release media, or a public d
 Run Vantage with seeded synthetic data:
 
 ```powershell
-$env:VANTAGE_DEMO_MODE = "1"
-$env:VANTAGE_ENABLE_BACKGROUND_POLLING = "0"
+Copy-Item .env.example .env
+.\scripts\rotate-agent-token.ps1 -EnvFile .env -Apply
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply
+(Get-Content .env) -replace '^VANTAGE_DEMO_MODE=.*', "VANTAGE_DEMO_MODE=1" | Set-Content .env
+Add-Content .env "VANTAGE_ENABLE_BACKGROUND_POLLING=0"
 docker compose up --build -d
 ```
 
-This avoids exposing real node names, private IP addresses, model paths, or local filesystem details.
+Copy the operator token to the clipboard without showing it in the recording, then sign in. This avoids exposing real node names, private IP addresses, model paths, local filesystem details, or credentials.
 
 ## Capture List
 

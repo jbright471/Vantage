@@ -11,7 +11,7 @@ from uuid import uuid4
 import httpx
 
 
-DEFAULT_AGENT_OLLAMA_BASE_URLS = ("http://127.0.0.1:11435",)
+DEFAULT_AGENT_OLLAMA_BASE_URLS = ("http://127.0.0.1:11400",)
 AGENT_OLLAMA_BASE_URLS_ENV = "VANTAGE_AGENT_OLLAMA_BASE_URLS"
 AGENT_NODE_ID_ENV = "VANTAGE_AGENT_NODE_ID"
 DEFAULT_AGENT_NODE_ID = "remote-agent"
@@ -20,6 +20,29 @@ CAPABILITY_CHECK_PROMPT = (
     'Use keys "mode", "json", and "notes". Return JSON only.'
 )
 RECENT_RUNS: deque[dict] = deque(maxlen=25)
+DEFAULT_EVAL_NUM_PREDICT = 512
+DEFAULT_MAX_LLM_RESPONSE_CHARS = 65536
+
+
+def _bounded_env_int(name: str, default: int, *, minimum: int, maximum: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+    return max(minimum, min(value, maximum))
+
+
+def _bounded_response_text(value: Any) -> str:
+    response_text = str(value)
+    maximum = _bounded_env_int(
+        "VANTAGE_LLM_MAX_RESPONSE_CHARS",
+        DEFAULT_MAX_LLM_RESPONSE_CHARS,
+        minimum=1024,
+        maximum=1_000_000,
+    )
+    if len(response_text) > maximum:
+        raise RuntimeError("LLM response exceeded the configured size limit")
+    return response_text
 
 
 def resolve_agent_node_id() -> str:
@@ -268,6 +291,12 @@ def run_eval_attempt(model_name: str, *, prompt: str, expected_json: dict | None
         "stream": False,
         "options": {
             "temperature": 0,
+            "num_predict": _bounded_env_int(
+                "VANTAGE_EVAL_NUM_PREDICT",
+                DEFAULT_EVAL_NUM_PREDICT,
+                minimum=16,
+                maximum=4096,
+            ),
         },
     }
     expected = expected_json or {}
@@ -277,7 +306,7 @@ def run_eval_attempt(model_name: str, *, prompt: str, expected_json: dict | None
         try:
             response = httpx.post(f"{base_url}/api/generate", json=payload, timeout=90.0)
             response.raise_for_status()
-            response_text = str(response.json().get("response", ""))
+            response_text = _bounded_response_text(response.json().get("response", ""))
             score = _score_expected_json(response_text, expected)
             ended_at = datetime.now(UTC)
             return _record_run(

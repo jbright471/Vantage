@@ -2,6 +2,7 @@ from fastapi import Depends, FastAPI
 
 from agent.app.auth import require_agent_auth
 from agent.app import collectors
+from agent.app.resource_limits import require_agent_operation_capacity
 from agent.app.schemas import (
     CapabilityCheckRequest,
     EvalAttemptRequest,
@@ -35,12 +36,20 @@ def runs() -> dict:
     return {"runs": collectors.get_runs()}
 
 
-@app.post("/capability-check", response_model=RunInfo)
+@app.post(
+    "/capability-check",
+    response_model=RunInfo,
+    dependencies=[Depends(require_agent_operation_capacity)],
+)
 def capability_check(request: CapabilityCheckRequest) -> dict:
     return collectors.run_capability_check(request.model_name, prompt=request.prompt)
 
 
-@app.post("/eval-attempt", response_model=RunInfo)
+@app.post(
+    "/eval-attempt",
+    response_model=RunInfo,
+    dependencies=[Depends(require_agent_operation_capacity)],
+)
 def eval_attempt(request: EvalAttemptRequest) -> dict:
     return collectors.run_eval_attempt(
         request.model_name,

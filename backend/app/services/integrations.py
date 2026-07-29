@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import ipaddress
 import os
+import socket
 import smtplib
 from datetime import UTC, datetime
 from email.message import EmailMessage
@@ -21,6 +23,7 @@ GENERIC_WEBHOOK_URL_ENV = "VANTAGE_WEBHOOK_URL"
 SLACK_WEBHOOK_URL_ENV = "VANTAGE_SLACK_WEBHOOK_URL"
 DISCORD_WEBHOOK_URL_ENV = "VANTAGE_DISCORD_WEBHOOK_URL"
 WEBHOOK_ALLOWED_HOSTS_ENV = "VANTAGE_WEBHOOK_ALLOWED_HOSTS"
+WEBHOOK_ALLOW_PRIVATE_NETWORKS_ENV = "VANTAGE_WEBHOOK_ALLOW_PRIVATE_NETWORKS"
 EMAIL_SMTP_HOST_ENV = "VANTAGE_EMAIL_SMTP_HOST"
 EMAIL_SMTP_PORT_ENV = "VANTAGE_EMAIL_SMTP_PORT"
 EMAIL_SMTP_USERNAME_ENV = "VANTAGE_EMAIL_SMTP_USERNAME"
@@ -29,6 +32,12 @@ EMAIL_FROM_ENV = "VANTAGE_EMAIL_FROM"
 EMAIL_TO_ENV = "VANTAGE_EMAIL_TO"
 EMAIL_USE_TLS_ENV = "VANTAGE_EMAIL_USE_TLS"
 INTEGRATION_LAST_DISPATCH_KEY = "integration_last_dispatch"
+PRIVATE_WEBHOOK_NETWORKS = (
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("fc00::/7"),
+)
 
 
 def _event_id(prefix: str, value: str) -> str:
@@ -135,13 +144,91 @@ def email_configured() -> bool:
     return bool(os.getenv(EMAIL_SMTP_HOST_ENV) and os.getenv(EMAIL_FROM_ENV) and os.getenv(EMAIL_TO_ENV))
 
 
+def _target_matches_allowed_host(url: str, allowed_host: str) -> bool:
+    target = urlparse(url)
+    allowed = urlparse(f"//{allowed_host}")
+    if not target.hostname or not allowed.hostname:
+        return False
+    if target.hostname.lower().rstrip(".") != allowed.hostname.lower().rstrip("."):
+        return False
+    try:
+        allowed_port = allowed.port
+    except ValueError:
+        return False
+    if allowed_port is None:
+        return target.port is None
+    target_port = target.port or (443 if target.scheme == "https" else 80)
+    return target_port == allowed_port
+
+
+def _require_public_webhook_addresses(hostname: str, port: int) -> None:
+    try:
+        address_info = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+    except OSError as exc:
+        raise ValueError("Webhook target could not be resolved") from exc
+    if not address_info:
+        raise ValueError("Webhook target could not be resolved")
+
+    for info in address_info:
+        address = info[4][0].split("%", 1)[0]
+        try:
+            parsed_address = ipaddress.ip_address(address)
+        except ValueError as exc:
+            raise ValueError("Webhook target resolved to an invalid address") from exc
+        private_networks_allowed = os.getenv(WEBHOOK_ALLOW_PRIVATE_NETWORKS_ENV, "").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        is_explicitly_allowed_private = private_networks_allowed and any(
+            parsed_address in network for network in PRIVATE_WEBHOOK_NETWORKS
+        )
+        if not parsed_address.is_global and not is_explicitly_allowed_private:
+            raise ValueError("Webhook target resolves to a non-public address")
+
+
 def validate_webhook_target(url: str) -> None:
     parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or not parsed.hostname:
         raise ValueError("Webhook target must be an http or https URL")
+    if parsed.username or parsed.password:
+        raise ValueError("Webhook target must not include user information")
+    try:
+        target_port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    except ValueError as exc:
+        raise ValueError("Webhook target port is invalid") from exc
+
     allowed_hosts = {host.strip().lower() for host in os.getenv(WEBHOOK_ALLOWED_HOSTS_ENV, "").split(",") if host.strip()}
-    if allowed_hosts and (parsed.hostname or "").lower() not in allowed_hosts:
+    if not allowed_hosts:
+        raise ValueError("VANTAGE_WEBHOOK_ALLOWED_HOSTS must explicitly allow the webhook target")
+    if not any(_target_matches_allowed_host(url, allowed_host) for allowed_host in allowed_hosts):
         raise ValueError("Webhook target host is not in VANTAGE_WEBHOOK_ALLOWED_HOSTS")
+    _require_public_webhook_addresses(parsed.hostname, target_port)
+
+
+def redact_webhook_target(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        return "<redacted>"
+    hostname = parsed.hostname
+    authority = f"[{hostname}]" if ":" in hostname else hostname
+    try:
+        if parsed.port is not None:
+            authority = f"{authority}:{parsed.port}"
+    except ValueError:
+        return "<redacted>"
+    return f"{parsed.scheme}://{authority}/<redacted>"
+
+
+def _sanitize_dispatch_result(result: dict[str, Any] | None) -> dict[str, Any] | None:
+    if result is None:
+        return None
+    sanitized = dict(result)
+    target_url = sanitized.get("target_url")
+    if isinstance(target_url, str):
+        sanitized["target_url"] = redact_webhook_target(target_url)
+    return sanitized
 
 
 def build_webhook_payload(adapter: str, events: list[dict[str, Any]]) -> dict[str, Any]:
@@ -192,19 +279,19 @@ def dispatch_email(events: list[dict[str, Any]]) -> dict[str, Any]:
 async def dispatch_webhook(adapter: str, target_url: str, events: list[dict[str, Any]]) -> dict[str, Any]:
     validate_webhook_target(target_url)
     payload = build_webhook_payload(adapter, events)
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
         response = await client.post(target_url, json=payload)
         response.raise_for_status()
     return {
         "adapter": adapter,
-        "target_url": target_url,
+        "target_url": redact_webhook_target(target_url),
         "event_count": len(events),
         "status_code": response.status_code,
     }
 
 
 def record_integration_dispatch(session: Session, result: dict[str, Any]) -> dict[str, Any]:
-    payload = {**result, "dispatched_at": datetime.now(UTC).isoformat()}
+    payload = {**(_sanitize_dispatch_result(result) or {}), "dispatched_at": datetime.now(UTC).isoformat()}
     set_app_setting(session, INTEGRATION_LAST_DISPATCH_KEY, payload)
     return payload
 
@@ -221,6 +308,6 @@ def build_integration_health(session: Session) -> dict[str, Any]:
         "external_api_token_configured": bool(os.getenv("VANTAGE_EXTERNAL_API_TOKEN")),
         "webhook_allowed_hosts_configured": bool(os.getenv(WEBHOOK_ALLOWED_HOSTS_ENV)),
         "configured_targets": configured_targets,
-        "last_dispatch": get_app_setting(session, INTEGRATION_LAST_DISPATCH_KEY, None),
+        "last_dispatch": _sanitize_dispatch_result(get_app_setting(session, INTEGRATION_LAST_DISPATCH_KEY, None)),
         "security_event_counters": list_security_event_counters(session),
     }

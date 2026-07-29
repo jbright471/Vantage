@@ -17,6 +17,13 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
+if [[ ! -f "${INSTALL_DIR}/vantage-agent.env" ]]; then
+  if [[ -z "${VANTAGE_AGENT_SHARED_TOKEN:-}" || "${#VANTAGE_AGENT_SHARED_TOKEN}" -lt 32 ]]; then
+    echo "VANTAGE_AGENT_SHARED_TOKEN must contain at least 32 characters for a new agent installation." >&2
+    exit 1
+  fi
+fi
+
 if ! id "${AGENT_USER}" >/dev/null 2>&1; then
   NOLOGIN_SHELL="$(command -v nologin || echo /usr/sbin/nologin)"
   useradd --system --home "${INSTALL_DIR}" --shell "${NOLOGIN_SHELL}" "${AGENT_USER}"
@@ -38,7 +45,11 @@ if [[ ! -f "${INSTALL_DIR}/vantage-agent.env" ]]; then
     echo "VANTAGE_AGENT_AUTH_MODE=${VANTAGE_AGENT_AUTH_MODE:-bearer}"
     echo "VANTAGE_AGENT_KEY_ID=${VANTAGE_AGENT_KEY_ID:-}"
     echo "VANTAGE_AGENT_ALLOWED_ACTIONS=${VANTAGE_AGENT_ALLOWED_ACTIONS:-read,capability_check,eval_attempt}"
-    echo "VANTAGE_AGENT_OLLAMA_BASE_URLS=${VANTAGE_AGENT_OLLAMA_BASE_URLS:-http://127.0.0.1:11434}"
+    echo "VANTAGE_AGENT_LLM_REQUESTS_PER_MINUTE=${VANTAGE_AGENT_LLM_REQUESTS_PER_MINUTE:-30}"
+    echo "VANTAGE_AGENT_LLM_MAX_CONCURRENCY=${VANTAGE_AGENT_LLM_MAX_CONCURRENCY:-1}"
+    echo "VANTAGE_EVAL_NUM_PREDICT=${VANTAGE_EVAL_NUM_PREDICT:-512}"
+    echo "VANTAGE_LLM_MAX_RESPONSE_CHARS=${VANTAGE_LLM_MAX_RESPONSE_CHARS:-65536}"
+    echo "VANTAGE_AGENT_OLLAMA_BASE_URLS=${VANTAGE_AGENT_OLLAMA_BASE_URLS:-http://127.0.0.1:11400}"
     echo "VANTAGE_AGENT_NODE_ID=${VANTAGE_AGENT_NODE_ID:-remote-agent}"
   } >"${INSTALL_DIR}/vantage-agent.env"
   chmod 600 "${INSTALL_DIR}/vantage-agent.env"

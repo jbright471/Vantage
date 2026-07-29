@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from backend.app.api.actions import router as actions_router
+from backend.app.api.control_plane_auth import router as control_plane_auth_router
 from backend.app.api.docs import router as docs_router
 from backend.app.api.evals import router as evals_router
 from backend.app.api.health import router as health_router
@@ -30,6 +31,7 @@ from backend.app.workers.report_scheduler import (
     stop_report_scheduler_task,
 )
 from backend.app.logging import configure_logging
+from backend.app.security.control_plane import control_plane_security_middleware
 
 
 @asynccontextmanager
@@ -88,7 +90,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Vantage Control Plane", lifespan=lifespan)
+app.middleware("http")(control_plane_security_middleware)
 app.include_router(health_router, prefix="/api")
+app.include_router(control_plane_auth_router, prefix="/api")
 app.include_router(actions_router, prefix="/api")
 app.include_router(docs_router, prefix="/api")
 app.include_router(evals_router, prefix="/api")

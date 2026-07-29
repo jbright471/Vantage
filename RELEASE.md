@@ -17,8 +17,9 @@ The zip bundle includes:
 - generic bootstrap config sample
 - remote-agent installer assets
 - setup-check script
-- token-rotation helper script
+- agent and control-plane secret-rotation helper scripts
 - audit-bundle verification helper script
+- security audit and machine-readable findings
 - security hardening notes under `docs/security/`
 - integration examples under `docs/integrations/`
 - operator documentation
@@ -69,6 +70,12 @@ It verifies:
 
 Then it uploads the zip bundle and checksum file to the GitHub release.
 
+## Security Workflow
+
+The SHA-pinned `.github/workflows/security.yml` workflow runs on pull requests, default-branch pushes, a weekly schedule, and manual dispatch. It covers full-history secret scanning, dependency review, npm and Python audits, OSV-Scanner, Semgrep, CodeQL, Trivy filesystem/image scans, and CycloneDX SBOM generation.
+
+Do not publish a release unless the security workflow is green for the exact release commit. Download and retain the backend and frontend SBOM artifacts with the release evidence.
+
 ## Hosted Documentation Workflow
 
 The GitHub Pages workflow publishes public-safe product assets from `docs/product/`, `docs/screenshots/`, `README.md`, and `ROADMAP.md` when documentation or product assets change on the default branch. Use it for a lightweight landing page or hosted documentation surface without changing the Vantage runtime.
@@ -83,16 +90,17 @@ The GitHub Pages workflow publishes public-safe product assets from `docs/produc
 6. Run `.\scripts\build-release.ps1 -Version <version>`.
 7. Inspect the generated zip and confirm no secrets or local IPs are present.
 8. Run through `docs/security/RELEASE_SECURITY_CHECKLIST.md`.
-9. Verify `scripts/verify-audit-bundle.py` is included if signed bundle exports are part of the release promise.
-10. Verify the checksum file exists.
-11. Tag the release:
+9. Verify the GitHub security workflow is green for the exact commit and retain its SBOM artifacts.
+10. Verify `scripts/verify-audit-bundle.py` is included if signed bundle exports are part of the release promise.
+11. Verify the checksum file exists.
+12. Tag the release:
 
 ```powershell
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-12. Verify the GitHub release contains the zip and `SHA256SUMS.txt`.
+13. Verify the GitHub release contains the zip and `SHA256SUMS.txt`.
 
 Optional local scan:
 
@@ -109,21 +117,22 @@ The scan should not find real local addresses, local Windows paths, or populated
 
 1. Extract the release zip on the deployment host.
 2. Copy `.env.production.example` to `.env.production`.
-3. Generate and set `VANTAGE_AGENT_SHARED_TOKEN`.
-4. Optionally generate and set `VANTAGE_AUDIT_SIGNING_KEY` for signed audit bundles.
-5. Optionally generate and set `VANTAGE_EXTERNAL_API_TOKEN` before connecting n8n or scripts.
-6. Edit `config/vantage.bootstrap.toml`.
-7. Run `scripts/check-setup.ps1`.
-8. Start:
+3. Run `scripts/rotate-agent-token.ps1 -EnvFile .env.production -Apply`.
+4. Run `scripts/rotate-control-plane-secrets.ps1 -EnvFile .env.production -Apply`.
+5. Optionally generate and set `VANTAGE_AUDIT_SIGNING_KEY` for signed audit bundles.
+6. Optionally generate and set `VANTAGE_EXTERNAL_API_TOKEN` before connecting n8n or scripts.
+7. Edit `config/vantage.bootstrap.toml`.
+8. Run `scripts/check-setup.ps1 -EnvFile .env.production`.
+9. Start:
 
 ```powershell
 docker compose -f docker-compose.prod.yml --env-file .env.production up --build -d
 ```
 
-9. Verify:
+10. Verify through the published frontend:
 
 ```powershell
-Invoke-RestMethod http://<control-plane-host>:8000/api/health/ready
+Invoke-RestMethod http://<control-plane-host>:5173/api/health/ready
 ```
 
 ## Public Demo From Source
@@ -134,8 +143,8 @@ For a public-safe demo instance:
 Copy-Item .env.example .env
 Add-Content .env "VANTAGE_DEMO_MODE=1"
 Add-Content .env "VANTAGE_ENABLE_BACKGROUND_POLLING=0"
-$token = python -c "import secrets; print(secrets.token_urlsafe(48))"
-(Get-Content .env) -replace '^VANTAGE_AGENT_SHARED_TOKEN=.*', "VANTAGE_AGENT_SHARED_TOKEN=$token" | Set-Content .env
+.\scripts\rotate-agent-token.ps1 -EnvFile .env -Apply
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply
 docker compose up --build -d
 ```
 

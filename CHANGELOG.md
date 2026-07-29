@@ -6,7 +6,25 @@ This project follows a pragmatic Keep a Changelog style and uses semantic versio
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Added
+
+- Fail-closed single-operator authentication with signed HttpOnly sessions, CSRF protection, Bearer support for trusted scripts, login throttling, and a dedicated browser login gate.
+- Shared rate/concurrency gates and bounded prompt, suite, output-token, and response sizes for costly LLM and eval operations.
+- Threat model, authentication ADR, comprehensive security audit, machine-readable findings, Dependabot configuration, and a scheduled security workflow covering Gitleaks, dependency review, npm/pip/OSV audits, Semgrep, CodeQL, Trivy, and CycloneDX SBOMs.
+- Safe operator/session and agent secret-rotation helpers plus regression coverage for missing and weak authentication configuration.
+
+### Changed
+
+- Development services now bind to loopback by default; production publishes only the frontend and keeps the backend internal.
+- Development and production containers now run as non-root; production adds read-only filesystems, dropped capabilities, `no-new-privileges`, and bounded temporary filesystems.
+- Container bases and GitHub Actions are pinned immutably, release builds use tracked files only, and the frontend/Python dependency graphs are clean under the configured audits.
+- Setup, operator, contributor, and release documentation now reflects mandatory operator/session secrets and authenticated browser access.
+
+### Security
+
+- Closed the unauthenticated control-plane, remote-agent, and integration fail-open paths.
+- Restricted webhook delivery with exact allowlists, DNS/address validation, redirect denial, private-network opt-in, timeouts, and persisted-URL redaction.
+- Added strict browser response headers, API no-store behavior, safe cookie controls, and authenticated production DAST verification.
 
 ## [0.1.0] - 2026-05-13
 

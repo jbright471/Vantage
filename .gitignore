@@ -15,6 +15,8 @@ node_modules/
 dist/
 coverage/
 .playwright-cli/
+.security/sbom/
+graphify-out/
 
 # Local planning/scratch artifacts used during implementation.
 *-plan.md

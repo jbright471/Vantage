@@ -38,6 +38,17 @@ def test_create_eval_suite_and_case() -> None:
         assert updated_suite["cases"][0]["score_type"] == "json_subset"
 
 
+def test_eval_case_rejects_oversized_prompt() -> None:
+    with TestClient(app) as client:
+        suite = client.post("/api/evals/suites", json={"name": "Bounded prompts"}).json()
+        response = client.post(
+            f"/api/evals/suites/{suite['suite_id']}/cases",
+            json={"name": "Too large", "prompt": "x" * 16001},
+        )
+
+    assert response.status_code == 422
+
+
 def test_eval_intelligence_presets_are_managed_settings() -> None:
     preset_payload = {
         "name": "Managed flaky review",
@@ -260,6 +271,21 @@ def test_export_and_import_eval_suite() -> None:
     assert imported["name"] == "Imported Portable Suite"
     assert imported["case_count"] == 1
     assert imported["cases"][0]["score_config_json"]["expected_text"] == "portable"
+
+
+def test_import_eval_suite_rejects_more_than_one_hundred_cases() -> None:
+    payload = {
+        "name": "Oversized import",
+        "cases": [
+            {"name": f"Case {index}", "prompt": "Return JSON."}
+            for index in range(101)
+        ],
+    }
+
+    with TestClient(app) as client:
+        response = client.post("/api/evals/suites/import", json=payload)
+
+    assert response.status_code == 413
 
 
 def test_queue_eval_attempt_creates_run_records() -> None:

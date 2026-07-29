@@ -11,9 +11,11 @@ The examples below use `control-plane` as an example control-plane node name and
 - The backend stores operational state in local SQLite.
 - The remote agent supports bearer-token authentication by default and optional HMAC request signing with replay protection.
 - Signed audit bundles can make exported run history tamper-evident when `VANTAGE_AUDIT_SIGNING_KEY` is configured.
-- Integration endpoints can be protected with `VANTAGE_EXTERNAL_API_TOKEN` before connecting n8n, scripts, or webhook receivers.
+- Integration automation endpoints require `VANTAGE_EXTERNAL_API_TOKEN` and return HTTP `503` when authentication is not configured.
+- Operator APIs require a high-entropy bearer token or a signed, short-lived browser session; cookie mutations additionally require CSRF validation.
+- Costly LLM/eval endpoints have per-minute, concurrency, output-token, prompt, response, and suite-size bounds.
 - Secrets are supplied through environment files and are ignored by git.
-- Production Compose requires `VANTAGE_AGENT_SHARED_TOKEN` to be supplied externally before startup.
+- Production Compose requires agent, operator, and independent session-signing secrets before startup.
 - Demo mode uses synthetic data and is the recommended way to create public screenshots or reproduction steps.
 
 ## Agent Authentication
@@ -24,7 +26,7 @@ The remote agent reads this environment variable. For example, an operator might
 VANTAGE_AGENT_SHARED_TOKEN
 ```
 
-Bearer mode is the default. When configured, all agent endpoints require:
+Bearer mode is the default. All agent endpoints require:
 
 ```http
 Authorization: Bearer <token>
@@ -50,6 +52,8 @@ Local files:
 - `.env.production.example`: committed production example with no secret value
 
 Production Compose refuses to start without `VANTAGE_AGENT_SHARED_TOKEN`. Use `--env-file .env.production`, Portainer secrets, or Portainer environment variables to supply the token outside the Compose YAML.
+
+The agent also fails closed with HTTP `503` if it starts without a token of at least 32 characters, and a new `deploy/agent/install.sh` installation refuses to create a missing or weak credential file.
 
 ## Audit Export Signing
 
@@ -102,20 +106,23 @@ Use `VANTAGE_DEMO_MODE=1` for public release screenshots and walkthroughs. Do no
 Recommended deployment posture:
 
 - expose the UI only on a trusted LAN or VPN
-- keep the backend off the public internet
+- keep the default `VANTAGE_BIND_ADDRESS=127.0.0.1`, or bind to a specific trusted interface protected by a host firewall or VPN
+- keep the production backend on the internal Compose network; access its API through the frontend `/api` proxy
 - keep remote agent ports reachable only from the control plane
 - use host firewall rules where practical
 - rotate `VANTAGE_AGENT_SHARED_TOKEN` after accidental disclosure
 - use HMAC mode when replay protection is required
-- set `VANTAGE_EXTERNAL_API_TOKEN` before exposing `/api/integrations/*`
-- restrict webhook targets with `VANTAGE_WEBHOOK_ALLOWED_HOSTS` when using dispatch endpoints
+- set `VANTAGE_EXTERNAL_API_TOKEN` before using protected `/api/integrations/*` automation routes
+- keep `VANTAGE_CONTROL_PLANE_TOKEN` and `VANTAGE_SESSION_SIGNING_KEY` independent and rotate both after suspected session theft
+- set `VANTAGE_SESSION_COOKIE_SECURE=1` behind HTTPS
+- explicitly allow every webhook authority with `VANTAGE_WEBHOOK_ALLOWED_HOSTS`; private RFC1918/ULA targets additionally require `VANTAGE_WEBHOOK_ALLOW_PRIVATE_NETWORKS=1`
 
 ## Known Limitations
 
-- Vantage does not currently provide human user accounts or browser login.
+- Vantage provides a single-operator login, not multi-user accounts, roles, OIDC, or per-user audit attribution.
 - Agent authentication is shared-secret based; HMAC mode adds request signing and replay protection but is not mutual TLS.
 - The development Compose file is not hardened for internet exposure.
-- The production Compose file improves packaging posture but still assumes trusted LAN or VPN access.
+- The production Compose file runs non-root with a read-only root filesystem and dropped capabilities, but still assumes trusted LAN or VPN access.
 - SQLite is local and not encrypted by Vantage.
 - Optional host-level remediation must go through a future local node agent with explicit allowlists, not a privileged backend container.
 
@@ -140,6 +147,7 @@ Do not include live tokens, private prompts, or model output containing sensitiv
 - Do not paste live tokens into issues, PRs, or docs.
 - Rotate tokens after disclosure.
 - Use `scripts/rotate-agent-token.ps1` for a dry-run or applied token rotation workflow.
+- Use `scripts/rotate-control-plane-secrets.ps1` to generate independent operator and session secrets without printing them by default.
 - Prefer generated high-entropy tokens, for example:
 
 ```powershell

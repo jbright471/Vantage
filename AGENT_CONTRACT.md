@@ -22,7 +22,7 @@ http://<remote-agent-ip>:9110
 
 ## Authentication
 
-When `VANTAGE_AGENT_SHARED_TOKEN` is set on the agent, every endpoint requires authentication. Bearer mode is the default:
+Every endpoint requires authentication. `VANTAGE_AGENT_SHARED_TOKEN` must be set on the agent; when it is missing, the agent fails closed with HTTP `503`. Bearer mode is the default:
 
 ```http
 Authorization: Bearer <token>
@@ -48,7 +48,7 @@ The signature signs `METHOD`, `PATH`, timestamp, nonce, and SHA-256 body hash. T
 
 For short migrations, `VANTAGE_AGENT_AUTH_MODE=bearer_or_hmac` accepts either bearer or signed requests. Avoid leaving migration mode enabled permanently.
 
-Missing or invalid tokens return:
+Missing credentials or an invalid token return:
 
 ```json
 {
@@ -57,6 +57,16 @@ Missing or invalid tokens return:
 ```
 
 with HTTP status `401`.
+
+If the agent itself has no shared token configured, it returns:
+
+```json
+{
+  "detail": "Agent authentication is not configured"
+}
+```
+
+with HTTP status `503`.
 
 Disallowed action classes return HTTP `403`. Configure the allowlist with:
 
@@ -117,7 +127,7 @@ Returns GPU telemetry collected from `nvidia-smi`.
 
 ## GET /models
 
-Returns model inventory discovered from configured Ollama endpoints.
+Returns model inventory discovered from configured Ollama-compatible/router endpoints.
 
 ### Response
 
@@ -155,7 +165,7 @@ Current examples include loaded Ollama models, capability-check runs, and eval-a
       "run_id": "086af75060fb0680c77aad586646becf8d7e80b2c01bd4c096e724e27ce3e6e8",
       "source_type": "remote_agent",
       "detail_type": "ollama_loaded_model",
-      "source_id": "ollama-ps:http://<ollama-host>:11435:gemma4:e4b",
+      "source_id": "ollama-ps:http://<router-host>:11400:qwen3.6:27b",
       "node_id": "remote-worker",
       "model_name": "gemma4:e4b",
       "action_type": "infer",
@@ -165,7 +175,7 @@ Current examples include loaded Ollama models, capability-check runs, and eval-a
       "duration_ms": null,
       "summary": "Model gemma4:e4b is currently loaded on remote-worker",
       "metadata_json": {
-        "base_url": "http://<ollama-host>:11435"
+        "base_url": "http://<router-host>:11400"
       }
     }
   ]

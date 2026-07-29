@@ -128,6 +128,6 @@ def export_operator_report(
 
 
 @router.get("/integrations/collectors")
-def list_collectors() -> dict:
+def list_collectors(_: None = Depends(require_external_api_token)) -> dict:
     collectors = default_collector_registry.list_collectors()
     return {"format": "vantage.collectors.v1", "count": len(collectors), "collectors": collectors}

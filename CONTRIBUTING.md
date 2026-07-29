@@ -16,8 +16,9 @@ Run the Docker development stack:
 
 ```powershell
 cd ./vantage
-$token = python -c "import secrets; print(secrets.token_urlsafe(48))"
-(Get-Content .env.example) -replace '^VANTAGE_AGENT_SHARED_TOKEN=.*', "VANTAGE_AGENT_SHARED_TOKEN=$token" | Set-Content .env
+Copy-Item .env.example .env
+.\scripts\rotate-agent-token.ps1 -EnvFile .env -Apply
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply
 docker compose up --build -d
 ```
 
@@ -128,16 +129,20 @@ Production packaging files include:
 - [scripts/build-release.ps1](./scripts/build-release.ps1)
 - [deploy/agent/](./deploy/agent)
 - [.github/workflows/release.yml](./.github/workflows/release.yml)
+- [.github/workflows/security.yml](./.github/workflows/security.yml)
 
 When changing deployment behavior, update [OPERATIONS.md](./OPERATIONS.md), [PORTAINER.md](./PORTAINER.md), [RELEASE.md](./RELEASE.md), and [SECURITY.md](./SECURITY.md) as needed.
 
 Verify production packaging:
 
 ```powershell
-$env:VANTAGE_AGENT_SHARED_TOKEN = "setup-check-placeholder-token"
+$env:VANTAGE_AGENT_SHARED_TOKEN = "dev-check-agent-token-000000000000000000"
+$env:VANTAGE_CONTROL_PLANE_TOKEN = "dev-check-control-token-000000000000000"
+$env:VANTAGE_SESSION_SIGNING_KEY = "dev-check-session-key-00000000000000000"
 docker compose -f docker-compose.prod.yml config --quiet
 .\scripts\check-setup.ps1 -ComposeFile docker-compose.prod.yml
 .\scripts\build-release.ps1 -Version dev-check
+Remove-Item Env:VANTAGE_AGENT_SHARED_TOKEN, Env:VANTAGE_CONTROL_PLANE_TOKEN, Env:VANTAGE_SESSION_SIGNING_KEY
 ```
 
 ## Pull Request Checklist
@@ -149,6 +154,8 @@ docker compose -f docker-compose.prod.yml config --quiet
 - New actions create auditable `Run` records.
 - New node observations preserve freshness and last-known-state semantics.
 - Secrets are not committed.
+- Authentication and resource-limit changes include negative-path tests.
+- The security workflow remains SHA-pinned and passes before merge.
 - Demo mode still works when public-facing UI or docs change.
 
 Use the repository pull request template and issue templates when working through GitHub. They are intentionally strict about operator safety and private-network redaction.
