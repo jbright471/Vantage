@@ -11,8 +11,11 @@ COPY backend ./backend
 COPY agent ./agent
 COPY config ./config
 
+# Pip and its vendored build dependencies are not needed at runtime.
 RUN python -m pip install --upgrade pip \
     && python -m pip install --no-cache-dir ".[postgres]" \
+    && python -m pip check \
+    && python -m pip uninstall --yes pip \
     && groupadd --system --gid 10001 vantage \
     && useradd --system --uid 10001 --gid vantage --home-dir /nonexistent --shell /usr/sbin/nologin vantage \
     && mkdir -p /data \
