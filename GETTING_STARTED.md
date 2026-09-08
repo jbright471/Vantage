@@ -9,7 +9,7 @@ Demo mode seeds safe synthetic data so you can inspect the UI, exports, routing,
 ```powershell
 Copy-Item .env.example .env
 .\scripts\rotate-agent-token.ps1 -EnvFile .env -Apply
-.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply -IncludeAuditSigningKey
 (Get-Content .env) -replace '^VANTAGE_DEMO_MODE=.*', "VANTAGE_DEMO_MODE=1" | Set-Content .env
 docker compose up --build -d
 ```
@@ -32,13 +32,15 @@ Add-Content .env "VANTAGE_ENABLE_BACKGROUND_POLLING=0"
 
 ## Connect Real Nodes
 
-1. Copy `config/vantage.bootstrap.example.toml` to `config/vantage.bootstrap.toml`.
-2. Replace example node names and URLs with your own local hosts.
-3. Keep real bearer tokens in `.env`, never in TOML or committed docs.
-4. Start the backend and frontend with `docker compose up --build -d`.
-5. Sign in with `VANTAGE_CONTROL_PLANE_TOKEN` and open the in-app Operator Guide from the `Docs` button.
+1. Copy `config/vantage.bootstrap.example.toml` to the ignored `config/vantage.bootstrap.local.toml`, then set `VANTAGE_BOOTSTRAP_CONFIG_PATH=/app/config/vantage.bootstrap.local.toml` in `.env`. This keeps private hostnames and LAN addresses out of public commits.
+2. Keep the local `control-plane` entry. Vantage does not scan the LAN; install the Linux agent only on workers you intend to trust.
+3. Use the setup wizard or Operator Guide to install each agent and add its stable node ID and LAN URL.
+4. Keep the shared agent secret in `.env` and the agent's protected env file, never in TOML, shell history, or committed docs. New installations use HMAC request signing.
+5. Set `VANTAGE_AGENT_CONTROL_PLANE_CIDRS=<control-plane-ip>/32` during agent installation to apply a per-service systemd network policy, and retain host-firewall or VPN controls as defense in depth. HMAC authenticates requests but does not encrypt telemetry, prompts, or responses.
+6. Start the backend and frontend with `docker compose up --build -d`.
+7. Run `scripts/check-setup.ps1 -RemoteAgentUrl http://<worker-ip>:9110`, then sign in and confirm the node becomes `LIVE`.
 
-`control-plane` and `remote-worker` are example node names only. Use names that make sense for your homelab.
+`control-plane` is the public-safe local default. Remote workers are opt-in so a clean install does not begin in a degraded state.
 
 ## First Checks
 
@@ -47,6 +49,7 @@ Add-Content .env "VANTAGE_ENABLE_BACKGROUND_POLLING=0"
 - Models should show merged placement inventory across nodes.
 - Runs should show durable audit records for actions, evals, exports, and capability checks.
 - Routing should show preferred node order and why a route would be accepted or rejected.
+- Eval Lab should offer `Install starter suite`; install it once, queue it against an available local model, execute both cases, and set a baseline after a clean result.
 
 ## Use The Setup Wizard
 
@@ -56,6 +59,8 @@ The wizard helps with:
 
 - generating a high-entropy `VANTAGE_AGENT_SHARED_TOKEN` line for `.env`
 - creating a worker-node TOML block for `config/vantage.bootstrap.toml`
+- generating a Linux systemd-agent installation command that prompts for the secret securely
+- configuring HMAC signing and the read/capability-check/eval-only v1 allowlist
 - setting `VANTAGE_LOCAL_OLLAMA_BASE_URLS`
 - restarting and verifying the stack
 

@@ -11,14 +11,15 @@ from uuid import uuid4
 import httpx
 
 
-DEFAULT_AGENT_OLLAMA_BASE_URLS = ("http://127.0.0.1:11400",)
+DEFAULT_AGENT_OLLAMA_BASE_URLS = ("http://127.0.0.1:11434",)
 AGENT_OLLAMA_BASE_URLS_ENV = "VANTAGE_AGENT_OLLAMA_BASE_URLS"
 AGENT_NODE_ID_ENV = "VANTAGE_AGENT_NODE_ID"
 DEFAULT_AGENT_NODE_ID = "remote-agent"
 CAPABILITY_CHECK_PROMPT = (
-    "Reply with a compact JSON object describing the model health for this control-plane check. "
-    'Use keys "mode", "json", and "notes". Return JSON only.'
+    "Complete this deterministic inference handshake. Return exactly one JSON object and no Markdown: "
+    '{"mode":"inference","json":true,"notes":"ok"}'
 )
+CAPABILITY_CHECK_EXPECTED = {"mode": "inference", "json": True, "notes": "ok"}
 RECENT_RUNS: deque[dict] = deque(maxlen=25)
 DEFAULT_EVAL_NUM_PREDICT = 512
 DEFAULT_MAX_LLM_RESPONSE_CHARS = 65536
@@ -164,6 +165,16 @@ def _parse_response_json(response_text: str) -> dict | list | None:
     return parsed if isinstance(parsed, (dict, list)) else None
 
 
+def _validate_capability_response(response_text: str) -> dict:
+    parsed = _parse_response_json(response_text)
+    if not isinstance(parsed, dict):
+        raise ValueError("Capability response was not a JSON object")
+    mismatched = [key for key, value in CAPABILITY_CHECK_EXPECTED.items() if parsed.get(key) != value]
+    if mismatched:
+        raise ValueError(f"Capability response failed the deterministic handshake: {', '.join(mismatched)}")
+    return parsed
+
+
 def get_health() -> dict:
     return {"status": "ok", "node_id": resolve_agent_node_id()}
 
@@ -220,6 +231,7 @@ def run_capability_check(model_name: str, *, prompt: str | None = None) -> dict:
         "model": model_name,
         "prompt": request_prompt,
         "stream": False,
+        "format": "json",
         "options": {
             "temperature": 0,
             "num_predict": 96,
@@ -232,6 +244,8 @@ def run_capability_check(model_name: str, *, prompt: str | None = None) -> dict:
             response = httpx.post(f"{base_url}/api/generate", json=payload, timeout=45.0)
             response.raise_for_status()
             body = response.json()
+            response_text = _bounded_response_text(body.get("response", ""))
+            response_json = _validate_capability_response(response_text)
             ended_at = datetime.now(UTC)
             result = _record_run(
                 {
@@ -250,7 +264,8 @@ def run_capability_check(model_name: str, *, prompt: str | None = None) -> dict:
                     "metadata_json": {
                         "base_url": base_url,
                         "prompt": request_prompt,
-                        "response_preview": body.get("response", "")[:240],
+                        "response_preview": response_text[:240],
+                        "response_json": response_json,
                     },
                 }
             )

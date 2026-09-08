@@ -1,13 +1,13 @@
 # Agent Authentication
 
-Vantage supports two node-agent authentication modes. Bearer mode remains the default because it is simple for a single trusted LAN operator. HMAC mode is available when operators want request signing, timestamp checks, and replay protection.
+Vantage supports two node-agent authentication modes. New installations default to HMAC request signing, timestamp checks, and replay protection. Bearer mode remains available for compatibility with existing trusted-LAN installations.
 
 ## Modes
 
 | Mode | Value | Use When |
 | --- | --- | --- |
-| Bearer | `VANTAGE_AGENT_AUTH_MODE=bearer` | Single-operator LAN or VPN deployments where a shared secret is sufficient. |
-| HMAC | `VANTAGE_AGENT_AUTH_MODE=hmac` | Deployments that need signed requests and replay protection. |
+| HMAC | `VANTAGE_AGENT_AUTH_MODE=hmac` | Recommended default for explicitly registered LAN or VPN workers. |
+| Bearer | `VANTAGE_AGENT_AUTH_MODE=bearer` | Compatibility mode for an existing trusted-LAN installation. |
 | Migration | `VANTAGE_AGENT_AUTH_MODE=bearer_or_hmac` | Short transition windows while rotating clients from bearer to HMAC. |
 
 All modes use `VANTAGE_AGENT_SHARED_TOKEN` as the shared secret. HMAC mode signs each request with:
@@ -48,6 +48,10 @@ VANTAGE_AGENT_ALLOWED_ACTIONS=read,capability_check,eval_attempt
 | `eval_attempt` | `POST /eval-attempt` |
 
 Host-level remediation actions should be added only through an explicit local node-agent contract and a narrower allowlist.
+
+HMAC authenticates request contents but does not encrypt HTTP traffic. Restrict TCP `9110` to the control-plane IP on a trusted LAN, or carry the connection over a trusted VPN/TLS tunnel when prompts, responses, or telemetry cross a less-trusted network. Never publish the agent port to the internet.
+
+On systemd hosts, pass `VANTAGE_AGENT_CONTROL_PLANE_CIDRS=<control-plane-ip>/32` to the installer to create a deny-by-default service network policy that still permits loopback access to the local model runtime. Retain host-firewall or VPN restrictions as defense in depth.
 
 ## Replay Protection
 

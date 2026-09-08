@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import secrets
 import time
+from typing import Any
 
 import httpx
 
@@ -54,17 +56,29 @@ class RemoteAgentClient:
             headers["X-Vantage-Key-Id"] = self.key_id
         return headers
 
+    def _raise_for_status(self, response: httpx.Response, path: str) -> None:
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in {401, 403}:
+                raise AgentAuthenticationError(
+                    f"Remote agent rejected authentication for {self.base_url}{path}"
+                ) from exc
+            raise
+
     async def _get(self, path: str) -> dict:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            try:
-                response = await client.get(f"{self.base_url}{path}", headers=self._headers("GET", path))
-                response.raise_for_status()
-            except httpx.HTTPStatusError as exc:
-                if exc.response.status_code in {401, 403}:
-                    raise AgentAuthenticationError(
-                        f"Remote agent rejected authentication for {self.base_url}{path}"
-                    ) from exc
-                raise
+            response = await client.get(f"{self.base_url}{path}", headers=self._headers("GET", path))
+            self._raise_for_status(response, path)
+            return response.json()
+
+    def post_json(self, path: str, payload: dict[str, Any], *, timeout: float) -> dict:
+        body = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        headers = self._headers("POST", path, body)
+        headers["Content-Type"] = "application/json"
+        with httpx.Client(timeout=timeout) as client:
+            response = client.post(f"{self.base_url}{path}", content=body, headers=headers)
+            self._raise_for_status(response, path)
             return response.json()
 
     async def fetch_health(self) -> dict:

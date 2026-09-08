@@ -54,13 +54,30 @@ describe("RunsPage", () => {
 
     expect(screen.getByText("Restart Remote Worker agent")).toBeTruthy();
     expect(screen.getByText("submitted_unverified")).toBeTruthy();
-    expect(screen.getByText("99653acc...")).toBeTruthy();
+    expect(screen.getByText("99653acc…")).toBeTruthy();
     expect(screen.queryByText("Request sent; Vantage has not verified completion yet.")).toBeNull();
     expect(globalThis.fetch).toHaveBeenCalledWith("/api/runs?limit=5", {
       headers: {
         Accept: "application/json",
       },
     });
+  });
+
+  it("reconciles new unfiltered runs received from the live stream", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ ...runsPayload, items: [], total: 0 }),
+    } as Response);
+
+    const view = render(<RunsPage runs={[]} />);
+    await waitFor(() => {
+      expect(screen.getByText("No run history matches the current filter.")).toBeTruthy();
+    });
+
+    view.rerender(<RunsPage runs={runsPayload.items} />);
+
+    expect(await screen.findByText("Restart Remote Worker agent")).toBeTruthy();
+    expect(screen.getByText("Showing 1 of 1 recent runs")).toBeTruthy();
   });
 
   it("pushes filtering to the runs API instead of filtering in the browser", async () => {

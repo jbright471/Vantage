@@ -202,7 +202,7 @@ export function NodeCard({ node, onRefresh, onDiagnose, onSetEnabled, refreshSta
           disabled={!isEnabled || refreshPhase === "submitting"}
           onClick={() => onRefresh(node.node_id)}
         >
-          {refreshPhase === "submitting" ? "Submitting refresh..." : "Refresh node"}
+          {refreshPhase === "submitting" ? "Submitting refresh…" : "Refresh node"}
         </button>
 
         {refreshStatus ? <span className={`status-chip is-${refreshStatus}`}>{refreshStatus}</span> : null}
@@ -212,7 +212,7 @@ export function NodeCard({ node, onRefresh, onDiagnose, onSetEnabled, refreshSta
           disabled={enabledActionPhase === "submitting"}
           onClick={() => onSetEnabled(node.node_id, !isEnabled)}
         >
-          {enabledActionPhase === "submitting" ? "Submitting..." : isEnabled ? "Quarantine node" : "Re-enable node"}
+          {enabledActionPhase === "submitting" ? "Submitting…" : isEnabled ? "Quarantine node" : "Re-enable node"}
         </button>
         {enabledActionStatus ? <span className={`status-chip is-${enabledActionStatus}`}>{enabledActionStatus}</span> : null}
         {needsDiagnosis ? (

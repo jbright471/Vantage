@@ -1,15 +1,30 @@
 from datetime import UTC, datetime
 from collections.abc import Sequence
+import os
 
 from sqlalchemy.orm import Session
 
 from backend.app.models import AppSetting
 
 LOCAL_OLLAMA_ENDPOINT_OVERRIDES_KEY = "local_ollama_endpoint_overrides"
+DEFAULT_LOCAL_OLLAMA_BASE_URLS = ("http://127.0.0.1:11400",)
+LOCAL_OLLAMA_BASE_URLS_ENV = "VANTAGE_LOCAL_OLLAMA_BASE_URLS"
 
 
 def normalize_endpoint_url(value: str) -> str:
     return value.strip().rstrip("/")
+
+
+def resolve_local_ollama_base_urls(configured_urls: Sequence[str] | None = None) -> list[str]:
+    raw_urls = os.getenv(LOCAL_OLLAMA_BASE_URLS_ENV)
+    if raw_urls:
+        candidates = [part.strip() for part in raw_urls.split(",")]
+    elif configured_urls:
+        candidates = list(configured_urls)
+    else:
+        candidates = list(DEFAULT_LOCAL_OLLAMA_BASE_URLS)
+
+    return [normalize_endpoint_url(candidate) for candidate in candidates if candidate.strip()]
 
 
 def get_disabled_local_ollama_endpoints(session: Session) -> set[str]:
@@ -24,7 +39,7 @@ def get_disabled_local_ollama_endpoints(session: Session) -> set[str]:
 
 def filter_enabled_local_ollama_endpoints(session: Session, configured_urls: Sequence[str]) -> list[str]:
     disabled = get_disabled_local_ollama_endpoints(session)
-    return [url for url in (normalize_endpoint_url(candidate) for candidate in configured_urls) if url not in disabled]
+    return [url for url in resolve_local_ollama_base_urls(configured_urls) if url not in disabled]
 
 
 def set_local_ollama_endpoint_disabled(session: Session, endpoint_url: str, disabled: bool) -> dict:

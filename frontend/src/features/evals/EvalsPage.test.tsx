@@ -34,12 +34,112 @@ describe("EvalsPage", () => {
     await waitFor(() => {
       expect(screen.getByText(/no eval suites have been defined yet/i)).toBeTruthy();
     });
-    expect(screen.getByText("Eval Lab foundation")).toBeTruthy();
+    expect(screen.getByText("Measure local model behavior")).toBeTruthy();
     expect(globalThis.fetch).toHaveBeenCalledWith("/api/evals/suites", {
       headers: {
         Accept: "application/json",
       },
     });
+  });
+
+  it("installs the starter smoke suite without manual authoring", async () => {
+    const starterSuite = {
+      suite_id: "starter-suite",
+      name: "Vantage Starter Smoke",
+      description: "Repeatable local-model readiness checks.",
+      created_at: "2026-07-25T12:00:00Z",
+      metadata_json: { template_id: "vantage-starter-smoke-v1", template_version: 1 },
+      case_count: 2,
+      cases: [
+        {
+          case_id: "starter-json",
+          name: "Structured JSON handshake",
+          prompt: "Return JSON",
+          expected_json: { vantage_smoke: true, answer: 7 },
+          score_type: "json_subset",
+          score_config_json: {},
+          sort_order: 0,
+        },
+        {
+          case_id: "starter-exact",
+          name: "Exact instruction following",
+          prompt: "Return VANTAGE_OK",
+          expected_json: {},
+          score_type: "exact_match",
+          score_config_json: { expected_text: "VANTAGE_OK" },
+          sort_order: 1,
+        },
+      ],
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/api/evals/starter-suite") {
+        return { ok: true, json: async () => starterSuite } as Response;
+      }
+      if (url === "/api/evals/score-history") {
+        return {
+          ok: true,
+          json: async () => ({ total_runs: 0, placements: [], suites: [], cases: [], recent_runs: [] }),
+        } as Response;
+      }
+      return { ok: true, json: async () => [] } as Response;
+    });
+
+    render(<EvalsPage />);
+    await waitFor(() => expect(screen.getByText(/no eval suites have been defined yet/i)).toBeTruthy());
+    fireEvent.click(screen.getByRole("button", { name: /install starter suite/i }));
+
+    await waitFor(() => {
+      const installedButton = screen.getByRole("button", { name: /starter suite installed/i }) as HTMLButtonElement;
+      expect(installedButton.disabled).toBe(true);
+    });
+    expect(screen.getAllByText("Vantage Starter Smoke").length).toBeGreaterThan(0);
+    expect(globalThis.fetch).toHaveBeenCalledWith("/api/evals/starter-suite", {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    });
+  });
+
+  it("counts only unfinished eval runs as active execution", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "/api/evals/score-history") {
+        return {
+          ok: true,
+          json: async () => ({ total_runs: 1, placements: [], suites: [], cases: [], recent_runs: [] }),
+        } as Response;
+      }
+      return { ok: true, json: async () => [] } as Response;
+    });
+
+    render(
+      <EvalsPage
+        runs={[
+          {
+            run_id: "completed-eval",
+            summary: "Completed deterministic eval",
+            status: "success",
+            detail_type: "eval_attempt",
+            node_id: "control-plane",
+            started_at: "2026-07-25T22:04:13Z",
+          },
+          {
+            run_id: "queued-eval",
+            summary: "Queued deterministic eval",
+            status: "queued",
+            detail_type: "eval_attempt",
+            node_id: "control-plane",
+            started_at: "2026-07-25T22:05:13Z",
+          },
+        ]}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("1 active")).toBeTruthy();
+    });
+    expect(screen.getByText("Recent attempts")).toBeTruthy();
+    expect(screen.queryByText("2 queued")).toBeNull();
   });
 
   it("creates a suite and adds a prompt case", async () => {
@@ -94,10 +194,10 @@ describe("EvalsPage", () => {
       expect(screen.getByText(/no eval suites have been defined yet/i)).toBeTruthy();
     });
 
-    fireEvent.change(screen.getByPlaceholderText("Reasoning smoke test"), {
+    fireEvent.change(screen.getByPlaceholderText("e.g., Reasoning smoke test…"), {
       target: { value: "Reasoning Smoke" },
     });
-    fireEvent.change(screen.getByPlaceholderText(/short operator note/i), {
+    fireEvent.change(screen.getByPlaceholderText(/measures concise reasoning/i), {
       target: { value: "Short checks" },
     });
     fireEvent.click(screen.getByRole("button", { name: /create suite/i }));
@@ -495,7 +595,9 @@ describe("EvalsPage", () => {
     expect(screen.getByText("Every 30 min")).toBeTruthy();
     expect(screen.getByText("Auto-execute")).toBeTruthy();
     expect(
-      screen.getByText(`Next queue: ${new Date(createdSchedule.next_run_at).toLocaleString()}`),
+      screen.getByText(
+        `Next queue: ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(createdSchedule.next_run_at))}`,
+      ),
     ).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /^queue now$/i }));
@@ -504,7 +606,9 @@ describe("EvalsPage", () => {
       expect(screen.getByText(/1 run queued for llama3.2:latest on control-plane/i)).toBeTruthy();
     });
     expect(
-      screen.getByText(`Last queued: ${new Date(queuedSchedule.last_queued_at).toLocaleString()}`),
+      screen.getByText(
+        `Last queued: ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(queuedSchedule.last_queued_at))}`,
+      ),
     ).toBeTruthy();
     expect(screen.getByText(/Queued eval case 'JSON Answer'/)).toBeTruthy();
     expect(globalThis.fetch).toHaveBeenCalledWith("/api/evals/schedules/schedule-1/queue-now", {

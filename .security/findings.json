@@ -4,7 +4,7 @@
     "mode": "patch-and-pre-release-verification",
     "target": "jbright471/Vantage local working tree",
     "base_commit": "75344c122ca6dda5e9d1cc025fb25f24971a112c",
-    "generated_at": "2026-07-25T19:17:37.1978345Z",
+    "generated_at": "2026-07-26T00:09:11.5620839Z",
     "release_decision": "CONDITIONAL_GO",
     "decision_scope": "private release candidate",
     "open_confirmed_p0": 0,
@@ -13,7 +13,7 @@
     "limitations": [
       "The deleted remote release asset was unavailable for rescanning.",
       "CodeQL and dependency review require a GitHub-hosted workflow run before they are verified.",
-      "No remote agent, live LLM/router, SMTP server, or webhook receiver was contacted."
+      "Bastet was explicitly authorized and exercised as an upgrade target; no clean external-user host, unrelated LAN source, SMTP server, or webhook receiver was contacted."
     ]
   },
   "findings": [
@@ -214,7 +214,7 @@
       "regression_evidence": [
         "tests/backend/test_resource_limits.py",
         "tests/agent/test_agent_resource_limits.py",
-        "134 Python tests passed"
+        "144 Python tests passed"
       ],
       "secret_rotation_required": false
     },
@@ -236,6 +236,51 @@
         "OSV-Scanner: 0 vulnerabilities",
         "pip-audit: 0 vulnerabilities",
         "final backend image: 0 fixed HIGH/CRITICAL vulnerabilities"
+      ],
+      "secret_rotation_required": false
+    },
+    {
+      "id": "VC-02-002",
+      "baseline_control": "VC-02",
+      "title": "Linux agent onboarding exposed the shared secret to shell history and defaulted to bearer authentication",
+      "severity": "P1",
+      "confidence": "confirmed",
+      "status": "fixed",
+      "locations": [
+        "deploy/agent/install.sh",
+        "OPERATIONS.md",
+        "frontend/src/features/onboarding/SetupWizardDrawer.tsx"
+      ],
+      "root_cause": "The documented install command accepted the long-lived shared agent token inline and new-install examples selected bearer mode.",
+      "impact": "Operators following the guide could retain a fleet-wide agent credential in shell history, while bearer requests lacked replay protection.",
+      "remediation": "The installer now prompts interactively, validates URL-safe entropy, defaults new installs to HMAC, and the public workflows no longer place secrets in commands.",
+      "regression_evidence": [
+        "tests/scripts/test_agent_installer.py",
+        "frontend/src/features/onboarding/SetupWizardDrawer.test.tsx",
+        "frontend/e2e/operator-smoke.spec.ts"
+      ],
+      "secret_rotation_required": "conditional-if-a-real-agent-token-was-previously-entered-inline"
+    },
+    {
+      "id": "VC-18-001",
+      "baseline_control": "VC-18",
+      "title": "Interactive remote model requests bypassed the HMAC-aware transport",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "status": "fixed",
+      "locations": [
+        "backend/app/collectors/remote.py",
+        "backend/app/services/agent_transport.py",
+        "backend/app/api/models.py",
+        "backend/app/services/evals.py"
+      ],
+      "root_cause": "Polling used the signed client while capability checks and eval paths independently constructed bearer-only headers.",
+      "impact": "A correctly configured HMAC agent failed closed for interactive and scheduled model work, leaving the documented stronger-auth workflow incomplete.",
+      "remediation": "All remote agent paths now share one transport that signs the exact serialized body and maps authentication failures consistently.",
+      "regression_evidence": [
+        "tests/backend/test_remote_client.py::test_remote_agent_client_signs_the_exact_post_body",
+        "tests/integration/test_remote_agent_hmac_workflow.py",
+        "isolated HMAC setup check reported status=ok and matching node_id"
       ],
       "secret_rotation_required": false
     }
@@ -268,11 +313,21 @@
       "status": "open-for-production-only",
       "action": "Configure encrypted off-host backup retention, periodic restore drills, and external alert delivery.",
       "reason": "Only a local synthetic restore was exercised."
+    },
+    {
+      "id": "GATE-005",
+      "owner": "release-owner",
+      "status": "open",
+      "action": "Complete docs/architecture/V1_MULTI_NODE_ACCEPTANCE.md on a clean separate Linux worker, including the starter eval suite and firewall denial from an unrelated LAN address.",
+      "reason": "The Bastet legacy-agent upgrade, signed health, GPU/model inventory, capability check, source-restricted systemd policy, and restart recovery pass; a clean external-user install and unrelated-source denial remain unverified."
     }
   ],
   "verification": {
-    "python_tests": "134 passed",
-    "frontend_tests": "37 passed",
+    "python_tests": "147 passed",
+    "frontend_tests": "56 passed",
+    "browser_e2e": "2 passed; updated setup-wizard Linux/HMAC workflow included",
+    "isolated_agent_hmac": "authenticated health passed with matching node_id",
+    "bastet_agent_upgrade": "authorized Pop!_OS upgrade passed HMAC health, two-GPU/two-model inventory, deterministic Gemma capability check, systemd source restriction, and restart recovery",
     "npm_audit": "0 vulnerabilities",
     "pip_audit": "0 vulnerabilities",
     "osv_scanner": "0 vulnerabilities",

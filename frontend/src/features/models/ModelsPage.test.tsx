@@ -8,7 +8,7 @@ describe("ModelsPage", () => {
       <ModelsPage
         models={[
           {
-            model_name: "qwen3.6:latest",
+            model_name: "qwen3.8:latest",
             placements: ["control-plane", "remote-worker"],
             placement_details: [
               { node_id: "control-plane", model_digest: "sha256:111", available: true },
@@ -19,7 +19,7 @@ describe("ModelsPage", () => {
       />,
     );
 
-    expect(screen.getByText("qwen3.6:latest")).toBeTruthy();
+    expect(screen.getByText("qwen3.8:latest")).toBeTruthy();
     expect(screen.getByText("control-plane")).toBeTruthy();
     expect(screen.getByText("remote-worker")).toBeTruthy();
   });
@@ -29,7 +29,7 @@ describe("ModelsPage", () => {
       ok: true,
       json: async () => ({
         run_id: "run-1",
-        summary: "Capability check passed for qwen3.6:latest on remote-worker",
+        summary: "Capability check passed for qwen3.8:latest on remote-worker",
         status: "success",
         node_id: "remote-worker",
         started_at: "2026-04-23T12:00:00Z",
@@ -44,7 +44,7 @@ describe("ModelsPage", () => {
       <ModelsPage
         models={[
           {
-            model_name: "qwen3.6:latest",
+            model_name: "qwen3.8:latest",
             placements: ["remote-worker"],
             placement_details: [{ node_id: "remote-worker", model_digest: "sha256:222", available: true }],
           },
@@ -65,7 +65,7 @@ describe("ModelsPage", () => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model_name: "qwen3.6:latest",
+        model_name: "qwen3.8:latest",
         node_id: "remote-worker",
       }),
     });

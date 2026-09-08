@@ -11,7 +11,7 @@ flowchart LR
     U["Operator browser or script"] -->|"operator token / signed session"| N["Nginx frontend"]
     N --> B["FastAPI control plane"]
     B --> D["SQLite or Postgres"]
-    B -->|"agent bearer or HMAC"| A["Remote agent"]
+    B -->|"HMAC by default; bearer compatibility"| A["Remote agent"]
     A --> O["Ollama endpoint"]
     B -->|"exact allowlist"| X["Webhook or SMTP target"]
     G["Pinned CI workflows"] --> R["Release artifacts and SBOMs"]
@@ -22,7 +22,7 @@ flowchart LR
 | Threat | Primary controls | Residual risk |
 |---|---|---|
 | Unauthorized operator action | Fail-closed operator auth, HttpOnly signed session, CSRF, login throttling, loopback bind default | Shared single-operator identity; copied session remains valid until expiry |
-| Remote-agent impersonation or replay | Required high-entropy token, action allowlist, optional timestamped HMAC and nonce cache | Bearer mode has no replay protection; use HMAC on untrusted networks |
+| Remote-agent impersonation, replay, or unintended exposure | Required high-entropy token, HMAC default, nonce/timestamp checks, v1 action allowlist, explicit registration, source-scoped firewall/VPN guidance | HMAC does not encrypt HTTP payloads; bearer compatibility mode has no replay protection |
 | LLM/eval cost or resource abuse | Operator auth, per-minute and concurrency gates, output-token limit, prompt/response/suite caps, timeouts | Limits are per process and are not a distributed quota ledger |
 | Prompt injection affecting decisions | Candidate prompt/output marked untrusted, bounded JSON judge schema, evidence truncation, advisory summaries, deterministic checks retained | An LLM judge can still be manipulated; do not use it as the sole safety or authorization signal |
 | SSRF or secret-bearing webhook leakage | Exact host allowlist, DNS/IP validation, redirects disabled, private-network opt-in, redacted persistence | DNS rebinding requires network egress enforcement for stronger assurance |
@@ -42,3 +42,5 @@ flowchart LR
 ## Deployment assumptions
 
 Vantage currently supports one trusted operator and one active control-plane process. Public internet exposure, untrusted multi-tenancy, and multiple active control planes are outside the supported threat model. Use a VPN or identity-aware reverse proxy in addition to Vantage authentication for remote access.
+
+The supported v1 fleet shape is one desktop-local control plane plus explicitly registered Linux agents on trusted LAN/VPN hosts. Automatic network scanning, Windows/macOS agents, destructive model lifecycle actions, arbitrary shell access, and host remediation are outside the v1 boundary.

@@ -82,14 +82,22 @@ describe("SetupWizardDrawer", () => {
       />,
     );
 
-    expect(screen.getByText(".env")).toBeTruthy();
+    expect(screen.getByText("Required .env values")).toBeTruthy();
     expect(screen.getByText(/VANTAGE_AGENT_SHARED_TOKEN=/)).toBeTruthy();
+    expect(screen.getByText(/VANTAGE_CONTROL_PLANE_TOKEN=/)).toBeTruthy();
+    expect(screen.getByText(/VANTAGE_SESSION_SIGNING_KEY=/)).toBeTruthy();
+    expect(screen.getByText(/VANTAGE_AUDIT_SIGNING_KEY=/)).toBeTruthy();
+    expect(screen.getByText(/VANTAGE_AGENT_AUTH_MODE=hmac/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.change(screen.getByLabelText("Node name"), { target: { value: "Render Worker" } });
     expect(screen.getByText(/node_id = "render-worker"/)).toBeTruthy();
     expect(screen.getByText(/base_url = "http:\/\/worker.example.invalid:9110"/)).toBeTruthy();
-    expect(screen.getByText(/VANTAGE_AGENT_NODE_ID=render-worker/)).toBeTruthy();
+    expect(screen.getAllByText(/VANTAGE_AGENT_NODE_ID=render-worker/)).toHaveLength(2);
+    expect(screen.getByText("Linux agent install")).toBeTruthy();
+    expect(screen.getByText(/sudo .*deploy\/agent\/install\.sh/)).toBeTruthy();
+    expect(screen.getByText(/VANTAGE_AGENT_CONTROL_PLANE_CIDRS=<control-plane-ip>\/32/)).toBeTruthy();
+    expect(screen.getByText(/allow TCP 9110 only from the control-plane/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByText(/VANTAGE_LOCAL_OLLAMA_BASE_URLS=http:\/\/host.docker.internal:11400/)).toBeTruthy();
@@ -98,5 +106,23 @@ describe("SetupWizardDrawer", () => {
     expect(screen.getByText("Restart commands")).toBeTruthy();
     expect(screen.getByText(/docker compose up --build -d/)).toBeTruthy();
     expect(screen.getByText("SSE is live.")).toBeTruthy();
+  });
+
+  it("closes with Escape", () => {
+    const onClose = vi.fn();
+    render(
+      <SetupWizardDrawer
+        isOpen={true}
+        onClose={onClose}
+        nodes={nodes}
+        models={models}
+        routingRules={routingRules}
+        streamStatus="live"
+      />,
+    );
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });

@@ -87,7 +87,7 @@ export function NodesPage({ nodes, runs }: NodesPageProps) {
       ...current,
       [nodeId]: {
         phase: "submitting",
-        message: "Submitting refresh request to the control plane...",
+        message: "Submitting refresh request to the control plane…",
       },
     }));
 
@@ -140,7 +140,7 @@ export function NodesPage({ nodes, runs }: NodesPageProps) {
       ...current,
       [nodeId]: {
         phase: "submitting",
-        message: `${enabled ? "Re-enabling" : "Quarantining"} ${node.display_name}...`,
+        message: `${enabled ? "Re-enabling" : "Quarantining"} ${node.display_name}…`,
       },
     }));
 
@@ -187,7 +187,7 @@ export function NodesPage({ nodes, runs }: NodesPageProps) {
       ...current,
       [endpointUrl]: {
         phase: "submitting",
-        message: `${disabled ? "Disabling" : "Re-enabling"} ${endpointUrl}...`,
+        message: `${disabled ? "Disabling" : "Re-enabling"} ${endpointUrl}…`,
       },
     }));
 

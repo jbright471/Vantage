@@ -15,8 +15,8 @@ There are no open confirmed P0 or P1 findings in the reviewed tree. The original
 - Repository: `jbright471/Vantage`; confirmed private with no active GitHub release when this audit began.
 - Mode: patch, threat-model, and pre-release verification of the local working tree.
 - Reviewed surfaces: Python/FastAPI control plane and agent, React/Vite frontend, Nginx, SQLAlchemy persistence, imports/exports, webhooks and SMTP configuration, Docker/Compose, release packaging, and GitHub Actions.
-- Runtime verification: development stack on loopback and an isolated production stack with synthetic data.
-- Deliberately not contacted: remote agents, live LLM/router endpoints, SMTP servers, and webhook receivers.
+- Runtime verification: development stack on loopback, an isolated production stack with synthetic data, and the explicitly authorized Bastet Pop!_OS worker on the private LAN.
+- Deliberately not contacted: SMTP servers, webhook receivers, and unrelated LAN hosts. Remote-agent authentication was verified against isolated contracts and the upgraded Bastet worker.
 - Limitation: the deleted remote release asset was unavailable for rescanning. The retained Git history, current tracked tree, and locally retained release directories were scanned instead.
 - Limitation: CodeQL and GitHub dependency review are configured but can only be considered verified after GitHub-hosted execution.
 
@@ -56,7 +56,7 @@ Vantage intentionally uses a single-operator authorization model. Model output i
 | VC-13 AI safety | PASS | Threat model documents model distrust; model paths are authenticated, bounded, and cannot grant authority. |
 | VC-14 browser security | PASS | SameSite/HttpOnly session, CSRF token, strict headers, no browser token storage, authenticated DAST, and clean browser console. |
 | VC-15 supply chain | PASS | NPM, pip-audit, OSV, Trivy, Gitleaks, Semgrep, digest-pinned bases, and SHA-pinned Actions are clean. |
-| VC-16 cryptography | PASS | Standard constant-time comparison and ItsDangerous signing are used; secrets require at least 32 characters. |
+| VC-16 cryptography | PASS | Standard constant-time comparison and ItsDangerous signing are used; new agents default to exact-body HMAC with timestamp, nonce, replay checks, and secrets of at least 32 characters. |
 | VC-17 service authentication | PASS | Agent and integration authentication fail closed; weak/missing secrets return 503. |
 | VC-18 replay/state safety | PARTIAL | HMAC nonces/timestamps and tested idempotency exist; multi-process race testing remains future hardening. |
 | VC-19 network resilience | PASS | Outbound calls use explicit destinations, timeouts, redirect denial, sanitized results, and egress constraints. |
@@ -81,6 +81,8 @@ Vantage intentionally uses a single-operator authorization model. Model output i
 | VC-21-002 | P1 | Production containers ran as root | Fixed: backend UID 10001 and frontend `nginx`; read-only/capability restrictions verified at runtime. |
 | VC-06-001 | P1 | Costly AI/eval paths lacked global abuse bounds | Fixed: request rate/concurrency, input, output-token, response, and import caps with tests. |
 | VC-15-003 | P1 | Agent dependency resolution could select vulnerable `idna` | Fixed: `idna>=3.15` in both dependency manifests; OSV, pip-audit, and final image scan clean. |
+| VC-02-002 | P1 | Linux onboarding placed the shared agent secret in a shell command and defaulted to bearer authentication | Fixed: the installer prompts interactively or reads a root-only token file, validates URL-safe entropy, hardens existing environments to mode `600`, defaults new installs to HMAC, and the public guides no longer put secrets in command history. |
+| VC-18-001 | P2 | Interactive remote model paths bypassed the HMAC-aware polling transport | Fixed: polling, capability checks, manual/scheduled evals, assisted summaries, and remote judges share one exact-body signing transport; signed GET/POST contract tests pass. |
 
 No finding was waived or accepted as risk.
 
@@ -88,8 +90,8 @@ No finding was waived or accepted as risk.
 
 | Check | Version/scope | Result |
 |---|---|---|
-| Pytest | Python 3.14 / pytest 9.0.2 | **134 passed** |
-| Vitest | Vitest 3.2.7 | **37 passed** |
+| Pytest | Python 3.14 / pytest 9.0.2 | **147 passed** |
+| Vitest | Vitest 3.2.7 | **56 passed** |
 | TypeScript/Vite | Vite 7.3.6 production build | Passed |
 | NPM audit | npm 11.7.0 | **0 vulnerabilities** |
 | pip-audit | 2.10.1, resolved production Python environment | **0 vulnerabilities** |
@@ -101,6 +103,8 @@ No finding was waived or accepted as risk.
 | CycloneDX | exact final production images | SBOMs generated under `.security/sbom/` (locally ignored; CI uploads them) |
 | ZAP baseline | authenticated isolated production deployment | **0 failures**; two informational observations only |
 | Playwright | authenticated production UI | Login and application rendered; **0 console errors/warnings** |
+| Multi-node workflow | isolated HMAC agent plus running control plane | Signed `/health` setup check passed with matching `node_id`; in-process signed GET/POST agent contract and updated setup-wizard browser workflow passed. |
+| Bastet Linux upgrade | authorized private-LAN Pop!_OS worker | Legacy service backed up; dedicated service identity, HMAC health, two GPUs, two models, deterministic Gemma capability check, systemd source restriction, and restart recovery passed. |
 | Container runtime | isolated production Compose | backend UID 10001; frontend UID 101; read-only/cap-drop/no-new-privileges passed |
 | Backup/restore | synthetic SQLite data | Integrity, digest, and sentinel checks passed |
 | Release smoke | tracked-file ZIP | 149 entries; **0 forbidden; 0 required missing** |
@@ -118,6 +122,7 @@ Final local image identities:
 - [ ] Require the test and security workflows before merge; enable Dependabot alerts, secret scanning, push protection, and private vulnerability reporting.
 - [ ] Inspect the generated Semgrep result and both CI SBOM artifacts, then record the successful workflow URL in the release checklist.
 - [ ] Build the release ZIP from a clean checkout and scan that exact ZIP before publication.
+- [ ] Complete the remaining external-host checks in `docs/architecture/V1_MULTI_NODE_ACCEPTANCE.md`: a clean external-user install, the starter eval suite, and firewall denial from an unrelated LAN address. Bastet upgrade and restart recovery are verified.
 - [ ] If any real credential was present in the deleted release asset—which is no longer available to prove either way—rotate it before publication. No real credential was found in retained history or artifacts.
 
 Suggested operator commands after committing the changes:

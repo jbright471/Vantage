@@ -12,6 +12,7 @@ from backend.app.collectors.remote import AgentAuthenticationError, RemoteAgentC
 from backend.app.config import BootstrapConfig
 from backend.app.db import SessionLocal
 from backend.app.models import ModelPlacement, Node, NodeSnapshot, Run, WarningRecord
+from backend.app.services.agent_transport import build_remote_agent_client
 from backend.app.services.endpoint_overrides import filter_enabled_local_ollama_endpoints
 from backend.app.services.events import EventBroker
 from backend.app.services.polling import classify_health, extract_model_placements, normalize_snapshot
@@ -21,8 +22,6 @@ from backend.app.services.state import build_full_state
 
 logger = logging.getLogger("vantage.runtime")
 BACKGROUND_POLLING_ENV = "VANTAGE_ENABLE_BACKGROUND_POLLING"
-AGENT_AUTH_MODE_ENV = "VANTAGE_AGENT_AUTH_MODE"
-AGENT_KEY_ID_ENV = "VANTAGE_AGENT_KEY_ID"
 
 
 def background_polling_enabled() -> bool:
@@ -47,25 +46,6 @@ def _serialize_remote_models(payload: dict) -> list[dict]:
     ]
 
 
-def resolve_agent_auth_token(config: BootstrapConfig) -> str | None:
-    token = os.getenv(config.agent_auth_token_env)
-    return token if token else None
-
-
-def resolve_agent_auth_mode(node: Node) -> str:
-    if node.auth_mode:
-        return node.auth_mode
-    configured = os.getenv(AGENT_AUTH_MODE_ENV)
-    return configured if configured else "bearer"
-
-
-def resolve_agent_key_id(node: Node) -> str | None:
-    if node.auth_config_json and node.auth_config_json.get("key_id"):
-        return str(node.auth_config_json["key_id"])
-    configured = os.getenv(AGENT_KEY_ID_ENV)
-    return configured if configured else None
-
-
 def build_agent_auth_warning(node_id: str, error: Exception) -> dict:
     now = datetime.now(UTC)
     return {
@@ -85,13 +65,7 @@ def build_agent_auth_warning(node_id: str, error: Exception) -> dict:
     }
 
 
-async def collect_remote_snapshot(node: Node, auth_token: str | None = None) -> dict:
-    client = RemoteAgentClient(
-        node.base_url,
-        auth_token=auth_token,
-        auth_mode=resolve_agent_auth_mode(node),
-        key_id=resolve_agent_key_id(node),
-    )
+async def collect_remote_snapshot(node: Node, client: RemoteAgentClient) -> dict:
     captured_at = datetime.now(UTC)
     health_payload, gpu_payload, models_payload, runs_payload = await asyncio.gather(
         client.fetch_health(),
@@ -141,7 +115,7 @@ async def collect_remote_snapshot(node: Node, auth_token: str | None = None) -> 
 
 async def collect_snapshot_for_node(node: Node, config: BootstrapConfig) -> dict:
     if node.role == "remote":
-        return await collect_remote_snapshot(node, auth_token=resolve_agent_auth_token(config))
+        return await collect_remote_snapshot(node, build_remote_agent_client(node, config))
     with SessionLocal() as session:
         enabled_urls = filter_enabled_local_ollama_endpoints(session, config.local_ollama_base_urls)
     return await asyncio.to_thread(collect_local_snapshot, node.node_id, enabled_urls)

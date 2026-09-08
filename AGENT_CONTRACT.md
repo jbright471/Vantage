@@ -22,13 +22,13 @@ http://<remote-agent-ip>:9110
 
 ## Authentication
 
-Every endpoint requires authentication. `VANTAGE_AGENT_SHARED_TOKEN` must be set on the agent; when it is missing, the agent fails closed with HTTP `503`. Bearer mode is the default:
+Every endpoint requires authentication. `VANTAGE_AGENT_SHARED_TOKEN` must be set on the agent; when it is missing, the agent fails closed with HTTP `503`. New installations default to HMAC request signing. Bearer authentication remains available for compatibility:
 
 ```http
 Authorization: Bearer <token>
 ```
 
-Optional HMAC mode is enabled with:
+HMAC mode is configured with:
 
 ```text
 VANTAGE_AGENT_AUTH_MODE=hmac
@@ -80,7 +80,7 @@ VANTAGE_AGENT_ALLOWED_ACTIONS=read,capability_check,eval_attempt
 | `capability_check` | `POST /capability-check` |
 | `eval_attempt` | `POST /eval-attempt` |
 
-If the token is not configured, the agent allows unauthenticated access. Production and shared homelab deployments should configure the token.
+If the token is missing or shorter than 32 characters, every agent endpoint fails closed with HTTP `503`.
 
 ## GET /health
 
@@ -165,7 +165,7 @@ Current examples include loaded Ollama models, capability-check runs, and eval-a
       "run_id": "086af75060fb0680c77aad586646becf8d7e80b2c01bd4c096e724e27ce3e6e8",
       "source_type": "remote_agent",
       "detail_type": "ollama_loaded_model",
-      "source_id": "ollama-ps:http://<router-host>:11400:qwen3.6:27b",
+      "source_id": "ollama-ps:http://<router-host>:11400:qwen3.8:27b",
       "node_id": "remote-worker",
       "model_name": "gemma4:e4b",
       "action_type": "infer",

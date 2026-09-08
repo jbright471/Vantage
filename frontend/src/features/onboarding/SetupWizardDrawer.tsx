@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import type { ModelRecord, NodeRecord, RoutingRuleRecord } from "../../api/client";
+import { OverlayHeader, OverlaySurface } from "../../components/OverlaySurface";
 
 type WizardStep = "token" | "nodes" | "ollama" | "verify";
 
@@ -26,6 +27,15 @@ function generateToken(): string {
   return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
+function generateRequiredSecrets() {
+  return {
+    agentToken: generateToken(),
+    controlPlaneToken: generateToken(),
+    sessionSigningKey: generateToken(),
+    auditSigningKey: generateToken(),
+  };
+}
+
 function slugify(value: string): string {
   return value
     .trim()
@@ -47,7 +57,26 @@ function buildNodeToml(nodeName: string, nodeUrl: string, nodeRole: string): str
 }
 
 function buildAgentNodeEnv(nodeName: string): string {
-  return `VANTAGE_AGENT_NODE_ID=${slugify(nodeName) || "gpu-worker"}`;
+  return [
+    `VANTAGE_AGENT_NODE_ID=${slugify(nodeName) || "gpu-worker"}`,
+    "VANTAGE_AGENT_AUTH_MODE=hmac",
+    "VANTAGE_AGENT_KEY_ID=vantage-lan-v1",
+    "VANTAGE_AGENT_ALLOWED_ACTIONS=read,capability_check,eval_attempt",
+    "VANTAGE_AGENT_OLLAMA_BASE_URLS=http://127.0.0.1:11434",
+    "VANTAGE_AGENT_CONTROL_PLANE_CIDRS=<control-plane-ip>/32",
+  ].join("\n");
+}
+
+function buildLinuxAgentInstall(nodeName: string): string {
+  const nodeId = slugify(nodeName) || "gpu-worker";
+  return [
+    `sudo VANTAGE_AGENT_NODE_ID=${nodeId} \\`,
+    "  VANTAGE_AGENT_AUTH_MODE=hmac \\",
+    "  VANTAGE_AGENT_KEY_ID=vantage-lan-v1 \\",
+    '  VANTAGE_AGENT_OLLAMA_BASE_URLS="http://127.0.0.1:11434" \\',
+    '  VANTAGE_AGENT_CONTROL_PLANE_CIDRS="<control-plane-ip>/32" \\',
+    "  bash deploy/agent/install.sh",
+  ].join("\n");
 }
 
 function buildOllamaEnv(endpointList: string): string {
@@ -91,7 +120,7 @@ export function SetupWizardDrawer({
   streamStatus,
 }: SetupWizardDrawerProps) {
   const [activeStep, setActiveStep] = useState<WizardStep>("token");
-  const [token, setToken] = useState(() => generateToken());
+  const [secrets, setSecrets] = useState(generateRequiredSecrets);
   const [nodeName, setNodeName] = useState("gpu-worker-a");
   const [nodeUrl, setNodeUrl] = useState("http://worker.example.invalid:9110");
   const [nodeRole, setNodeRole] = useState("remote");
@@ -102,16 +131,20 @@ export function SetupWizardDrawer({
   }
 
   const envSnippet = [
-    `VANTAGE_AGENT_SHARED_TOKEN=${token}`,
-    "VANTAGE_AGENT_AUTH_MODE=bearer",
+    `VANTAGE_AGENT_SHARED_TOKEN=${secrets.agentToken}`,
+    "VANTAGE_AGENT_AUTH_MODE=hmac",
+    "VANTAGE_AGENT_KEY_ID=vantage-lan-v1",
     "VANTAGE_AGENT_ALLOWED_ACTIONS=read,capability_check,eval_attempt",
-    "VANTAGE_AUDIT_SIGNING_KEY=",
+    `VANTAGE_CONTROL_PLANE_TOKEN=${secrets.controlPlaneToken}`,
+    `VANTAGE_SESSION_SIGNING_KEY=${secrets.sessionSigningKey}`,
+    `VANTAGE_AUDIT_SIGNING_KEY=${secrets.auditSigningKey}`,
     "VANTAGE_AUDIT_KEY_ID=local-audit-key",
     "VANTAGE_EXTERNAL_API_TOKEN=",
     "VANTAGE_WEBHOOK_ALLOWED_HOSTS=",
   ].join("\n");
   const nodeSnippet = buildNodeToml(nodeName, nodeUrl, nodeRole);
   const agentNodeEnvSnippet = buildAgentNodeEnv(nodeName);
+  const linuxAgentInstallSnippet = buildLinuxAgentInstall(nodeName);
   const ollamaSnippet = buildOllamaEnv(ollamaEndpoints);
   const activeIndex = steps.findIndex((step) => step.id === activeStep);
   const hasObservedModels = models.length > 0;
@@ -127,26 +160,26 @@ export function SetupWizardDrawer({
   }
 
   return (
-    <div className="run-drawer-backdrop" role="presentation" onClick={onClose}>
-      <aside
-        className="run-drawer setup-wizard-drawer"
-        role="dialog"
-        aria-modal="true"
-        aria-label="First-run setup wizard"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <header className="drawer-header">
-          <div>
-            <p className="section-kicker">Setup wizard</p>
-            <h3>Configure Vantage without surrendering control</h3>
-            <p className="drawer-run-id">Generate snippets, review them, then paste into your local files.</p>
-          </div>
-          <button type="button" className="drawer-close-button" onClick={onClose} aria-label="Close setup wizard">
-            x
-          </button>
-        </header>
+    <OverlaySurface
+      isOpen={isOpen}
+      onClose={onClose}
+      labelledBy="setup-wizard-title"
+      describedBy="setup-wizard-description"
+      size="wide"
+      className="setup-wizard-drawer"
+    >
+      <OverlayHeader
+        titleId="setup-wizard-title"
+        title="First-run setup wizard"
+        kicker="Setup / Local"
+        description="Configure Vantage without surrendering control. Generate snippets, review them, then paste them into your local files."
+        descriptionId="setup-wizard-description"
+        closeLabel="Close setup wizard"
+        onClose={onClose}
+        headingLevel={3}
+      />
 
-        <div className="drawer-content setup-wizard-content">
+      <div className="drawer-content setup-wizard-content">
           <nav className="setup-stepper" aria-label="Setup steps">
             {steps.map((step, index) => (
               <button
@@ -163,18 +196,23 @@ export function SetupWizardDrawer({
 
           {activeStep === "token" ? (
             <section className="setup-step-panel">
-              <h4>1. Generate the shared agent token</h4>
+              <h4>1. Generate independent installation secrets</h4>
               <p>
-                Vantage needs the same token in the control-plane backend and any remote node agent. This wizard does
-                not store the token; it only helps you generate the `.env` line.
+                Vantage needs an agent token, a separate operator-login token, and an independent session-signing key.
+                The audit key enables signed evidence exports. This wizard generates them locally and does not store
+                them.
               </p>
               <div className="setup-inline-row">
-                <button type="button" className="action-button" onClick={() => setToken(generateToken())}>
-                  Regenerate token
+                <button type="button" className="action-button" onClick={() => setSecrets(generateRequiredSecrets())}>
+                  Regenerate secrets
                 </button>
                 <span className="meta-chip">local browser only</span>
               </div>
-              <SetupCodeBlock label=".env" value={envSnippet} />
+              <SetupCodeBlock label="Required .env values" value={envSnippet} />
+              <p className="action-copy">
+                Save the control-plane token in your password manager: it is the value you enter on the Vantage login
+                screen. Never reuse any generated value for another setting.
+              </p>
             </section>
           ) : null}
 
@@ -188,15 +226,33 @@ export function SetupWizardDrawer({
               <div className="setup-form-grid">
                 <label>
                   Node name
-                  <input value={nodeName} onChange={(event) => setNodeName(event.target.value)} />
+                  <input
+                    name="setup-node-name"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={nodeName}
+                    onChange={(event) => setNodeName(event.target.value)}
+                  />
                 </label>
                 <label>
                   Agent URL
-                  <input value={nodeUrl} onChange={(event) => setNodeUrl(event.target.value)} />
+                  <input
+                    name="setup-agent-url"
+                    type="url"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={nodeUrl}
+                    onChange={(event) => setNodeUrl(event.target.value)}
+                  />
                 </label>
                 <label>
                   Role
-                  <select value={nodeRole} onChange={(event) => setNodeRole(event.target.value)}>
+                  <select
+                    name="setup-node-role"
+                    autoComplete="off"
+                    value={nodeRole}
+                    onChange={(event) => setNodeRole(event.target.value)}
+                  >
                     <option value="remote">remote</option>
                     <option value="primary">primary</option>
                     <option value="worker">worker</option>
@@ -205,6 +261,13 @@ export function SetupWizardDrawer({
               </div>
               <SetupCodeBlock label="config/vantage.bootstrap.toml" value={nodeSnippet} />
               <SetupCodeBlock label="remote agent env" value={agentNodeEnvSnippet} />
+              <SetupCodeBlock label="Linux agent install" value={linuxAgentInstallSnippet} />
+              <p className="action-copy">
+                The installer prompts for the shared agent secret without placing it in shell history. On the worker,
+                allow TCP 9110 only from the control-plane machine or its trusted VPN address; do not expose the agent
+                port to the internet. Vantage does not scan the LAN, so repeat this install-and-register step for each
+                worker you intentionally trust.
+              </p>
             </section>
           ) : null}
 
@@ -217,7 +280,13 @@ export function SetupWizardDrawer({
               </p>
               <label className="setup-wide-label">
                 Local Ollama base URLs
-                <input value={ollamaEndpoints} onChange={(event) => setOllamaEndpoints(event.target.value)} />
+                <input
+                  name="setup-ollama-endpoints"
+                  autoComplete="off"
+                  spellCheck={false}
+                  value={ollamaEndpoints}
+                  onChange={(event) => setOllamaEndpoints(event.target.value)}
+                />
               </label>
               <SetupCodeBlock label=".env" value={ollamaSnippet} />
               <div className="setup-signal-grid">
@@ -296,8 +365,7 @@ export function SetupWizardDrawer({
               </button>
             )}
           </footer>
-        </div>
-      </aside>
-    </div>
+      </div>
+    </OverlaySurface>
   );
 }

@@ -92,15 +92,16 @@ The GitHub Pages workflow publishes public-safe product assets from `docs/produc
 8. Run through `docs/security/RELEASE_SECURITY_CHECKLIST.md`.
 9. Verify the GitHub security workflow is green for the exact commit and retain its SBOM artifacts.
 10. Verify `scripts/verify-audit-bundle.py` is included if signed bundle exports are part of the release promise.
-11. Verify the checksum file exists.
-12. Tag the release:
+11. Complete the unchecked external-host items in `docs/architecture/V1_MULTI_NODE_ACCEPTANCE.md`: a clean external-user Linux install, the starter eval suite, and source-scoped denial from an unrelated LAN address. The Bastet upgrade and restart-recovery paths are verified.
+12. Verify the checksum file exists.
+13. Tag the release:
 
 ```powershell
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-13. Verify the GitHub release contains the zip and `SHA256SUMS.txt`.
+14. Verify the GitHub release contains the zip and `SHA256SUMS.txt`.
 
 Optional local scan:
 
@@ -118,8 +119,8 @@ The scan should not find real local addresses, local Windows paths, or populated
 1. Extract the release zip on the deployment host.
 2. Copy `.env.production.example` to `.env.production`.
 3. Run `scripts/rotate-agent-token.ps1 -EnvFile .env.production -Apply`.
-4. Run `scripts/rotate-control-plane-secrets.ps1 -EnvFile .env.production -Apply`.
-5. Optionally generate and set `VANTAGE_AUDIT_SIGNING_KEY` for signed audit bundles.
+4. Run `scripts/rotate-control-plane-secrets.ps1 -EnvFile .env.production -Apply -IncludeAuditSigningKey`.
+5. Preserve the generated `VANTAGE_AUDIT_SIGNING_KEY` so previously exported bundles remain verifiable.
 6. Optionally generate and set `VANTAGE_EXTERNAL_API_TOKEN` before connecting n8n or scripts.
 7. Edit `config/vantage.bootstrap.toml`.
 8. Run `scripts/check-setup.ps1 -EnvFile .env.production`.
@@ -144,7 +145,7 @@ Copy-Item .env.example .env
 Add-Content .env "VANTAGE_DEMO_MODE=1"
 Add-Content .env "VANTAGE_ENABLE_BACKGROUND_POLLING=0"
 .\scripts\rotate-agent-token.ps1 -EnvFile .env -Apply
-.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply
+.\scripts\rotate-control-plane-secrets.ps1 -EnvFile .env -Apply -IncludeAuditSigningKey
 docker compose up --build -d
 ```
 

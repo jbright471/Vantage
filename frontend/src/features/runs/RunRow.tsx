@@ -24,7 +24,7 @@ function formatStartedAt(startedAt: string | null | undefined): string {
 }
 
 function truncateRunId(runId: string): string {
-  return runId.length > 8 ? `${runId.slice(0, 8)}...` : runId;
+  return runId.length > 8 ? `${runId.slice(0, 8)}…` : runId;
 }
 
 async function copyRunId(runId: string) {

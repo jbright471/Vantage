@@ -34,7 +34,7 @@ export function ModelsPage({ models }: ModelsPageProps) {
       ...current,
       [placementKey]: {
         phase: "submitting",
-        message: "Running live capability check against the selected node...",
+        message: "Running live capability check against the selected node…",
       },
     }));
 
@@ -79,7 +79,7 @@ export function ModelsPage({ models }: ModelsPageProps) {
           <div className="metric-strip">
             <article className="metric-card">
               <p className="info-kicker">Total inventory</p>
-              <strong>{orderedModels.length} models</strong>
+              <strong>{orderedModels.length} {orderedModels.length === 1 ? "model" : "models"}</strong>
             </article>
             <article className="metric-card">
               <p className="info-kicker">Replicated</p>
@@ -87,7 +87,7 @@ export function ModelsPage({ models }: ModelsPageProps) {
             </article>
             <article className="metric-card">
               <p className="info-kicker">Placements</p>
-              <strong>{totalPlacements} node slots</strong>
+              <strong>{totalPlacements} node {totalPlacements === 1 ? "slot" : "slots"}</strong>
             </article>
           </div>
 
@@ -131,11 +131,11 @@ export function ModelsPage({ models }: ModelsPageProps) {
                                 disabled={capabilityState?.phase === "submitting"}
                               >
                                 {capabilityState?.phase === "submitting"
-                                  ? `Checking ${placement.node_id}...`
+                                  ? `Checking ${placement.node_id}…`
                                   : `Check on ${placement.node_id}`}
                               </button>
                               {capabilityState?.message ? (
-                                <div className="inline-result">
+                                <div className="inline-result" role="status">
                                   {capabilityState.status ? (
                                     <span className={`status-chip is-${capabilityState.status}`}>
                                       {capabilityState.status}

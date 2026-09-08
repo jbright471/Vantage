@@ -279,10 +279,10 @@ describe("RoutingPage", () => {
 
     render(<RoutingPage rules={[]} availableNodes={["control-plane", "remote-worker"]} />);
 
-    fireEvent.change(screen.getByPlaceholderText("llama-batch"), { target: { value: "qwen-batch" } });
-    fireEvent.change(screen.getByPlaceholderText("qwen3.5:27b"), { target: { value: "qwen3.5:27b" } });
-    fireEvent.change(screen.getByPlaceholderText("remote-worker, control-plane"), { target: { value: "remote-worker, control-plane" } });
-    fireEvent.change(screen.getByPlaceholderText("0.75"), { target: { value: "0.75" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g., llama-batch…"), { target: { value: "qwen-batch" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g., qwen3.5:27b…"), { target: { value: "qwen3.5:27b" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g., remote-worker, control-plane…"), { target: { value: "remote-worker, control-plane" } });
+    fireEvent.change(screen.getByPlaceholderText("e.g., 0.75…"), { target: { value: "0.75" } });
     fireEvent.click(screen.getByRole("button", { name: /create rule/i }));
 
     await waitFor(() => {

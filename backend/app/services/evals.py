@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.config import BootstrapConfig
 from backend.app.models import EvalCase, EvalSuite, ModelPlacement, Node, Run
+from backend.app.services.agent_transport import build_remote_agent_client
 from backend.app.services.endpoint_overrides import filter_enabled_local_ollama_endpoints
 
 
@@ -192,7 +193,6 @@ def build_eval_assisted_summary_run(
     model_name: str,
     node: Node,
     config: BootstrapConfig,
-    auth_headers: dict[str, str] | None = None,
 ) -> Run:
     started_at = datetime.now(UTC)
     context = _build_assisted_summary_context(history)
@@ -223,7 +223,7 @@ def build_eval_assisted_summary_run(
                 node=node,
                 model_name=model_name,
                 prompt=prompt,
-                auth_headers=auth_headers,
+                config=config,
             )
         else:
             response_text = _run_local_assisted_summary(session, model_name, prompt, config)
@@ -306,22 +306,20 @@ def _run_remote_assisted_summary(
     node: Node,
     model_name: str,
     prompt: str,
-    auth_headers: dict[str, str] | None = None,
+    config: BootstrapConfig,
 ) -> str:
-    response = httpx.post(
-        f"{node.base_url}/eval-attempt",
-        json={
+    body = build_remote_agent_client(node, config).post_json(
+        "/eval-attempt",
+        {
             "model_name": model_name,
             "prompt": prompt,
             "expected_json": {},
             "score_type": "contains",
             "score_config_json": {"expected_text": ""},
         },
-        headers=auth_headers or {},
         timeout=120.0,
     )
-    response.raise_for_status()
-    return _bounded_response_text(response.json().get("metadata_json", {}).get("response_text", ""))
+    return _bounded_response_text(body.get("metadata_json", {}).get("response_text", ""))
 
 
 def _score_history_row(run: Run) -> dict[str, Any] | None:
@@ -513,7 +511,6 @@ def score_eval_response_with_context(
     score_config_json: dict[str, Any] | None,
     candidate_prompt: str,
     config: BootstrapConfig,
-    auth_headers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     if score_type == "llm_judge":
         return score_llm_judge_response(
@@ -523,7 +520,6 @@ def score_eval_response_with_context(
             score_config_json=score_config_json or {},
             candidate_prompt=candidate_prompt,
             config=config,
-            auth_headers=auth_headers,
         )
     return score_eval_response(response_text, score_type, expected_json, score_config_json)
 
@@ -536,7 +532,6 @@ def score_llm_judge_response(
     score_config_json: dict[str, Any],
     candidate_prompt: str,
     config: BootstrapConfig,
-    auth_headers: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     judge_model_name = str(score_config_json.get("judge_model_name") or "").strip()
     judge_node_id = str(score_config_json.get("judge_node_id") or "").strip()
@@ -590,21 +585,19 @@ def score_llm_judge_response(
 
     try:
         if judge_node.role == "remote":
-            response = httpx.post(
-                f"{judge_node.base_url}/eval-attempt",
-                json={
+            body = build_remote_agent_client(judge_node, config).post_json(
+                "/eval-attempt",
+                {
                     "model_name": judge_model_name,
                     "prompt": judge_prompt,
                     "expected_json": {},
                     "score_type": "json_subset",
                     "score_config_json": {},
                 },
-                headers=auth_headers or {},
                 timeout=90.0,
             )
-            response.raise_for_status()
             judge_response_text = _bounded_response_text(
-                response.json().get("metadata_json", {}).get("response_text", "")
+                body.get("metadata_json", {}).get("response_text", "")
             )
         else:
             judge_response_text = _run_local_eval(
@@ -758,7 +751,6 @@ def execute_eval_run(
     *,
     node: Node,
     config: BootstrapConfig,
-    auth_headers: dict[str, str] | None = None,
 ) -> Run:
     metadata = dict(run.metadata_json or {})
     prompt = metadata.get("prompt")
@@ -796,20 +788,17 @@ def execute_eval_run(
 
     try:
         if node.role == "remote":
-            response = httpx.post(
-                f"{node.base_url}/eval-attempt",
-                json={
+            body = build_remote_agent_client(node, config).post_json(
+                "/eval-attempt",
+                {
                     "model_name": run.model_name,
                     "prompt": prompt,
                     "expected_json": expected_json,
                     "score_type": score_type,
                     "score_config_json": score_config_json,
                 },
-                headers=auth_headers or {},
                 timeout=90.0,
             )
-            response.raise_for_status()
-            body = response.json()
             response_text = _bounded_response_text(body.get("metadata_json", {}).get("response_text", ""))
             score = score_eval_response_with_context(
                 session,
@@ -819,7 +808,6 @@ def execute_eval_run(
                 score_config_json=score_config_json,
                 candidate_prompt=prompt,
                 config=config,
-                auth_headers=auth_headers,
             )
             agent_run_id = body.get("run_id")
         else:
@@ -832,7 +820,6 @@ def execute_eval_run(
                 score_config_json=score_config_json,
                 candidate_prompt=prompt,
                 config=config,
-                auth_headers=auth_headers,
             )
             agent_run_id = None
 

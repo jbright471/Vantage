@@ -54,17 +54,17 @@ export function OnboardingPanel({
     {
       label: "Nodes registered",
       complete: nodeCount > 0,
-      detail: nodeCount > 0 ? `${nodeCount} node records visible.` : "Add nodes in config/vantage.bootstrap.toml.",
+      detail: nodeCount > 0 ? `${nodeCount} node ${nodeCount === 1 ? "record" : "records"} visible.` : "Add nodes in config/vantage.bootstrap.toml.",
     },
     {
       label: "Models observed",
       complete: modelCount > 0,
-      detail: modelCount > 0 ? `${modelCount} model names indexed.` : "Run a poll cycle or enable demo mode.",
+      detail: modelCount > 0 ? `${modelCount} model ${modelCount === 1 ? "name" : "names"} indexed.` : "Run a poll cycle or enable demo mode.",
     },
     {
       label: "Runs auditable",
       complete: runCount > 0,
-      detail: runCount > 0 ? `${runCount} run records stored.` : "Trigger a refresh, route action, or eval attempt.",
+      detail: runCount > 0 ? `${runCount} run ${runCount === 1 ? "record" : "records"} stored.` : "Trigger a refresh, route action, or eval attempt.",
     },
     {
       label: "Routing policy visible",

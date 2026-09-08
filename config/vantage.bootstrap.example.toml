@@ -18,10 +18,3 @@ display_name = "Control Plane"
 base_url = "http://127.0.0.1:8000"
 role = "primary"
 enabled = true
-
-[[nodes]]
-node_id = "remote-worker"
-display_name = "Remote Worker"
-base_url = "http://10.0.0.25:9110"
-role = "remote"
-enabled = false

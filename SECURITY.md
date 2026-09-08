@@ -147,7 +147,7 @@ Do not include live tokens, private prompts, or model output containing sensitiv
 - Do not paste live tokens into issues, PRs, or docs.
 - Rotate tokens after disclosure.
 - Use `scripts/rotate-agent-token.ps1` for a dry-run or applied token rotation workflow.
-- Use `scripts/rotate-control-plane-secrets.ps1` to generate independent operator and session secrets without printing them by default.
+- Use `scripts/rotate-control-plane-secrets.ps1` to generate independent operator and session secrets without printing them by default. Add `-IncludeAuditSigningKey` during initial setup, then preserve that audit key so older signed bundles remain verifiable.
 - Prefer generated high-entropy tokens, for example:
 
 ```powershell

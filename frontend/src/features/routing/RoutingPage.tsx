@@ -120,6 +120,15 @@ function formatPassRate(value: number | null): string {
   return `${Math.round(value * 100)}% pass`;
 }
 
+function formatTimestamp(value: string): string {
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.valueOf())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(timestamp);
+}
+
 export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: RoutingPageProps) {
   const [localRules, setLocalRules] = useState<RoutingRuleRecord[]>(rules);
   const [preferredNodesByRule, setPreferredNodesByRule] = useState<Record<string, string[]>>({});
@@ -190,7 +199,7 @@ export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: Routi
     setPendingRouteChange(routeChange);
     setRouteSimulation({
       phase: "loading",
-      message: "Simulating route order against current node state...",
+      message: "Simulating route order against current node state…",
     });
 
     simulateRoutingRule(ruleId, routeChange.nextOrder)
@@ -220,7 +229,7 @@ export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: Routi
       ...current,
       [ruleId]: {
         phase: "saving",
-        message: `Saving ${nodeId} as the preferred node...`,
+        message: `Saving ${nodeId} as the preferred node…`,
       },
     }));
 
@@ -270,7 +279,7 @@ export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: Routi
       return;
     }
 
-    setFormState({ phase: "saving", message: "Creating routing rule..." });
+    setFormState({ phase: "saving", message: "Creating routing rule…" });
     try {
       const created = await createRoutingRule({
         rule_id: ruleForm.rule_id.trim(),
@@ -297,7 +306,7 @@ export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: Routi
   async function handlePatchRule(rule: RoutingRuleRecord, patch: Partial<RoutingRuleRecord>) {
     setSaveStateByRule((current) => ({
       ...current,
-      [rule.rule_id]: { phase: "saving", message: "Updating routing policy..." },
+      [rule.rule_id]: { phase: "saving", message: "Updating routing policy…" },
     }));
 
     try {
@@ -322,7 +331,7 @@ export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: Routi
   async function handleDeleteRule(ruleId: string) {
     setSaveStateByRule((current) => ({
       ...current,
-      [ruleId]: { phase: "saving", message: "Deleting routing rule..." },
+      [ruleId]: { phase: "saving", message: "Deleting routing rule…" },
     }));
     try {
       await deleteRoutingRule(ruleId);
@@ -344,7 +353,7 @@ export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: Routi
   }
 
   async function handleShowHistory(ruleId: string) {
-    setHistoryState({ ruleId, phase: "loading", items: [], message: "Loading route history..." });
+    setHistoryState({ ruleId, phase: "loading", items: [], message: "Loading route history…" });
     try {
       const items = await fetchRoutingHistory(ruleId);
       setHistoryState({ ruleId, phase: "ready", items });
@@ -384,14 +393,19 @@ export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: Routi
           <label>
             Rule ID
             <input
+              name="routing-rule-id"
+              autoComplete="off"
+              spellCheck={false}
               value={ruleForm.rule_id}
-              placeholder="llama-batch"
+              placeholder="e.g., llama-batch…"
               onChange={(event) => setRuleForm((current) => ({ ...current, rule_id: event.target.value }))}
             />
           </label>
           <label>
             Priority
             <select
+              name="routing-priority"
+              autoComplete="off"
               value={ruleForm.priority_class}
               onChange={(event) => setRuleForm((current) => ({ ...current, priority_class: event.target.value }))}
             >
@@ -403,24 +417,32 @@ export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: Routi
           <label>
             Model
             <input
+              name="routing-model-name"
+              autoComplete="off"
+              spellCheck={false}
               value={ruleForm.model_name}
-              placeholder="qwen3.5:27b"
+              placeholder="e.g., qwen3.5:27b…"
               onChange={(event) => setRuleForm((current) => ({ ...current, model_name: event.target.value }))}
             />
           </label>
           <label>
             Preferred nodes
             <input
+              name="routing-preferred-nodes"
+              autoComplete="off"
+              spellCheck={false}
               value={ruleForm.preferred_nodes}
-              placeholder="remote-worker, control-plane"
+              placeholder="e.g., remote-worker, control-plane…"
               onChange={(event) => setRuleForm((current) => ({ ...current, preferred_nodes: event.target.value }))}
             />
           </label>
           <label>
             Min eval pass rate
             <input
+              name="routing-minimum-eval-pass-rate"
+              autoComplete="off"
               value={ruleForm.minimum_eval_pass_rate}
-              placeholder="0.75"
+              placeholder="e.g., 0.75…"
               inputMode="decimal"
               onChange={(event) =>
                 setRuleForm((current) => ({ ...current, minimum_eval_pass_rate: event.target.value }))
@@ -431,6 +453,7 @@ export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: Routi
         <div className="routing-policy-switches">
           <label>
             <input
+              name="routing-allow-degraded"
               type="checkbox"
               checked={ruleForm.allow_degraded}
               onChange={(event) => setRuleForm((current) => ({ ...current, allow_degraded: event.target.checked }))}
@@ -439,6 +462,7 @@ export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: Routi
           </label>
           <label>
             <input
+              name="routing-allow-stale"
               type="checkbox"
               checked={ruleForm.allow_stale}
               onChange={(event) => setRuleForm((current) => ({ ...current, allow_stale: event.target.checked }))}
@@ -447,6 +471,7 @@ export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: Routi
           </label>
           <label>
             <input
+              name="routing-allow-unreachable"
               type="checkbox"
               checked={ruleForm.allow_unreachable}
               onChange={(event) =>
@@ -465,7 +490,12 @@ export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: Routi
           </button>
         </div>
         {formState.message ? (
-          <p className={formState.phase === "error" ? "action-copy is-error" : "action-copy"}>{formState.message}</p>
+          <p
+            className={formState.phase === "error" ? "action-copy is-error" : "action-copy"}
+            role={formState.phase === "error" ? "alert" : "status"}
+          >
+            {formState.message}
+          </p>
         ) : null}
       </div>
 
@@ -589,6 +619,7 @@ export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: Routi
                             className={
                               saveStateByRule[rule.rule_id]?.phase === "error" ? "action-copy is-error" : "action-copy"
                             }
+                            role="status"
                           >
                             {saveStateByRule[rule.rule_id]?.message}
                           </p>
@@ -616,8 +647,8 @@ export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: Routi
                   Close
                 </button>
               </div>
-              {historyState.phase === "loading" ? <p className="info-copy">{historyState.message}</p> : null}
-              {historyState.phase === "error" ? <p className="inline-warning">{historyState.message}</p> : null}
+              {historyState.phase === "loading" ? <p className="info-copy" role="status">{historyState.message}</p> : null}
+              {historyState.phase === "error" ? <p className="inline-warning" role="alert">{historyState.message}</p> : null}
               {historyState.phase === "ready" && historyState.items.length === 0 ? (
                 <p className="info-copy">No route history has been recorded for this rule yet.</p>
               ) : null}
@@ -627,7 +658,7 @@ export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: Routi
                     <article key={item.history_id} className="history-event">
                       <div>
                         <strong>{item.action_type}</strong>
-                        <span>{new Date(item.changed_at).toLocaleString()}</span>
+                        <span>{formatTimestamp(item.changed_at)}</span>
                       </div>
                       <p>{item.summary}</p>
                     </article>
@@ -698,10 +729,10 @@ export function RoutingPage({ rules, availableNodes, nodeSummaries = [] }: Routi
             <div className="routing-safety-panel route-simulation-panel">
               <p className="info-kicker">Route simulation</p>
               {routeSimulation.phase === "loading" ? (
-                <p className="info-copy">{routeSimulation.message}</p>
+                <p className="info-copy" role="status">{routeSimulation.message}</p>
               ) : null}
               {routeSimulation.phase === "error" ? (
-                <p className="inline-warning">{routeSimulation.message}</p>
+                <p className="inline-warning" role="alert">{routeSimulation.message}</p>
               ) : null}
               {routeSimulation.phase === "ready" && routeSimulation.result ? (
                 <>

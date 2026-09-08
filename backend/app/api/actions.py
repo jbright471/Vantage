@@ -16,6 +16,7 @@ from backend.app.services.bootstrap import NODE_ENABLED_OVERRIDES_KEY, get_node_
 from backend.app.services.endpoint_overrides import (
     filter_enabled_local_ollama_endpoints,
     normalize_endpoint_url,
+    resolve_local_ollama_base_urls,
     set_local_ollama_endpoint_disabled,
 )
 from backend.app.services.runtime import run_single_node_poll
@@ -206,7 +207,7 @@ def set_node_enabled(node_id: str, payload: NodeEnabledRequest) -> dict:
 def set_local_ollama_endpoint(node_id: str, payload: LocalOllamaEndpointRequest) -> dict:
     config = load_bootstrap_config(DEFAULT_BOOTSTRAP_CONFIG_PATH)
     endpoint_url = normalize_endpoint_url(payload.endpoint_url)
-    configured_urls = {normalize_endpoint_url(url) for url in config.local_ollama_base_urls}
+    configured_urls = set(resolve_local_ollama_base_urls(config.local_ollama_base_urls))
     if endpoint_url not in configured_urls:
         raise HTTPException(status_code=400, detail="Endpoint is not a configured local Ollama base URL")
 

@@ -108,7 +108,7 @@ Production deployments use `docker-compose.prod.yml`, `.env.production`, and the
 | `scripts/check-setup.ps1` | Preflight check for Docker, Compose config, independent secrets, auth mode, optional audit signing key, optional SQLite path, backend readiness, and remote-agent reachability. Reads `.env` by default or `-EnvFile <path>`. |
 | `scripts/build-release.ps1` | Creates a shareable release zip and `SHA256SUMS.txt`. |
 | `scripts/rotate-agent-token.ps1` | Generates a new high-entropy agent token and optionally updates an env file. |
-| `scripts/rotate-control-plane-secrets.ps1` | Generates independent operator and session-signing secrets without printing them by default. |
+| `scripts/rotate-control-plane-secrets.ps1` | Generates independent operator and session-signing secrets without printing them by default; `-IncludeAuditSigningKey` also initializes signed audit exports. |
 | `scripts/verify-audit-bundle.py` | Verifies signed audit bundle payload digests and HMAC signatures. |
 
 Production Compose requires `VANTAGE_AGENT_SHARED_TOKEN`, `VANTAGE_CONTROL_PLANE_TOKEN`, and `VANTAGE_SESSION_SIGNING_KEY` to be supplied externally. Keep those values in `.env.production`, Portainer secrets, or a managed secret store. Do not paste real tokens into Compose YAML, screenshots, tickets, or documentation.
@@ -138,7 +138,7 @@ The onboarding panel appears in the command shell until dismissed in browser-loc
 
 The `Read operator guide` button opens this guide in the slide-out drawer so you can keep the live dashboard visible while reading setup guidance.
 
-Use `Launch setup wizard` for first-run configuration. The wizard generates a shared-token `.env` line, a `config/vantage.bootstrap.toml` node block, local Ollama endpoint settings, and restart/verification commands. It does not write files or store secrets; the operator still reviews and applies each generated snippet deliberately.
+Use `Launch setup wizard` for first-run configuration. The wizard generates independent agent, operator-login, session-signing, and audit-signing secrets; a `config/vantage.bootstrap.toml` node block; local Ollama endpoint settings; and restart/verification commands. It does not write files or store secrets; the operator still reviews and applies each generated snippet deliberately.
 
 ### Command Header and Warnings
 
@@ -234,7 +234,9 @@ Use `History` on a routing row to inspect create, update, and delete events for 
 
 ### Evals
 
-The Eval Lab is the Phase 2 surface for prompt-suite testing. Operators can create, edit, duplicate, import, export, and clean up prompt suites; add or duplicate prompt cases; queue eval attempt `Run` records for a selected model placement; execute queued runs; compare recent pass rates; inspect scored responses; create recurring schedules; and review deterministic Eval Intelligence summaries.
+The Eval Lab is the repeatable prompt-suite testing surface. Operators can create, edit, duplicate, import, export, and clean up prompt suites; add or duplicate prompt cases; queue eval attempt `Run` records for a selected model placement; execute queued runs; compare recent pass rates; inspect scored responses; create recurring schedules; and review deterministic Eval Intelligence summaries.
+
+For a new installation, click `Install starter suite`. Vantage creates one idempotent `Vantage Starter Smoke` suite with a structured-JSON check and an exact instruction-following check. Queue it against an available local model, execute both cases, and use `Set baseline` after a clean run. Reusing the install action returns the same suite instead of creating duplicates.
 
 Eval scores are auditable checks, not broad model-quality guarantees. Deterministic score types include `json_subset`, `exact_match`, `contains`, `regex`, `numeric_threshold`, and `json_schema`. The guarded `llm_judge` score type can ask a selected local model to judge a candidate response, but it must return strict JSON and Vantage fails the run closed if the judge output is malformed.
 
@@ -311,7 +313,9 @@ The Integration Health panel in the app shows whether an external API token is c
 
 ### Docs Drawer
 
-The `Docs` button in the application header opens this Operator Guide as live Markdown from `/api/docs/operator-guide.md`. The drawer is designed for quick reference while the dashboard remains visible behind it.
+The `Docs` button in the application header opens this Operator Guide in a large reference workspace. The left sidebar groups the guide by its `##` chapters and turns each `###` heading into a focused page. Search checks both section titles and section content, while Previous and Next controls preserve the guide's reading order.
+
+The selected page is stored in the URL as `?docs=<section-slug>`. You can bookmark or share that local URL, refresh without losing your place, and use browser Back and Forward to move through documentation history. The workspace still reads live Markdown from `/api/docs/operator-guide.md`, so this file remains the single source of truth.
 
 If the guide fails to load, verify the backend is running and `/api/health/ready` returns `ok`. The drawer reads the repository-root `OPERATOR_GUIDE.md`, so documentation updates are available in the app after the backend can read the updated file.
 
@@ -430,10 +434,11 @@ Safe operating rule: never promote a node that is stale, unreachable, missing th
 
 ### Add a New Remote Worker Node
 
-1. Deploy the lightweight Vantage agent on the remote Linux worker with `deploy/agent/install.sh`.
-2. Configure the agent to use the same shared token referenced by `agent_auth_token_env`.
-3. Confirm the agent exposes the expected endpoints, including health, GPU, models, and runs.
-4. Add a new `[[nodes]]` entry to `config/vantage.bootstrap.toml`.
+1. Copy the Vantage release bundle or checkout to the remote Linux model host. Vantage does not discover or scan the LAN.
+2. Run the setup wizard's `Linux agent install` command. The installer prompts for the shared token securely, defaults to HMAC, and installs only the `read`, `capability_check`, and `eval_attempt` action classes.
+3. Restrict worker TCP port `9110` to the control-plane IP or trusted VPN interface. Do not expose it to the internet; HMAC does not encrypt HTTP payloads.
+4. Run `scripts/check-setup.ps1 -RemoteAgentUrl http://<remote-agent-ip>:9110` from the control-plane checkout and require the authenticated health check to pass.
+5. Add a new `[[nodes]]` entry to `config/vantage.bootstrap.toml`.
 
 Example:
 
@@ -446,12 +451,12 @@ role = "remote"
 enabled = true
 ```
 
-5. Restart the Vantage backend container or process so the bootstrap config is reloaded.
-6. Open Nodes and confirm the new worker appears.
-7. Wait for the node to become `LIVE`.
-8. Confirm GPU telemetry and observed model count.
-9. Open Models and confirm expected model placements.
-10. Update Routing only after the node is live and model inventory is visible.
+6. Restart the Vantage backend container or process so the bootstrap config is reloaded.
+7. Open Nodes and confirm the new worker appears.
+8. Wait for the node to become `LIVE`.
+9. Confirm GPU telemetry and observed model count.
+10. Run a capability check or starter eval against a model on the worker.
+11. Update Routing only after the node is live, the model inventory is visible, and the check succeeds.
 
 If the node appears but remains stale or unreachable, check network reachability, firewall rules, the agent service, the shared token, and the configured `base_url`.
 
@@ -465,7 +470,7 @@ If the node appears but remains stale or unreachable, check network reachability
 
 ### Run a Production Setup Check
 
-1. Set `VANTAGE_AGENT_SHARED_TOKEN` in the current shell or `.env.production`.
+1. Set independent values for `VANTAGE_AGENT_SHARED_TOKEN`, `VANTAGE_CONTROL_PLANE_TOKEN`, and `VANTAGE_SESSION_SIGNING_KEY` in the current shell or `.env.production`.
 2. Run `scripts/check-setup.ps1`.
 3. Pass `-RemoteAgentUrl http://<remote-agent-ip>:9110` when you want the checker to verify a worker agent.
 4. Pass `-SqlitePath <path-to-vantage.sqlite3>` when you use a host-mounted SQLite path instead of the default Docker volume.
@@ -474,11 +479,11 @@ If the node appears but remains stale or unreachable, check network reachability
 Example:
 
 ```powershell
-$env:VANTAGE_AGENT_SHARED_TOKEN = "<same-token-as-control-plane>"
 .\scripts\check-setup.ps1 `
+  -EnvFile .env.production `
   -ComposeFile docker-compose.prod.yml `
   -RemoteAgentUrl http://<remote-agent-ip>:9110 `
-  -ControlPlaneUrl http://<control-plane-host>:8000
+  -ControlPlaneUrl http://<control-plane-host>:5173
 ```
 
 ### Back Up SQLite Before Updating
@@ -528,7 +533,7 @@ python scripts/verify-audit-bundle.py <path-to-bundle.json>
 ### Deploy Through Portainer
 
 1. Review `PORTAINER.md`.
-2. Make sure `VANTAGE_AGENT_SHARED_TOKEN` is configured as a Portainer environment variable or secret.
+2. Configure independent `VANTAGE_AGENT_SHARED_TOKEN`, `VANTAGE_CONTROL_PLANE_TOKEN`, and `VANTAGE_SESSION_SIGNING_KEY` values as Portainer environment variables or secrets.
 3. Deploy `docker-compose.prod.yml` as the stack definition.
 4. Confirm backend and frontend containers become `healthy`.
 5. Open the UI and verify Nodes, Runs, Models, Routing, Evals, and Docs load.

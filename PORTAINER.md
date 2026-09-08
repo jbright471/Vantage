@@ -54,7 +54,7 @@ Create Portainer stack environment variables or secrets:
 
 Do not paste real tokens or audit signing keys into the Compose file, docs, screenshots, or GitHub issues.
 
-If you use Portainer secrets, confirm the resolved environment is visible to the backend container before starting the stack. Vantage treats missing `VANTAGE_AGENT_SHARED_TOKEN` as a production startup error in `docker-compose.prod.yml`.
+If you use Portainer secrets, confirm the resolved environment is visible to the backend container before starting the stack. Vantage treats missing `VANTAGE_AGENT_SHARED_TOKEN`, `VANTAGE_CONTROL_PLANE_TOKEN`, or `VANTAGE_SESSION_SIGNING_KEY` as a production startup error in `docker-compose.prod.yml`.
 
 ## Bootstrap Config
 
@@ -72,11 +72,7 @@ to:
 config/vantage.bootstrap.toml
 ```
 
-Then replace:
-
-- `control-plane` with your control-plane node ID
-- `remote-worker` with your worker node ID
-- `http://<remote-agent-ip>:9110` with the worker agent URL
+The public example registers only the local `control-plane` node. Keep or rename that node, then use the in-app setup wizard or the remote-node block in `OPERATOR_GUIDE.md` to add workers deliberately.
 
 ## Stack Creation
 
@@ -149,7 +145,7 @@ This prevents container logs from growing indefinitely on small homelab disks. F
 Install the remote agent on each Linux worker:
 
 ```bash
-sudo VANTAGE_AGENT_SHARED_TOKEN="<same-token-as-control-plane>" \
+sudo VANTAGE_AGENT_SHARED_TOKEN="<same-token-as-remote-agents>" \
   VANTAGE_AGENT_NODE_ID="<your-node-id>" \
   VANTAGE_AGENT_OLLAMA_BASE_URLS="http://127.0.0.1:11400" \
   bash deploy/agent/install.sh
@@ -158,7 +154,7 @@ sudo VANTAGE_AGENT_SHARED_TOKEN="<same-token-as-control-plane>" \
 Verify from the control-plane host:
 
 ```powershell
-$token = "<same-token-as-control-plane>"
+$token = "<same-token-as-remote-agents>"
 Invoke-RestMethod http://<remote-agent-ip>:9110/health -Headers @{ Authorization = "Bearer $token" }
 ```
 
@@ -167,7 +163,9 @@ Invoke-RestMethod http://<remote-agent-ip>:9110/health -Headers @{ Authorization
 Run the setup checker before or after deployment:
 
 ```powershell
-$env:VANTAGE_AGENT_SHARED_TOKEN = "<same-token-as-control-plane>"
+$env:VANTAGE_AGENT_SHARED_TOKEN = "<same-token-as-remote-agents>"
+$env:VANTAGE_CONTROL_PLANE_TOKEN = "<independent-operator-token>"
+$env:VANTAGE_SESSION_SIGNING_KEY = "<independent-session-signing-key>"
 .\scripts\check-setup.ps1 `
   -ComposeFile docker-compose.prod.yml `
   -RemoteAgentUrl http://<remote-agent-ip>:9110 `

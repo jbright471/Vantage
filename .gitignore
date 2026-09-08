@@ -15,8 +15,12 @@ node_modules/
 dist/
 coverage/
 .playwright-cli/
+frontend/playwright-report/
+frontend/test-results/
+artifacts/
 .security/sbom/
 graphify-out/
+config/vantage.bootstrap.local.toml
 
 # Local planning/scratch artifacts used during implementation.
 *-plan.md

@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-import os
+import json
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
@@ -9,14 +9,16 @@ from pydantic import BaseModel
 from backend.app.config import DEFAULT_BOOTSTRAP_CONFIG_PATH, load_bootstrap_config
 from backend.app.db import SessionLocal
 from backend.app.models import Node, Run
+from backend.app.services.agent_transport import build_remote_agent_client
 from backend.app.services.endpoint_overrides import filter_enabled_local_ollama_endpoints
 from backend.app.services.state import get_models_state
 
 router = APIRouter()
 CAPABILITY_CHECK_PROMPT = (
-    "Reply with a compact JSON object describing the model health for this control-plane check. "
-    'Use keys "mode", "json", and "notes". Return JSON only.'
+    "Complete this deterministic inference handshake. Return exactly one JSON object and no Markdown: "
+    '{"mode":"inference","json":true,"notes":"ok"}'
 )
+CAPABILITY_CHECK_EXPECTED = {"mode": "inference", "json": True, "notes": "ok"}
 
 
 class CapabilityCheckRequest(BaseModel):
@@ -32,12 +34,17 @@ def _coerce_datetime(value: str | datetime | None) -> datetime | None:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
-def _agent_auth_headers() -> dict[str, str]:
-    config = load_bootstrap_config(DEFAULT_BOOTSTRAP_CONFIG_PATH)
-    token = os.getenv(config.agent_auth_token_env)
-    if not token:
-        return {}
-    return {"Authorization": f"Bearer {token}"}
+def _validate_capability_response(response_text: str) -> dict:
+    try:
+        parsed = json.loads(response_text)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Capability response was not valid JSON") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("Capability response was not a JSON object")
+    mismatched = [key for key, value in CAPABILITY_CHECK_EXPECTED.items() if parsed.get(key) != value]
+    if mismatched:
+        raise ValueError(f"Capability response failed the deterministic handshake: {', '.join(mismatched)}")
+    return parsed
 
 
 @router.get("/models")
@@ -68,6 +75,8 @@ def _run_local_capability_check(model_name: str, node_id: str) -> dict:
             response = httpx.post(f"{base_url}/api/generate", json=payload, timeout=45.0)
             response.raise_for_status()
             body = response.json()
+            response_text = str(body.get("response", ""))
+            response_json = _validate_capability_response(response_text)
             ended_at = datetime.now(UTC)
             return {
                 "run_id": str(uuid4()),
@@ -85,7 +94,8 @@ def _run_local_capability_check(model_name: str, node_id: str) -> dict:
                 "metadata_json": {
                     "base_url": base_url,
                     "prompt": CAPABILITY_CHECK_PROMPT,
-                    "response_preview": body.get("response", "")[:240],
+                    "response_preview": response_text[:240],
+                    "response_json": response_json,
                 },
             }
         except Exception as exc:
@@ -122,14 +132,12 @@ def run_capability_check(request: CapabilityCheckRequest) -> dict:
     if node.role == "remote":
         started_at = datetime.now(UTC)
         try:
-            response = httpx.post(
-                f"{node.base_url}/capability-check",
-                json={"model_name": request.model_name, "prompt": CAPABILITY_CHECK_PROMPT},
-                headers=_agent_auth_headers(),
+            config = load_bootstrap_config(DEFAULT_BOOTSTRAP_CONFIG_PATH)
+            payload = build_remote_agent_client(node, config).post_json(
+                "/capability-check",
+                {"model_name": request.model_name, "prompt": CAPABILITY_CHECK_PROMPT},
                 timeout=60.0,
             )
-            response.raise_for_status()
-            payload = response.json()
         except Exception as exc:
             ended_at = datetime.now(UTC)
             payload = {
