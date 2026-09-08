@@ -115,7 +115,10 @@ def get_routing_state(session: Session) -> list[dict]:
             "allow_degraded": rule.allow_degraded,
             "allow_stale": rule.allow_stale,
             "allow_unreachable": rule.allow_unreachable,
+            "allow_unverified": rule.allow_unverified,
+            "allow_stale_evidence": rule.allow_stale_evidence,
             "minimum_eval_pass_rate": rule.minimum_eval_pass_rate,
+            "required_eval_suite_id": rule.required_eval_suite_id,
             "preferred_nodes": nodes_by_rule.get(rule.rule_id, []),
         }
         for rule in rules

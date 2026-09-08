@@ -9,6 +9,7 @@ snapshot_prune_interval_seconds = 900
 run_timeout_seconds = 300
 abandoned_after_seconds = 900
 idempotency_dedupe_seconds = 30
+eval_evidence_max_age_seconds = 604800
 agent_auth_token_env = "VANTAGE_AGENT_SHARED_TOKEN"
 local_ollama_base_urls = ["http://127.0.0.1:11400"]
 

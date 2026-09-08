@@ -24,7 +24,10 @@ class RoutingRuleCreateRequest(BaseModel):
     allow_degraded: bool = False
     allow_stale: bool = False
     allow_unreachable: bool = False
+    allow_unverified: bool = False
+    allow_stale_evidence: bool = False
     minimum_eval_pass_rate: float | None = None
+    required_eval_suite_id: str | None = None
 
 
 class RoutingRulePatchRequest(BaseModel):
@@ -35,7 +38,10 @@ class RoutingRulePatchRequest(BaseModel):
     allow_degraded: bool | None = None
     allow_stale: bool | None = None
     allow_unreachable: bool | None = None
+    allow_unverified: bool | None = None
+    allow_stale_evidence: bool | None = None
     minimum_eval_pass_rate: float | None = None
+    required_eval_suite_id: str | None = None
 
 
 class RoutingRuleDryRunRequest(BaseModel):
@@ -87,7 +93,10 @@ def create_routing(payload: RoutingRuleCreateRequest) -> dict:
             allow_degraded=payload.allow_degraded,
             allow_stale=payload.allow_stale,
             allow_unreachable=payload.allow_unreachable,
+            allow_unverified=payload.allow_unverified,
+            allow_stale_evidence=payload.allow_stale_evidence,
             minimum_eval_pass_rate=payload.minimum_eval_pass_rate,
+            required_eval_suite_id=payload.required_eval_suite_id,
         )
         session.add(rule)
         _replace_rule_nodes(session, payload.rule_id, preferred_nodes)
@@ -212,8 +221,14 @@ def patch_routing(rule_id: str, payload: RoutingRulePatchRequest) -> dict:
             rule.allow_stale = payload.allow_stale
         if payload.allow_unreachable is not None:
             rule.allow_unreachable = payload.allow_unreachable
+        if payload.allow_unverified is not None:
+            rule.allow_unverified = payload.allow_unverified
+        if payload.allow_stale_evidence is not None:
+            rule.allow_stale_evidence = payload.allow_stale_evidence
         if payload.minimum_eval_pass_rate is not None:
             rule.minimum_eval_pass_rate = payload.minimum_eval_pass_rate
+        if payload.required_eval_suite_id is not None:
+            rule.required_eval_suite_id = payload.required_eval_suite_id or None
         if payload.preferred_nodes is not None:
             preferred_nodes = _dedupe_nodes(payload.preferred_nodes)
             _validate_node_ids(session, preferred_nodes)

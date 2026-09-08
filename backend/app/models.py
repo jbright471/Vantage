@@ -75,7 +75,10 @@ class RoutingRule(Base):
     allow_degraded: Mapped[bool] = mapped_column(Boolean, default=False)
     allow_stale: Mapped[bool] = mapped_column(Boolean, default=False)
     allow_unreachable: Mapped[bool] = mapped_column(Boolean, default=False)
+    allow_unverified: Mapped[bool] = mapped_column(Boolean, default=False)
+    allow_stale_evidence: Mapped[bool] = mapped_column(Boolean, default=False)
     minimum_eval_pass_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    required_eval_suite_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
 class RoutingRuleNode(Base):
