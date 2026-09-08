@@ -165,7 +165,7 @@ Current examples include loaded Ollama models, capability-check runs, and eval-a
       "run_id": "086af75060fb0680c77aad586646becf8d7e80b2c01bd4c096e724e27ce3e6e8",
       "source_type": "remote_agent",
       "detail_type": "ollama_loaded_model",
-      "source_id": "ollama-ps:http://<router-host>:11400:qwen3.6:27b",
+      "source_id": "ollama-ps:http://<router-host>:11400:qwen3.8:27b",
       "node_id": "remote-worker",
       "model_name": "gemma4:e4b",
       "action_type": "infer",

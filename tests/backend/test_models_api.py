@@ -23,7 +23,7 @@ def test_local_capability_check_endpoint_returns_success(monkeypatch) -> None:
     with TestClient(app) as client:
         response = client.post(
             "/api/models/capability-check",
-            json={"model_name": "qwen3.6:latest", "node_id": "control-plane"},
+            json={"model_name": "qwen3.8:latest", "node_id": "control-plane"},
         )
 
     assert response.status_code == 200
@@ -50,7 +50,7 @@ def test_local_capability_check_rejects_non_deterministic_response(monkeypatch) 
     with TestClient(app) as client:
         response = client.post(
             "/api/models/capability-check",
-            json={"model_name": "qwen3.6:latest", "node_id": "control-plane"},
+            json={"model_name": "qwen3.8:latest", "node_id": "control-plane"},
         )
 
     assert response.status_code == 200
@@ -71,7 +71,7 @@ def test_remote_capability_check_failure_returns_failed_run(monkeypatch) -> None
     with TestClient(app) as client:
         response = client.post(
             "/api/models/capability-check",
-            json={"model_name": "qwen3.6-hermes:latest", "node_id": "remote-worker"},
+            json={"model_name": "qwen3.8-hermes:latest", "node_id": "remote-worker"},
         )
 
     assert response.status_code == 200

@@ -27,14 +27,14 @@ def test_agent_exposes_health_gpu_and_models(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "agent.app.collectors.get_models",
-        lambda: [{"model_name": "qwen3.6:latest", "model_digest": "sha256:abc", "available": True}],
+        lambda: [{"model_name": "qwen3.8:latest", "model_digest": "sha256:abc", "available": True}],
     )
 
     client = _authenticated_client(monkeypatch)
 
     assert client.get("/health").json()["status"] == "ok"
     assert client.get("/gpu").json()["gpus"][0]["name"] == "RTX 3090"
-    assert client.get("/models").json()["models"][0]["model_name"] == "qwen3.6:latest"
+    assert client.get("/models").json()["models"][0]["model_name"] == "qwen3.8:latest"
 
 
 def test_agent_exposes_runs_and_capability_check(monkeypatch) -> None:
@@ -47,13 +47,13 @@ def test_agent_exposes_runs_and_capability_check(monkeypatch) -> None:
                 "detail_type": "ollama_loaded_model",
                 "source_id": "ollama-ps:http://127.0.0.1:11435/qwen",
                 "node_id": "remote-worker",
-                "model_name": "qwen3.6:latest",
+                "model_name": "qwen3.8:latest",
                 "action_type": "infer",
                 "status": "running",
                 "started_at": "2026-04-23T12:00:00+00:00",
                 "ended_at": None,
                 "duration_ms": None,
-                "summary": "Model qwen3.6:latest is currently loaded on remote-worker",
+                "summary": "Model qwen3.8:latest is currently loaded on remote-worker",
                 "metadata_json": {},
             }
         ],
@@ -80,7 +80,7 @@ def test_agent_exposes_runs_and_capability_check(monkeypatch) -> None:
     client = _authenticated_client(monkeypatch)
 
     assert client.get("/runs").json()["runs"][0]["run_id"] == "run-1"
-    assert client.post("/capability-check", json={"model_name": "qwen3.6:latest"}).json()["status"] == "success"
+    assert client.post("/capability-check", json={"model_name": "qwen3.8:latest"}).json()["status"] == "success"
 
 
 def test_agent_exposes_eval_attempt(monkeypatch) -> None:
@@ -107,7 +107,7 @@ def test_agent_exposes_eval_attempt(monkeypatch) -> None:
 
     response = client.post(
         "/eval-attempt",
-        json={"model_name": "qwen3.6:latest", "prompt": "Return JSON", "expected_json": {}},
+        json={"model_name": "qwen3.8:latest", "prompt": "Return JSON", "expected_json": {}},
     )
 
     assert response.status_code == 200
@@ -119,7 +119,7 @@ def test_agent_rejects_oversized_eval_prompt(monkeypatch) -> None:
 
     response = client.post(
         "/eval-attempt",
-        json={"model_name": "qwen3.6:latest", "prompt": "x" * 16001},
+        json={"model_name": "qwen3.8:latest", "prompt": "x" * 16001},
     )
 
     assert response.status_code == 422

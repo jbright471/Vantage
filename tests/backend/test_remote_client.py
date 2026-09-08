@@ -115,7 +115,7 @@ def test_remote_agent_client_signs_the_exact_post_body(monkeypatch) -> None:
     monkeypatch.setattr("backend.app.collectors.remote.time.time", lambda: 1770000000)
     monkeypatch.setattr("backend.app.collectors.remote.secrets.token_urlsafe", lambda length: "nonce-post")
 
-    payload = {"model_name": "qwen3.6:latest", "prompt": "Return JSON"}
+    payload = {"model_name": "qwen3.8:latest", "prompt": "Return JSON"}
     response = RemoteAgentClient(
         "http://remote-worker:9110",
         auth_token="secret-token",
