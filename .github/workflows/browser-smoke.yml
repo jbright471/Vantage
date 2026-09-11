@@ -22,6 +22,9 @@ jobs:
       VANTAGE_SESSION_SIGNING_KEY: ci-session-key-00000000000000000000000
       VANTAGE_AUDIT_SIGNING_KEY: ci-audit-key-000000000000000000000000
       VANTAGE_DEMO_MODE: "0"
+      # The development stack bind-mounts the checkout over /app, which the backend's non-root
+      # user cannot write on a Linux runner. Keep the smoke-test database inside the container.
+      VANTAGE_DATABASE_URL: sqlite+pysqlite:////tmp/vantage.sqlite3
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -40,7 +43,8 @@ jobs:
       - name: Wait for readiness
         run: |
           for attempt in {1..60}; do
-            if curl --fail --silent http://127.0.0.1:8000/api/health/ready > /dev/null; then
+            if curl --fail --silent http://127.0.0.1:8000/api/health/ready > /dev/null \
+              && curl --fail --silent http://127.0.0.1:5173/ > /dev/null; then
               exit 0
             fi
             sleep 2
