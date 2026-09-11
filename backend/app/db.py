@@ -41,6 +41,16 @@ def ensure_runtime_schema() -> None:
                 )
             if "minimum_eval_pass_rate" not in routing_columns:
                 connection.execute(text("ALTER TABLE routing_rules ADD COLUMN minimum_eval_pass_rate FLOAT"))
+            if "allow_unverified" not in routing_columns:
+                connection.execute(
+                    text("ALTER TABLE routing_rules ADD COLUMN allow_unverified BOOLEAN NOT NULL DEFAULT 0")
+                )
+            if "allow_stale_evidence" not in routing_columns:
+                connection.execute(
+                    text("ALTER TABLE routing_rules ADD COLUMN allow_stale_evidence BOOLEAN NOT NULL DEFAULT 0")
+                )
+            if "required_eval_suite_id" not in routing_columns:
+                connection.execute(text("ALTER TABLE routing_rules ADD COLUMN required_eval_suite_id VARCHAR"))
 
     if "eval_schedules" not in table_names:
         return

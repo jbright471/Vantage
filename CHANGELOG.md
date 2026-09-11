@@ -12,8 +12,11 @@ This project follows a pragmatic Keep a Changelog style and uses semantic versio
 - Shared rate/concurrency gates and bounded prompt, suite, output-token, and response sizes for costly LLM and eval operations.
 - Threat model, authentication ADR, comprehensive security audit, machine-readable findings, Dependabot configuration, and a scheduled security workflow covering Gitleaks, dependency review, npm/pip/OSV audits, Semgrep, CodeQL, Trivy, and CycloneDX SBOMs.
 - Safe operator/session and agent secret-rotation helpers plus regression coverage for missing and weak authentication configuration.
+- Explicit routing evaluation-evidence states (`validated`, `failed`, `unverified`, `stale`) surfaced on every dry-run decision, with `allow_unverified` and `allow_stale_evidence` opt-ins, an optional `required_eval_suite_id` scope, and a configurable `eval_evidence_max_age_seconds` recency window.
 
 ### Changed
+
+- Routing rules with a minimum eval pass rate now reject nodes that have no in-scope evaluation evidence instead of treating silence as a pass, and pass rates are scoped to the required suite, the digest the node currently serves, and the recency window.
 
 - Development services now bind to loopback by default; production publishes only the frontend and keeps the backend internal.
 - Development and production containers now run as non-root; production adds read-only filesystems, dropped capabilities, `no-new-privileges`, and bounded temporary filesystems.
