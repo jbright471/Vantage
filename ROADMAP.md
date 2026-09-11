@@ -128,6 +128,12 @@ Status: shipped.
 - Route history showing when and why preferences changed.
 - Capability-aware routing that can use eval scores, model availability, and node health as constraints.
 - Safer scheduled-work policy lanes that remain strict unless an operator explicitly enables degraded, stale, or unreachable failover allowances.
+- Explicit evaluation-evidence states on every dry-run decision: `validated`, `failed`, `unverified`, and `stale`.
+- Rules with a minimum eval pass rate reject nodes that have no in-scope evidence, rather than treating missing evidence as a pass.
+- Evidence opt-ins `allow_unverified` and `allow_stale_evidence`. The second is separate from `allow_stale`, which concerns node telemetry freshness rather than evidence age.
+- Eval pass rates scoped to an optional required suite (`required_eval_suite_id`), the model digest the node currently serves, and a configurable recency window (`eval_evidence_max_age_seconds`).
+
+Known limitation: digest scoping depends on the digest recorded when an eval is queued, not a digest verified at execution time. See [Eval Evidence Provenance](docs/architecture/LATER_RESEARCH_DECISIONS.md#eval-evidence-provenance).
 
 ## Phase 4: Production Deployment And Packaging
 

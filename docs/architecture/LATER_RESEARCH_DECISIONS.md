@@ -14,6 +14,7 @@ This document converts the original Later Research list into explicit product an
 | Postgres support | Support non-SQLite SQLAlchemy URLs at the engine layer; keep SQLite as the default. | Foundation shipped |
 | Cross-node model synchronization | Treat as a planning surface first. Do not copy, pull, or delete models until the agent action contract is allowlisted and auditable. | Planned |
 | Host service remediation | Use a privileged local node agent, never a privileged backend container. Every action must be allowlisted, confirmed, idempotent, and recorded as a Run. | Boundary defined |
+| Eval evidence provenance | Treat digest-scoped evidence as queue-time attribution only. Capture and compare the serving digest at execution, and promote digest and suite to indexed Run columns, before claiming proof. | Limitation documented |
 
 ## Rust Remote Agent
 
@@ -160,6 +161,25 @@ Unsafe by default:
 - Docker socket mounting into the backend
 - privileged backend containers
 - remediation that bypasses Run audit records
+
+## Eval Evidence Provenance
+
+Routing rules can require evaluation evidence before selecting a node. That evidence is scoped to an optional suite, the model digest the node currently serves, and a recency window (`eval_evidence_max_age_seconds`, default 604800 seconds, seven days). Digest scoping can only be as trustworthy as the digest recorded on each eval Run.
+
+Current behavior:
+
+- `queue_eval_case_runs` copies `model_digest` into the Run's `metadata_json` at queue time. It takes the value from an available `ModelPlacement`, and records nothing if no such placement has a digest.
+- Eval execution does not capture or compare the digest of the model that actually answered.
+- `Run` has no `model_digest` or `suite_id` column. Both are read from `metadata_json`, so suite and digest scoping happen in Python rather than as indexed SQL filters.
+
+Consequence: a digest-scoped `validated` state shows that evidence was recorded against the digest placed when the eval was queued. It does not prove which artifact produced the result. If the model is replaced between queueing and execution, the evidence can be attributed to the wrong artifact.
+
+Before digest-scoped evidence is treated as proof, Vantage needs:
+
+- the digest of the model that served the eval, captured at execution time and recorded on the Run
+- evidence whose queued and executed digests disagree marked as such, rather than counted
+- `model_digest` and `suite_id` promoted to indexed `Run` columns through a migration, keeping existing `metadata_json` history readable
+- tests covering a model replaced between queueing and execution
 
 ## Promotion Criteria
 
