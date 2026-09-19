@@ -8,6 +8,7 @@ version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
   "alembic>=1.17.0",
+  "anyio>=4.14.2",
   "fastapi>=0.116.0",
   "httpx>=0.28.0",
   "idna>=3.15",
