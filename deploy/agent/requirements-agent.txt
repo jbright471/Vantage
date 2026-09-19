@@ -1,3 +1,4 @@
+anyio>=4.14.2
 fastapi>=0.116.0
 httpx>=0.28.0
 idna>=3.15

@@ -28,6 +28,8 @@ This project follows a pragmatic Keep a Changelog style and uses semantic versio
 - Closed the unauthenticated control-plane, remote-agent, and integration fail-open paths.
 - Restricted webhook delivery with exact allowlists, DNS/address validation, redirect denial, private-network opt-in, timeouts, and persisted-URL redaction.
 - Added strict browser response headers, API no-store behavior, safe cookie controls, and authenticated production DAST verification.
+- Moved the backend base image to `python:3.14-slim` on Debian 13.7, clearing 13 HIGH/CRITICAL findings in `perl-base`, `libpcre2-8-0`, `libsqlite3-0`, and `gzip`.
+- Added `anyio>=4.14.2` to both dependency manifests so resolution cannot select a release affected by GHSA-82r6-8w77-94w6 or GHSA-5p39-cfhj-2xmp.
 
 ## [0.1.0] - 2026-05-13
 
