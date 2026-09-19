@@ -18,7 +18,7 @@ RUN apt-get update \
     && python -m pip install --no-cache-dir -e ".[postgres]" watchfiles \
     && groupadd --system --gid 10001 vantage \
     && useradd --system --uid 10001 --gid vantage --home-dir /nonexistent --shell /usr/sbin/nologin vantage \
-    && chown -R vantage:vantage /app
+    && mkdir -p /data \n    && chown -R vantage:vantage /app /data
 
 USER 10001:10001
 
