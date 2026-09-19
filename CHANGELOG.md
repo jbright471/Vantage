@@ -22,6 +22,11 @@ This project follows a pragmatic Keep a Changelog style and uses semantic versio
 - Development and production containers now run as non-root; production adds read-only filesystems, dropped capabilities, `no-new-privileges`, and bounded temporary filesystems.
 - Container bases and GitHub Actions are pinned immutably, release builds use tracked files only, and the frontend/Python dependency graphs are clean under the configured audits.
 - Setup, operator, contributor, and release documentation now reflects mandatory operator/session secrets and authenticated browser access.
+- The development Compose stack now keeps SQLite in a `vantage_dev_data` volume at `/data/vantage.sqlite3` instead of the bind-mounted checkout, so the non-root backend can write it on Linux hosts. Existing development data in `./vantage.sqlite3` is no longer used by default; set `VANTAGE_DATABASE_URL=sqlite+pysqlite:///./vantage.sqlite3` to keep using it where the host permits.
+
+### Fixed
+
+- The `desktop-local` browser smoke test, which failed on every run because the development backend could not create its SQLite database in the bind-mounted checkout. Its readiness check now also waits for the frontend.
 
 ### Security
 

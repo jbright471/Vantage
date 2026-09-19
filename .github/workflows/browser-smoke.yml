@@ -22,9 +22,6 @@ jobs:
       VANTAGE_SESSION_SIGNING_KEY: ci-session-key-00000000000000000000000
       VANTAGE_AUDIT_SIGNING_KEY: ci-audit-key-000000000000000000000000
       VANTAGE_DEMO_MODE: "0"
-      # The development stack bind-mounts the checkout over /app, which the backend's non-root
-      # user cannot write on a Linux runner. Keep the smoke-test database inside the container.
-      VANTAGE_DATABASE_URL: sqlite+pysqlite:////tmp/vantage.sqlite3
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
