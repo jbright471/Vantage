@@ -15,6 +15,8 @@ The examples below use `control-plane` as an example control-plane node name and
 - Operator APIs require a high-entropy bearer token or a signed, short-lived browser session; cookie mutations additionally require CSRF validation.
 - Costly LLM/eval endpoints have per-minute, concurrency, output-token, prompt, response, and suite-size bounds.
 - Secrets are supplied through environment files and are ignored by git.
+- Backend image builds apply current Debian updates to the selected util-linux and OpenSSL packages, because a pinned base digest can lag security fixes. Rebuild images to receive those updates.
+- Container security CI downloads a fresh Trivy database instead of restoring the daily shared cache, so newly published advisories are checked before merge.
 - Production Compose requires agent, operator, and independent session-signing secrets before startup.
 - Demo mode uses synthetic data and is the recommended way to create public screenshots or reproduction steps.
 
