@@ -30,6 +30,9 @@ This project follows a pragmatic Keep a Changelog style and uses semantic versio
 
 ### Security
 
+- Refresh the installed PCRE2 package during development and production backend image builds to receive the fix for CVE-2026-103111.
+- Require `certifi>=2026.10.19` in both Python dependency manifests to exclude the vulnerable transitive release reported by OSV (PYSEC-2026-4320).
+- Align dependency audits, browser smoke tests, and release validation with the Node 26 container build environment.
 - Closed the unauthenticated control-plane, remote-agent, and integration fail-open paths.
 - Restricted webhook delivery with exact allowlists, DNS/address validation, redirect denial, private-network opt-in, timeouts, and persisted-URL redaction.
 - Added strict browser response headers, API no-store behavior, safe cookie controls, and authenticated production DAST verification.
