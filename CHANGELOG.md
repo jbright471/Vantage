@@ -30,6 +30,7 @@ This project follows a pragmatic Keep a Changelog style and uses semantic versio
 
 ### Security
 
+- Refresh the pinned nginx runtime image to address the HIGH findings exposed when the frontend image scan resumed.
 - Refresh the installed PCRE2 package during development and production backend image builds to receive the fix for CVE-2026-103111.
 - Require `certifi>=2026.10.19` in both Python dependency manifests to exclude the vulnerable transitive release reported by OSV (PYSEC-2026-4320).
 - Align dependency audits, browser smoke tests, and release validation with the Node 26 container build environment.
