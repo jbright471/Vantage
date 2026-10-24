@@ -132,7 +132,9 @@ Before deployment:
 if (Test-Path $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force
 }
-Compress-Archive -Path (Join-Path $staging "*") -DestinationPath $zipPath -Force
+# Include dotfiles such as .env.production.example on Linux release runners.
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::CreateFromDirectory($staging, $zipPath)
 
 $hash = Get-FileHash -Algorithm SHA256 $zipPath
 "$($hash.Hash.ToLowerInvariant())  $(Split-Path -Leaf $zipPath)" | Set-Content -Path $checksumsPath -Encoding ascii

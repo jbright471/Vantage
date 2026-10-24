@@ -26,6 +26,7 @@ This project follows a pragmatic Keep a Changelog style and uses semantic versio
 
 ### Fixed
 
+- Release bundles now retain the required environment templates and other tracked dotfiles on Linux runners.
 - The `desktop-local` browser smoke test, which failed on every run because the development backend could not create its SQLite database in the bind-mounted checkout. Its readiness check now also waits for the frontend.
 
 ### Security
