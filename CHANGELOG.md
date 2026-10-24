@@ -26,10 +26,15 @@ This project follows a pragmatic Keep a Changelog style and uses semantic versio
 
 ### Fixed
 
+- Release bundles now retain the required environment templates and other tracked dotfiles on Linux runners.
 - The `desktop-local` browser smoke test, which failed on every run because the development backend could not create its SQLite database in the bind-mounted checkout. Its readiness check now also waits for the frontend.
 
 ### Security
 
+- Refresh the pinned nginx runtime image to address the HIGH findings exposed when the frontend image scan resumed.
+- Refresh the installed PCRE2 package during development and production backend image builds to receive the fix for CVE-2026-103111.
+- Require `certifi>=2026.10.19` in both Python dependency manifests to exclude the vulnerable transitive release reported by OSV (PYSEC-2026-4320).
+- Align dependency audits, browser smoke tests, and release validation with the Node 26 container build environment.
 - Closed the unauthenticated control-plane, remote-agent, and integration fail-open paths.
 - Restricted webhook delivery with exact allowlists, DNS/address validation, redirect denial, private-network opt-in, timeouts, and persisted-URL redaction.
 - Added strict browser response headers, API no-store behavior, safe cookie controls, and authenticated production DAST verification.
